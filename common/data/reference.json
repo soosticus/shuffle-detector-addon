@@ -1,0 +1,87 @@
+{
+  "_comment": "SEED DATA - unverified examples. Prices are in copper. Verify item IDs, vendor prices, reagents and disenchant yields against the game client, then edit or supply your own file (--data / GUI 'Reference data').",
+  "items": {
+    "2589": "Linen Cloth",
+    "2592": "Wool Cloth",
+    "4306": "Silk Cloth",
+    "4338": "Mageweave Cloth",
+    "14047": "Runecloth",
+    "2996": "Bolt of Linen Cloth",
+    "2997": "Bolt of Woolen Cloth",
+    "4305": "Bolt of Silk Cloth",
+    "4339": "Bolt of Mageweave",
+    "14048": "Bolt of Runecloth",
+    "2320": "Coarse Thread",
+    "2321": "Fine Thread",
+    "4291": "Silken Thread",
+    "8343": "Heavy Silken Thread",
+    "14341": "Rune Thread",
+    "10940": "Strange Dust",
+    "11083": "Soul Dust",
+    "11137": "Vision Dust",
+    "11176": "Dream Dust",
+    "10938": "Lesser Magic Essence",
+    "10939": "Greater Magic Essence",
+    "10998": "Lesser Astral Essence",
+    "11082": "Greater Astral Essence",
+    "11134": "Lesser Mystic Essence",
+    "11135": "Greater Mystic Essence",
+    "10978": "Small Glimmering Shard",
+    "11084": "Small Glowing Shard",
+    "11138": "Large Glowing Shard"
+  },
+  "vendor": {
+    "2320": 10,
+    "2321": 100,
+    "4291": 500,
+    "8343": 2000,
+    "14341": 1000
+  },
+  "recipes": [
+    {
+      "name": "Green Woolen Vest",
+      "skill": 125,
+      "source": "Trainer / world drop (verify)",
+      "reagents": [
+        {"item": 2997, "qty": 4},
+        {"item": 2321, "qty": 2}
+      ],
+      "yields": [
+        {"item": 10940, "avg": 0.9},
+        {"item": 10938, "avg": 0.4},
+        {"item": 10978, "avg": 0.1}
+      ],
+      "verified": false
+    },
+    {
+      "name": "Silk Headband",
+      "skill": 175,
+      "source": "Trainer / world drop (verify)",
+      "reagents": [
+        {"item": 4305, "qty": 4},
+        {"item": 4291, "qty": 2}
+      ],
+      "yields": [
+        {"item": 11083, "avg": 0.9},
+        {"item": 10998, "avg": 0.4},
+        {"item": 11084, "avg": 0.1}
+      ],
+      "verified": false
+    },
+    {
+      "name": "Black Mageweave Vest",
+      "skill": 235,
+      "source": "Trainer / world drop (verify)",
+      "reagents": [
+        {"item": 4339, "qty": 4},
+        {"item": 8343, "qty": 2}
+      ],
+      "yields": [
+        {"item": 11137, "avg": 0.9},
+        {"item": 11134, "avg": 0.4},
+        {"item": 11138, "avg": 0.1}
+      ],
+      "verified": false
+    }
+  ]
+}

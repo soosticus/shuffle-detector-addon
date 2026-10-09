@@ -1,0 +1,157 @@
+"""Locate WoW installs and install/update the bundled addon."""
+
+import os
+import re
+import shutil
+import stat
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+ADDON_NAME = "ShuffleDetector"
+_REPO_ADDON = Path(__file__).resolve().parents[3] / "addon" / ADDON_NAME
+_BUNDLED_ADDON = Path(__file__).resolve().parent / "_addon" / ADDON_NAME
+
+
+def bundled_addon_dir():
+    """Addon source: SHUFFLEDETECTOR_ADDON override, packaged copy, then the repo checkout."""
+    env = os.environ.get("SHUFFLEDETECTOR_ADDON")
+    for p in (Path(env) if env else None, _BUNDLED_ADDON, _REPO_ADDON):
+        if p and (p / f"{ADDON_NAME}.toc").is_file():
+            return p
+    return None
+
+
+def parse_version(text):
+    """'0.1.0' -> (0, 1, 0); None if unparseable."""
+    if not text:
+        return None
+    parts = re.findall(r"\d+", text)
+    return tuple(int(p) for p in parts) if parts else None
+
+
+def toc_version(addon_dir):
+    toc = Path(addon_dir) / f"{ADDON_NAME}.toc"
+    try:
+        for line in toc.read_text(encoding="utf-8", errors="replace").splitlines():
+            m = re.match(r"##\s*Version:\s*(.+)", line)
+            if m:
+                return m.group(1).strip()
+    except OSError:
+        pass
+    return None
+
+
+@dataclass
+class Install:
+    """One game client flavor, e.g. <root>/_classic_."""
+    flavor: str
+    addons_dir: Path
+
+    @property
+    def addon_dir(self):
+        return self.addons_dir / ADDON_NAME
+
+    @property
+    def installed_version(self):
+        return toc_version(self.addon_dir) if self.addon_dir.is_dir() else None
+
+    def __str__(self):
+        return f"{self.flavor} ({self.addons_dir})"
+
+
+def default_roots():
+    roots = []
+    env = os.environ.get("WOW_PATH")
+    if env:
+        roots.append(Path(env))
+    if sys.platform == "win32":
+        for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles"), "C:\\Games"):
+            if base:
+                roots.append(Path(base) / "World of Warcraft")
+    elif sys.platform == "darwin":
+        roots.append(Path("/Applications/World of Warcraft"))
+    else:
+        home = Path.home()
+        roots += [
+            home / "Games" / "world-of-warcraft",
+            home / ".wine" / "drive_c" / "Program Files (x86)" / "World of Warcraft",
+        ]
+    return roots
+
+
+def installs_in(path):
+    """Installs found at `path`: a WoW root, a flavor folder, or an AddOns folder."""
+    path = Path(path)
+    if path.name.lower() == "addons" and path.is_dir():
+        return [Install(path.parent.parent.name, path)]
+    if (path / "Interface" / "AddOns").is_dir():
+        return [Install(path.name, path / "Interface" / "AddOns")]
+    if not path.is_dir():
+        return []
+    return [
+        Install(d.name, d / "Interface" / "AddOns")
+        for d in sorted(path.iterdir())
+        if d.is_dir() and (d / "Interface" / "AddOns").is_dir()
+    ]
+
+
+def discover_installs(extra_roots=()):
+    seen, found = set(), []
+    for root in (*map(Path, extra_roots), *default_roots()):
+        for inst in installs_in(root):
+            key = str(inst.addons_dir).lower()
+            if key not in seen:
+                seen.add(key)
+                found.append(inst)
+    return found
+
+
+def status(install):
+    """'not_installed' | 'up_to_date' | 'outdated' | 'newer' | 'no_bundle'."""
+    src = bundled_addon_dir()
+    if src is None:
+        return "no_bundle"
+    if install.installed_version is None:
+        return "not_installed"
+    have, want = parse_version(install.installed_version), parse_version(toc_version(src))
+    if have == want:
+        return "up_to_date"
+    if have is None or want is None or have < want:
+        return "outdated"
+    return "newer"
+
+
+def install_addon(install):
+    """Copy the bundled addon into the AddOns folder (swap in place; SavedVariables live in WTF, untouched)."""
+    src = bundled_addon_dir()
+    if src is None:
+        raise FileNotFoundError("Bundled addon files not found.")
+    target = install.addon_dir
+    tmp = install.addons_dir / f".{ADDON_NAME}.new"
+    old = install.addons_dir / f".{ADDON_NAME}.old"
+    for p in (tmp, old):
+        _remove_tree(p)
+    shutil.copytree(src, tmp, copy_function=shutil.copyfile)
+    try:
+        if target.exists():
+            target.rename(old)
+        tmp.rename(target)
+    except OSError:
+        if old.exists() and not target.exists():
+            old.rename(target)
+        _remove_tree(tmp)
+        raise
+    _remove_tree(old)
+    return install.installed_version
+
+
+def _remove_tree(path):
+    """rmtree that also clears read-only attributes (which block deletion on Windows)."""
+    def onerror(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except OSError:
+            pass
+    shutil.rmtree(path, onerror=onerror)
