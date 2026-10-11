@@ -13,7 +13,7 @@ local PLAN_VERSION = 1
 local MACRO = "/shuffle\n/click " .. BUTTON_NAME
 
 BINDING_HEADER_SHUFFLEDETECTOR = "ShuffleDetector"
-BINDING_NAME_SHUFFLEDETECTOR_SHUFFLE = "Next shuffle step"
+_G["BINDING_NAME_CLICK " .. BUTTON_NAME .. ":LeftButton"] = "Next shuffle step"
 
 local btn, tracker
 
@@ -28,7 +28,14 @@ local function spellName(id, fallback)
 end
 
 local function itemName(id)
-    return (GetItemInfo and GetItemInfo(id)) or ("item " .. tostring(id))
+    local info = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    return (info and info(id)) or ("item " .. tostring(id))
+end
+
+-- This client has no global GetItemCount; it lives in C_Item.
+local function itemCount(id)
+    local count = (C_Item and C_Item.GetItemCount) or GetItemCount
+    return count and count(id) or 0
 end
 
 local function currentPlan()
@@ -61,13 +68,13 @@ local function findCrafted(plan)
         end
     end
     local count = slots
-    if plan.item and slots > 0 then count = GetItemCount(plan.item) end
+    if plan.item and slots > 0 then count = itemCount(plan.item) end
     return firstBag, firstSlot, count
 end
 
 local function missingReagent(plan)
     for _, r in ipairs(plan.reagents or {}) do
-        if GetItemCount(r.item) < r.qty then return r end
+        if itemCount(r.item) < r.qty then return r end
     end
 end
 
@@ -76,7 +83,7 @@ local function craftableCount(plan)
     local n
     for _, r in ipairs(plan.reagents or {}) do
         if r.qty > 0 then
-            local k = math.floor(GetItemCount(r.item) / r.qty)
+            local k = math.floor(itemCount(r.item) / r.qty)
             if not n or k < n then n = k end
         end
     end
@@ -154,7 +161,12 @@ local dirty = false -- a refresh was requested during combat
 -- Attributes of a secure button can only change out of combat; the tracker can always update.
 local function apply()
     if not btn then return end
-    local step = ns.NextShuffleStep()
+    local ok, step = pcall(ns.NextShuffleStep)
+    if not ok then
+        if tracker then tracker.foot:SetText("Error: " .. tostring(step)) end
+        say("error: " .. tostring(step))
+        return
+    end
     if InCombatLockdown() then
         dirty = true
     else
@@ -213,7 +225,7 @@ local function create()
     local function text(template, y)
         local fs = tracker:CreateFontString(nil, "OVERLAY", template)
         fs:SetPoint("TOPLEFT", tracker, "TOPLEFT", 8, y)
-        fs:SetPoint("RIGHT", tracker, "RIGHT", -8, 0)
+        fs:SetPoint("TOPRIGHT", tracker, "TOPRIGHT", -8, y)
         fs:SetJustifyH("LEFT")
         return fs
     end
