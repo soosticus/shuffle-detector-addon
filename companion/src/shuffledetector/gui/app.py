@@ -7,12 +7,12 @@ import sys
 from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
-    QMainWindow, QMessageBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
+    QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
+    QMainWindow, QMessageBox, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
     QTextBrowser, QVBoxLayout, QWidget, QAbstractItemView, QHeaderView, QProgressDialog,
 )
 
-from .. import addon_manager, calc, data_loader, plan, updater
+from .. import addon_manager, calc, calculator, data_loader, plan, updater
 
 STATUS_TEXT = {"known": "Known", "learnable": "Learnable", "needs_skill": "Needs skill", "unknown": "?"}
 ADDON_STATUS_TEXT = {
@@ -69,6 +69,44 @@ def _breakdown_html(r):
     ]
     if r.missing:
         parts.append("<p style='color:#c60'>No price data for: " + html.escape(", ".join(sorted(set(r.missing)))) + "</p>")
+    return "".join(parts)
+
+
+def _batch_html(b):
+    m = calc.fmt_money
+    if not b.crafts:
+        return (f"<h3>{html.escape(b.result.name)}</h3>"
+                + "".join(f"<p style='color:#c60'>{html.escape(n)}</p>" for n in b.notes))
+    limits = {"availability": "limited by what is listed", "budget": "limited by your budget", "cap": "capped"}
+    buy = []
+    for p in b.purchases:
+        where = ", ".join(x for x in (f"{p.ah_qty} from the AH ({m(p.ah_cost)})" if p.ah_qty else "",
+                                       f"{p.vendor_qty} from a vendor ({m(p.vendor_cost)})" if p.vendor_qty else "",
+                                       f"<span style='color:#c60'>{p.short} unavailable</span>" if p.short else "") if x)
+        buy.append(f"<tr><td><b>{p.qty:,} &times; {html.escape(p.name)}</b></td><td>{where or '-'}</td>"
+                   f"<td align='right'>{m(p.total)}</td></tr>")
+    out = []
+    for o in b.outputs:
+        rng = f" ({o.low:,}&ndash;{o.high:,})" if o.low != o.high else ""
+        out.append(f"<tr><td>{o.expected:,.1f} &times; {html.escape(o.name)}{rng}</td>"
+                   f"<td align='right'>{m(o.unit)} each</td><td align='right'>{m(o.value)}</td></tr>")
+    spread = b.revenue_low != b.revenue_high
+    rng = lambda lo, hi: f" <span style='color:gray'>(90%: {m(lo)} to {m(hi)})</span>" if spread else ""
+    parts = [f"<h3>{html.escape(b.result.name)}: {b.crafts:,} crafts"
+             + (f" <small>({limits[b.limited_by]})</small>" if b.limited_by else "") + "</h3>",
+             "<p><b>Buy</b></p><table cellpadding='3' width='100%'>" + "".join(buy) + "</table>",
+             f"<p>Total cost: <b>{m(b.cost)}</b></p>"]
+    if out:
+        parts.append(f"<p><b>Expected output</b> ({html.escape(b.exit)}"
+                     + (", 90% range per item" if b.exit == "Disenchant" else "") + ")</p>"
+                     "<table cellpadding='3' width='100%'>" + "".join(out) + "</table>")
+    if b.profit is not None:
+        color = "#2e9e44" if b.profit > 0 else "#d04040"
+        roi = f", ROI {b.roi * 100:.0f}%" if b.roi is not None else ""
+        parts += [f"<p>Net revenue after the AH cut: <b>{m(b.revenue)}</b>{rng(b.revenue_low, b.revenue_high)}</p>",
+                  f"<h3>Profit: <span style='color:{color}'>{m(b.profit)}</span>{roi}</h3>"
+                  + (f"<p style='color:gray'>Likely range: {m(b.profit_low)} to {m(b.profit_high)}</p>" if spread else "")]
+    parts += [f"<p style='color:gray'><i>{html.escape(n)}</i></p>" for n in b.notes]
     return "".join(parts)
 
 
@@ -177,8 +215,28 @@ class MainWindow(QMainWindow):
 
         self.detail = QTextBrowser()
         self.suggest = QTextBrowser()
+        self.calc_mode = QComboBox()
+        self.calc_mode.addItem("Number of crafts", "crafts")
+        self.calc_mode.addItem("Budget", "budget")
+        self.calc_crafts = QSpinBox(minimum=1, maximum=calculator.MAX_CRAFTS, value=20)
+        self.calc_budget = QLineEdit("100g")
+        self.calc_budget.setToolTip("For example 250g, 12g 30s or a number of copper")
+        self.calc_budget.setMaximumWidth(120)
+        self.calc_out = QTextBrowser()
+        calc_page = QWidget()
+        calc_lay = QVBoxLayout(calc_page)
+        calc_row = QHBoxLayout()
+        for w in (QLabel("Plan by"), self.calc_mode, self.calc_crafts, self.calc_budget):
+            calc_row.addWidget(w)
+        calc_row.addStretch()
+        calc_lay.addLayout(calc_row)
+        calc_lay.addWidget(self.calc_out, 1)
+        self.calc_mode.currentIndexChanged.connect(self.update_calc)
+        self.calc_crafts.valueChanged.connect(self.update_calc)
+        self.calc_budget.textChanged.connect(self.update_calc)
         tabs = QTabWidget()
         tabs.addTab(self.detail, "Breakdown")
+        tabs.addTab(calc_page, "Calculator")
         tabs.addTab(self.suggest, "Recipes to acquire")
         split = QSplitter(Qt.Horizontal)
         split.addWidget(self.table)
@@ -457,11 +515,35 @@ class MainWindow(QMainWindow):
             self.show_detail()
         else:
             self.detail.clear()
+            self.update_calc()
 
     def show_detail(self):
         rows = self.table.selectionModel().selectedRows()
         if rows:
             self.detail.setHtml(_breakdown_html(self.shown[rows[0].row()]))
+        self.update_calc()
+
+    def update_calc(self):
+        rows = self.table.selectionModel().selectedRows()
+        by_budget = self.calc_mode.currentData() == "budget"
+        self.calc_crafts.setVisible(not by_budget)
+        self.calc_budget.setVisible(by_budget)
+        if not rows or rows[0].row() >= len(self.shown) or not self.scan or not self.scan.scans:
+            self.calc_out.setHtml("<p>Select a shuffle to plan a batch.</p>")
+            return
+        budget = None
+        if by_budget:
+            try:
+                budget = calculator.parse_money(self.calc_budget.text())
+            except ValueError as e:
+                self.calc_out.setHtml(f"<p style='color:#c60'>{html.escape(str(e))}</p>")
+                return
+        exits = tuple(n for n, b in self.exit_boxes.items() if b.isChecked())
+        settings = calc.Settings(ah_cut=self.cut.value() / 100, price_mode=self.mode.currentData(), exits=exits)
+        items = calculator.realm_items(self.scan, self.realm.currentText())
+        batch = calculator.calculate(self.shown[rows[0].row()], items, self.ref, settings,
+                                     crafts=None if by_budget else self.calc_crafts.value(), budget=budget)
+        self.calc_out.setHtml(_batch_html(batch))
 
 
 def main(argv=None):

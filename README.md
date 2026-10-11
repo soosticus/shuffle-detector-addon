@@ -36,6 +36,10 @@ To bundle the addon into a built package, run `python companion/scripts/bundle_a
 
 Copy `addon/ShuffleDetector` into `Interface/AddOns`.
 
+## Shuffle calculator
+
+The GUI's Calculator tab plans a batch of the selected shuffle either by number of crafts or by budget. CLI: `shuffledetector --calc "Recipe Name" --crafts 20` or `--budget 250g`. It lists how many of each material to buy (from the AH, walking the cheapest listings, or from a vendor if that is cheaper), the total cost, the expected output, and the net profit after the AH cut. For disenchants it adds a 90% range from yield variance (yields are modelled as independent Poisson counts, so the range is rough for small batches). It honors the exit and price settings, buys no more than is listed, and values output at current prices, so large batches will move the market.
+
 ## In-game shuffle button
 
 Select a shuffle in the companion and choose Addon > "Send selected shuffle to game" (or the "Send to game" button; CLI: `--send-plan "Recipe Name"`). In game, `/reload`, then `/shuffledetector shuffle` shows the button (Shift-drag to move it). Each press does one step: disenchant a crafted piece in your bags, otherwise craft the next one, until the reagents run out. Bind a key under Key Bindings > AddOns > ShuffleDetector, or use `/click ShuffleDetectorShuffleButton`, to spam it. The button updates between presses and only out of combat. `/shuffledetector plan` shows the loaded shuffle and the next step.

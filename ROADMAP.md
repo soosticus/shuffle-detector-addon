@@ -6,13 +6,10 @@ Open items only; finished work is removed. Release notes are generated from comm
 
 - Layer observed in-game disenchant results from the addon on top of the Wowhead yield rates.
 - Handle vendor faction/location restrictions.
-- Confirm the AH tab and recipe capture (`/shuffledetector recipes`) in the Forever client.
+- Confirm the AH tab and recipe capture (`/shuffledetector recipes`) in the Forever client. Tailoring recipes were not being recorded for the main character, so the "known recipes only" filter falls back to showing everything; if `/shuffledetector recipes` still reports 0 after opening the Tailoring window and `/reload`, the recipe capture needs a fix for the Forever API. Enchanting (craft frame) recipes are not read by the addon.
 - Confirm the in-game shuffle button in the Forever client: crafting via the `spell` attribute (recipe name), the Disenchant `/cast` + `/use <bag> <slot>` macro, and that each press registers.
-- Shuffle button follow-ups: a craft count or budget target, and steps beyond craft/disenchant (for example vendor or AH listing) once the calculator can name them.
-
-## Planned: shuffle calculator
-
-Given a chosen shuffle, tell the user how many of each material to buy for a target (budget, craft count, or number of disenchants) and the expected profit. Show the per-step material quantities (including rounding up for yields), total cost at current AH/vendor prices, expected output, and net profit after AH cut, with a range that accounts for disenchant yield variance. Should reuse `calc.py` so it honors the exit filters and known-recipe settings.
+- Shuffle button follow-ups: take the craft count or budget from the calculator, and steps beyond craft/disenchant (for example vendor or AH listing) now that the calculator can name them.
+- Calculator follow-ups: model price impact when buying or selling large quantities (walk the sell side of the order book), use observed in-game disenchant results instead of Poisson for the range, and offer a "number of disenchants" target.
 
 ## Planned: more professions
 

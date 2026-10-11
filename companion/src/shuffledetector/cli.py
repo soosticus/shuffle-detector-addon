@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from . import addon_manager, calc, data_loader, plan
+from . import addon_manager, calc, calculator, data_loader, plan
 
 
 def build_parser():
@@ -22,7 +22,32 @@ def build_parser():
     p.add_argument("--send-plan", metavar="RECIPE", help="write this recipe's shuffle to the addon's Plan.lua (then /reload in game)")
     p.add_argument("--wow", help="WoW folder, flavor folder or AddOns folder to send the plan to (default: auto-detect)")
     p.add_argument("--detail", action="store_true", help="show step-by-step breakdown")
+    p.add_argument("--calc", metavar="RECIPE", help="plan a batch of this shuffle: what to buy, expected output and profit (needs --crafts or --budget)")
+    p.add_argument("--crafts", type=int, help="with --calc: number of crafts")
+    p.add_argument("--budget", help="with --calc: spend up to this much, e.g. 250g, 12g 30s or copper")
     return p
+
+
+def calc_batch(args, results, scan, ref, settings):
+    match = next((r for r in results if r.name.lower() == args.calc.lower()), None)
+    if match is None:
+        print(f"No recipe named {args.calc!r}.", file=sys.stderr)
+        return 2
+    if (args.crafts is None) == (args.budget is None):
+        print("--calc needs exactly one of --crafts or --budget.", file=sys.stderr)
+        return 2
+    try:
+        budget = calculator.parse_money(args.budget) if args.budget is not None else None
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 2
+    if args.crafts is not None and args.crafts < 1:
+        print("--crafts must be at least 1.", file=sys.stderr)
+        return 2
+    batch = calculator.calculate(match, calculator.realm_items(scan, args.realm), ref, settings,
+                                 crafts=args.crafts, budget=budget)
+    print(calculator.format_batch(batch))
+    return 0
 
 
 def send_plan(args, results):
@@ -64,6 +89,8 @@ def main(argv=None):
     results = calc.rank(scan, ref, settings, args.realm, args.character)
     if args.send_plan:
         return send_plan(args, results)
+    if args.calc:
+        return calc_batch(args, results, scan, ref, settings)
     for r in results[: args.top]:
         print(f"{r.name:<28} profit {calc.fmt_money(r.profit):>12}  cost {calc.fmt_money(r.cost):>12}  via {r.exit:<11} [{r.status}]")
         if args.detail:
