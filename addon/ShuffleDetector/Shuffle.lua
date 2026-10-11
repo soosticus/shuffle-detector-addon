@@ -222,6 +222,8 @@ local function create()
         local now = GetTime()
         if lastClick and now - lastClick < 0.2 then return end -- down + up of one press
         lastClick = now
+        say(("click: %s (%s)"):format(self.craftRecipe and "tradeskill craft" or tostring(self:GetAttribute("type")),
+            tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe)))
         if self.craftRecipe then
             local ok, err = pcall(C_TradeSkillUI.CraftRecipe, self.craftRecipe, 1)
             if not ok then say("craft failed: " .. tostring(err)) end
