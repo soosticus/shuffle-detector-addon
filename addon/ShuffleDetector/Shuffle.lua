@@ -158,6 +158,7 @@ local function refreshTracker(step)
 end
 
 local dirty = false -- a refresh was requested during combat
+local selfTest = false -- /shuffledetector selftest: the button runs "/target player" to prove secure actions work
 
 -- Attributes of a secure button can only change out of combat; the tracker can always update.
 local function apply()
@@ -175,8 +176,12 @@ local function apply()
         btn:SetAttribute("type", nil)
         btn:SetAttribute("spell", nil)
         btn:SetAttribute("macrotext", nil)
+        btn:SetAttribute("target-item", nil)
         btn.craftRecipe = nil
-        if step.kind == "craft" then
+        if selfTest then
+            btn:SetAttribute("type", "macro")
+            btn:SetAttribute("macrotext", "/target player")
+        elseif step.kind == "craft" then
             local plan = ns.plan
             if plan.spell and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
                 -- Casting a recipe by name does nothing in the modern profession UI; craft through it instead.
@@ -186,8 +191,9 @@ local function apply()
                 btn:SetAttribute("spell", plan.recipe)
             end
         elseif step.kind == "disenchant" then
-            btn:SetAttribute("type", "macro")
-            btn:SetAttribute("macrotext", ("/cast %s\n/use %s"):format(spellName(DISENCHANT_ID, "Disenchant"), ns.plan.itemName or ns.plan.recipe))
+            btn:SetAttribute("type", "spell")
+            btn:SetAttribute("spell", spellName(DISENCHANT_ID, "Disenchant"))
+            btn:SetAttribute("target-item", ns.plan.itemName or ns.plan.recipe)
         end
     end
     refreshTracker(step)
@@ -233,7 +239,7 @@ local function create()
             end
             local ok, err = pcall(T.CraftRecipe, self.craftRecipe, 1)
             if not ok then say("craft failed: " .. tostring(err)) end
-        elseif self:GetAttribute("type") == "macro" and SpellIsTargeting and SpellIsTargeting() then
+        elseif self:GetAttribute("type") == "spell" and SpellIsTargeting and SpellIsTargeting() then
             -- The cast was accepted but the item was never picked as its target; clear it so the next press starts clean.
             say("Disenchant is waiting for a target: could not pick the item from your bags.")
             if SpellStopTargeting then SpellStopTargeting() end
@@ -287,6 +293,12 @@ function ns.ShuffleStep()
     local how = btn:GetAttribute("type") or (btn.craftRecipe and "tradeskill") or "none"
     local ago = lastClick and ("%.0fs ago"):format(GetTime() - lastClick) or "never"
     say(("next: %s [action: %s; button last clicked %s]"):format(ns.NextShuffleStep().label, how, ago))
+end
+
+function ns.ShuffleSelfTest()
+    selfTest = not selfTest
+    apply()
+    say(selfTest and "self-test ON: pressing your macro should now target yourself. Run again to turn off." or "self-test off")
 end
 
 function ns.PrintShuffleMacro()
