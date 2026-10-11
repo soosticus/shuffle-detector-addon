@@ -42,9 +42,12 @@ ns.plan = {
     spell = 8774, item = 7054,       -- optional ids; item identifies the crafted piece in bags
     itemName = "Silk Headband",      -- optional; used when item is absent
     exit = "Disenchant",             -- or "Sell on AH" / "Vendor" / "" (craft only)
-    reagents = { { item = 4305, qty = 4 }, ... },
+    reagents = { { item = 4305, qty = 4, cloth = 4306, clothQty = 4 }, ... },
 }
 ```
+
+`cloth` and `clothQty` are optional: for a bolt reagent they name the raw cloth and how many make one bolt.
+The addon counts bolts plus raw cloth toward the craft and crafts the missing bolts first.
 
 The shuffle runs one step per press of a macro (`/shuffle` then `/click ShuffleDetectorShuffleButton`)
 or the "Next shuffle step" key binding: disenchant a crafted piece in the bags if the exit is
@@ -54,6 +57,6 @@ invisible; `/shuffle` only prepares it, because chat commands cannot cast.
 
 # Reference data
 
-`common/data/reference.json` holds item names, vendor prices, recipes (reagents) and average
+`common/data/reference.json` holds item names, vendor prices, recipes (reagents), `bolts` (bolt item -> raw cloth item and quantity per bolt) and average
 disenchant yields. The bundled values are unverified seed data; edit them or pass an extra file
 that overrides recipes by name.

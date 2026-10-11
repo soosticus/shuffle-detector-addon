@@ -23,6 +23,9 @@ class Line:
     source: str = ""
     ah_unit: float | None = None      # per-unit AH price (what it would cost / fetch)
     vendor_unit: float | None = None  # per-unit vendor price
+    raw_unit: float | None = None     # per-unit cost when made from raw cloth (bolts only)
+    raw_item: int | None = None       # the raw cloth item a bolt is made from
+    raw_qty: int = 0                  # raw cloth per bolt
 
 
 @dataclass
@@ -107,13 +110,26 @@ def evaluate(recipe, items, ref, settings, skill=None, known=frozenset()):
         vendor = ref.vendor.get(item)
         vendor_total = vendor * qty if vendor is not None else None
         options = [(t, s) for t, s in ((ah, "AH"), (vendor_total, "Vendor")) if t is not None]
+        # Bolts can also be crafted from raw cloth; the cheapest of buying a bolt or making one wins.
+        raw_total, raw_item, raw_per = None, None, 0
+        if item in ref.bolts:
+            raw_item, raw_per = ref.bolts[item]
+            need = raw_per * qty
+            cloth_vendor = ref.vendor.get(raw_item)
+            raw_options = [t for t in (buy_cost(items.get(raw_item), need),
+                                       cloth_vendor * need if cloth_vendor is not None else None) if t is not None]
+            if raw_options:
+                raw_total = min(raw_options)
+                options.append((raw_total, f"Craft from {ref.name(raw_item)}"))
         if options:
             total, source = min(options)
             res.reagents.append(Line(item, ref.name(item), qty, total / qty, total, source,
-                                     ah / qty if ah is not None else None, vendor))
+                                     ah / qty if ah is not None else None, vendor,
+                                     raw_total / qty if raw_total is not None else None, raw_item, raw_per))
             cost += total
         else:
-            res.reagents.append(Line(item, ref.name(item), qty, None, None, "unavailable", None, vendor))
+            res.reagents.append(Line(item, ref.name(item), qty, None, None, "unavailable", None, vendor,
+                                     None, raw_item, raw_per))
             res.missing.append(ref.name(item))
     gross = 0
     for y in recipe["yields"]:

@@ -25,6 +25,7 @@ class Reference:
     vendor: dict = field(default_factory=dict)       # item -> copper cost to buy from a vendor
     vendor_sell: dict = field(default_factory=dict)  # item -> copper a vendor pays for it
     recipes: list = field(default_factory=list)
+    bolts: dict = field(default_factory=dict)        # bolt item -> (raw cloth item, cloth per bolt)
 
     def name(self, item_id):
         return self.items.get(item_id, f"Item {item_id}")
@@ -55,6 +56,8 @@ def load_reference(path=None, extra=None, include_generated=True):
         merged.items.update({int(k): v for k, v in raw.get("items", {}).items()})
         merged.vendor.update({int(k): int(v) for k, v in raw.get("vendor", {}).items()})
         merged.vendor_sell.update({int(k): int(v) for k, v in raw.get("vendor_sell", {}).items()})
+        for k, v in raw.get("bolts", {}).items():
+            merged.bolts[int(k)] = (int(v["cloth"]), int(v["qty"]))
         by_name = {r["name"].lower(): r for r in merged.recipes}
         for r in raw.get("recipes", []):
             by_name[r["name"].lower()] = r

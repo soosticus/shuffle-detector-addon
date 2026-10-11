@@ -139,3 +139,58 @@ def test_parse_money():
         except ValueError:
             continue
         raise AssertionError(bad)
+
+
+BOLT_RECIPE = {
+    "name": "Bolt Vest", "item": 1, "skill": 10,
+    "reagents": [{"item": 2, "qty": 3}],
+    "yields": [{"item": 4, "avg": 1.0}],
+}
+
+
+def bolt_setup(bolt_price, cloth_price, bolt_qty=100, cloth_qty=100):
+    ref = Reference(items={1: "Vest", 2: "Bolt", 3: "Cloth", 4: "Dust"}, bolts={2: (3, 2)}, recipes=[BOLT_RECIPE])
+    items = {
+        2: {"min": bolt_price, "qty": bolt_qty, "prices": [(bolt_price, bolt_qty)]},
+        3: {"min": cloth_price, "qty": cloth_qty, "prices": [(cloth_price, cloth_qty)]},
+        4: {"min": 1000, "qty": 100, "prices": [(1000, 100)]},
+    }
+    settings = calc.Settings(price_mode="min", exits=("Disenchant",))
+    return ref, items, settings
+
+
+def test_evaluate_picks_cheaper_of_bolt_or_raw_cloth():
+    ref, items, settings = bolt_setup(bolt_price=300, cloth_price=100)  # a bolt costs 200 from 2 cloth
+    line = calc.evaluate(BOLT_RECIPE, items, ref, settings).reagents[0]
+    assert line.source == "Craft from Cloth" and line.total == 3 * 200 and line.raw_unit == 200 and line.ah_unit == 300
+    ref, items, settings = bolt_setup(bolt_price=150, cloth_price=100)
+    line = calc.evaluate(BOLT_RECIPE, items, ref, settings).reagents[0]
+    assert line.source == "AH" and line.total == 3 * 150 and line.raw_unit == 200
+
+
+def test_evaluate_uses_raw_cloth_when_bolts_unlisted():
+    ref, items, settings = bolt_setup(300, 100)
+    del items[2]
+    res = calc.evaluate(BOLT_RECIPE, items, ref, settings)
+    assert res.cost == 600 and res.reagents[0].raw_item == 3 and res.reagents[0].raw_qty == 2
+
+
+def test_shopping_list_mixes_bolts_and_raw_cloth():
+    # 5 cheap bolts are listed; the rest are cheaper to make from cloth (2 x 100 = 200 < 300).
+    ref, items, settings = bolt_setup(300, 100)
+    items[2] = {"min": 100, "qty": 10, "prices": [(100, 5), (300, 5)]}
+    res = calc.evaluate(BOLT_RECIPE, items, ref, settings)
+    b = calculator.calculate(res, items, ref, settings, crafts=3)  # 9 bolts needed
+    bolt, cloth = b.purchases
+    assert bolt.item == 2 and bolt.qty == 5 and bolt.ah_cost == 500
+    assert cloth.item == 3 and cloth.qty == 8 and cloth.ah_cost == 800 and cloth.note == "makes 4 x Bolt"
+    assert b.cost == 1300
+
+
+def test_shopping_list_all_raw_cloth_and_availability():
+    ref, items, settings = bolt_setup(1000, 100, cloth_qty=12)
+    res = calc.evaluate(BOLT_RECIPE, items, ref, settings)
+    plan = calculator.shopping_list(BOLT_RECIPE, items, ref, 1)  # 3 bolts: cloth 6 of 12
+    assert [p.item for p in plan] == [3] and plan[0].qty == 6 and plan[0].short == 0
+    b = calculator.calculate(res, items, ref, settings, budget=10**9)
+    assert b.crafts > 0 and all(p.short == 0 for p in b.purchases)

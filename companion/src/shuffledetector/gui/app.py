@@ -31,13 +31,14 @@ def _breakdown_html(r):
         for l in lines:
             extra = (
                 f"<td align='right'>{calc.fmt_money(l.ah_unit)}</td><td align='right'>{calc.fmt_money(l.vendor_unit)}</td>"
+                f"<td align='right'>{calc.fmt_money(l.raw_unit) if l.raw_item else ''}</td>"
                 if prices else ""
             )
             out.append(
                 f"<tr><td>{l.qty:g} &times; {html.escape(l.name)}</td><td>{html.escape(l.source)}</td>{extra}"
                 f"<td align='right'>{calc.fmt_money(l.unit)}</td><td align='right'>{calc.fmt_money(l.total)}</td></tr>"
             )
-        extra_h = "<th align='right'>AH</th><th align='right'>Vendor</th>" if prices else ""
+        extra_h = "<th align='right'>AH</th><th align='right'>Vendor</th><th align='right'>Raw cloth</th>" if prices else ""
         return (f"<h4>{label}</h4><table cellpadding='3' width='100%'><tr><th align='left'>Item</th><th align='left'>Source</th>"
                 f"{extra_h}<th align='right'>Each</th><th align='right'>Total</th></tr>{''.join(out)}</table>")
 
@@ -83,7 +84,8 @@ def _batch_html(b):
         where = ", ".join(x for x in (f"{p.ah_qty} from the AH ({m(p.ah_cost)})" if p.ah_qty else "",
                                        f"{p.vendor_qty} from a vendor ({m(p.vendor_cost)})" if p.vendor_qty else "",
                                        f"<span style='color:#c60'>{p.short} unavailable</span>" if p.short else "") if x)
-        buy.append(f"<tr><td><b>{p.qty:,} &times; {html.escape(p.name)}</b></td><td>{where or '-'}</td>"
+        made = f" <span style='color:gray'>({html.escape(p.note)})</span>" if p.note else ""
+        buy.append(f"<tr><td><b>{p.qty:,} &times; {html.escape(p.name)}</b>{made}</td><td>{where or '-'}</td>"
                    f"<td align='right'>{m(p.total)}</td></tr>")
     out = []
     for o in b.outputs:

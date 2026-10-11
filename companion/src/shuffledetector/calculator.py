@@ -19,6 +19,7 @@ class Purchase:
     vendor_qty: int = 0
     vendor_cost: float = 0
     short: int = 0    # units that can be bought from neither the AH nor a vendor
+    note: str = ""    # e.g. "makes 8 x Bolt of Silk Cloth"
 
     @property
     def total(self):
@@ -114,10 +115,56 @@ def buy_mix(entry, vendor_unit, qty):
     return ah_qty, ah_cost, 0, 0.0, max(need, 0)
 
 
+def _bolt_sources(bolt, qty, items, ref):
+    """Ways to get bolts as (cost per bolt, count, "bolt" | "cloth"), cheapest first: buy them, or buy raw cloth."""
+    cloth, per = ref.bolts[bolt]
+    sources = []
+    if items.get(bolt):
+        sources += [(u, c, "bolt") for u, c in _segments(items[bolt])]
+    if ref.vendor.get(bolt) is not None:
+        sources.append((ref.vendor[bolt], qty, "bolt"))
+    if items.get(cloth):
+        carry = 0
+        for unit, count in _segments(items[cloth]):
+            made, carry = divmod(carry + count, per)
+            if made:
+                sources.append((unit * per, made, "cloth"))
+    if ref.vendor.get(cloth) is not None:
+        sources.append((ref.vendor[cloth] * per, qty, "cloth"))
+    return sorted(sources, key=lambda s: (s[0], s[2]))
+
+
+def _bolt_purchases(bolt, qty, items, ref):
+    """Cheapest mix of bought bolts and bolts made from raw cloth, as purchases of the bolt and of the cloth."""
+    cloth, per = ref.bolts[bolt]
+    taken, need = {"bolt": 0, "cloth": 0}, qty
+    for _, count, kind in _bolt_sources(bolt, qty, items, ref):
+        if need <= 0:
+            break
+        take = min(count, need)
+        taken[kind] += take
+        need -= take
+    out = []
+    if taken["bolt"] or need or not taken["cloth"]:
+        p = Purchase(bolt, ref.name(bolt), taken["bolt"] + need,
+                     *buy_mix(items.get(bolt), ref.vendor.get(bolt), taken["bolt"]))
+        p.short += need
+        out.append(p)
+    if taken["cloth"]:
+        units = taken["cloth"] * per
+        p = Purchase(cloth, ref.name(cloth), units, *buy_mix(items.get(cloth), ref.vendor.get(cloth), units))
+        p.note = f"makes {taken['cloth']} x {ref.name(bolt)}"
+        out.append(p)
+    return out
+
+
 def shopping_list(recipe, items, ref, crafts):
     out = []
     for r in recipe["reagents"]:
         qty = r["qty"] * crafts
+        if r["item"] in ref.bolts:
+            out += _bolt_purchases(r["item"], qty, items, ref)
+            continue
         mix = buy_mix(items.get(r["item"]), ref.vendor.get(r["item"]), qty)
         out.append(Purchase(r["item"], ref.name(r["item"]), qty, *mix))
     return out
@@ -219,7 +266,7 @@ def format_batch(b):
         where = ", ".join(x for x in (f"{p.ah_qty} AH = {m(p.ah_cost)}" if p.ah_qty else "",
                                        f"{p.vendor_qty} vendor = {m(p.vendor_cost)}" if p.vendor_qty else "",
                                        f"{p.short} unavailable" if p.short else "") if x)
-        lines.append(f"  {p.qty} x {p.name}: {where or '-'}  (total {m(p.total)})")
+        lines.append(f"  {p.qty} x {p.name}: {where or '-'}  (total {m(p.total)})" + (f" [{p.note}]" if p.note else ""))
     lines.append(f"Total cost: {m(b.cost)}")
     if b.outputs:
         lines.append(f"Expected output ({b.exit}):")

@@ -58,3 +58,11 @@ def test_write_plan_and_survives_addon_update(tmp_path, monkeypatch):
     (inst.addon_dir / f"{am.ADDON_NAME}.toc").write_text("## Version: 0.2.0\n")
     am.install_addon(inst)
     assert "generated = 5," in inst.plan_file.read_text(encoding="utf-8")
+
+
+def test_build_plan_records_raw_cloth_for_bolts():
+    res = result()
+    res.reagents = [calc.Line(4305, "Bolt of Silk Cloth", 4, 1, 4, "AH", raw_item=4306, raw_qty=4)]
+    reagents = plan.build_plan(res)["reagents"]
+    assert reagents[0] == {"item": 4305, "qty": 4, "cloth": 4306, "clothQty": 4}
+    assert reagents[1] == {"item": 4291, "qty": 2}

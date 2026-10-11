@@ -95,7 +95,8 @@ def main(argv=None):
         print(f"{r.name:<28} profit {calc.fmt_money(r.profit):>12}  cost {calc.fmt_money(r.cost):>12}  via {r.exit:<11} [{r.status}]")
         if args.detail:
             for l in r.reagents:
-                print(f"    buy   {l.qty:g} x {l.name} ({l.source}) = {calc.fmt_money(l.total)}  [AH {calc.fmt_money(l.ah_unit)}, vendor {calc.fmt_money(l.vendor_unit)}]")
+                print(f"    buy   {l.qty:g} x {l.name} ({l.source}) = {calc.fmt_money(l.total)}  [AH {calc.fmt_money(l.ah_unit)}, vendor {calc.fmt_money(l.vendor_unit)}"
+                      + (f", raw cloth {calc.fmt_money(l.raw_unit)}" if l.raw_item else "") + "]")
             for e in r.exits:
                 print(f"    exit  {e.label:<11} {calc.fmt_money(e.net)}{' <-' if e.label == r.exit else ''}")
             for l in r.yields:

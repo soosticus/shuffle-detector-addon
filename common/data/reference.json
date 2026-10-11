@@ -30,6 +30,13 @@
     "11084": "Small Glowing Shard",
     "11138": "Large Glowing Shard"
   },
+  "bolts": {
+    "2996": {"cloth": 2589, "qty": 2},
+    "2997": {"cloth": 2592, "qty": 3},
+    "4305": {"cloth": 4306, "qty": 4},
+    "4339": {"cloth": 4338, "qty": 4},
+    "14048": {"cloth": 14047, "qty": 4}
+  },
   "vendor": {
     "2320": 10,
     "2321": 100,
