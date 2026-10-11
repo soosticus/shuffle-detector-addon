@@ -47,11 +47,10 @@ Select a shuffle in the companion and choose Addon > "Send selected shuffle to g
 To run the shuffle, make a macro (`/shuffledetector macro` prints it) and press it repeatedly:
 
 ```
-/shuffle
 /click ShuffleDetectorShuffleButton
 ```
 
-Each press does one step: disenchant a crafted piece in your bags, otherwise craft the next one, until the reagents run out. `/shuffle` only prepares the step: WoW doesn't let chat commands cast spells, so the second line presses an invisible secure button that does the action. You can also bind a key under Key Bindings > AddOns > ShuffleDetector. The step only changes out of combat. `/shuffledetector plan` prints the loaded shuffle and the next step.
+Each press does one step: disenchant a crafted piece in your bags, otherwise craft the next one, until the reagents run out. WoW doesn't let chat commands cast spells, so the macro presses an invisible secure button that picks and does the action. Presses while a cast or bag update is in progress do nothing. You can also bind a key under Key Bindings > AddOns > ShuffleDetector. The step only changes out of combat. `/shuffledetector plan` prints the loaded shuffle and the next step.
 
 ## License
 

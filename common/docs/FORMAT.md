@@ -46,11 +46,11 @@ ns.plan = {
 }
 ```
 
-The shuffle runs one step per press of a macro (`/shuffle` then `/click ShuffleDetectorShuffleButton`)
+The shuffle runs one step per press of a macro (`/click ShuffleDetectorShuffleButton`)
 or the "Next shuffle step" key binding: disenchant a crafted piece in the bags if the exit is
 Disenchant, otherwise craft the next one, until the reagents run out. A tracker frame
 (`/shuffledetector shuffle` to show or hide) highlights the current step. The secure button is
-invisible; `/shuffle` only prepares it, because chat commands cannot cast.
+invisible and chooses the step as it is clicked, because chat commands cannot cast.
 
 # Reference data
 

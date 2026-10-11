@@ -7,7 +7,6 @@ Open items only; finished work is removed. Release notes are generated from comm
 - Layer observed in-game disenchant results from the addon on top of the Wowhead yield rates.
 - Handle vendor faction/location restrictions.
 - Confirm the AH tab and recipe capture (`/shuffledetector recipes`) in the Forever client. Tailoring recipes were not being recorded for the main character, so the "known recipes only" filter falls back to showing everything; if `/shuffledetector recipes` still reports 0 after opening the Tailoring window and `/reload`, the recipe capture needs a fix for the Forever API. Enchanting (craft frame) recipes are not read by the addon.
-- Confirm in the Forever client that the shuffle macro works with just `/click ShuffleDetectorShuffleButton` (without the `/shuffle` line), and simplify the documented macro if so. The disenchant step now uses `type="spell"` with `target-item` and is confirmed working; crafting needs the profession window open. The button now also prepares itself on each click, so the `/shuffle` line should be unnecessary.
 - Confirm in game that the fast-press gating no longer repeats a craft or disenchant step.
 - Shuffle follow-ups: take the craft count or budget from the calculator, and steps beyond craft/disenchant (for example vendor or AH listing) now that the calculator can name them.
 - Per-recipe craft times: the calculator uses one default craft time (30 s) unless a recipe sets `craft_seconds`; read the real cast times from the game or Wowhead.

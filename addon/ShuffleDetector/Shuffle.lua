@@ -1,8 +1,7 @@
 -- Shuffle: runs the loaded shuffle (ns.plan, from Plan.lua) one step per macro press, and shows a
 -- tracker with the step you are on. Protected actions (casting, using items) can only come from a
 -- secure button on a hardware event, so a chat command cannot craft or disenchant by itself.
--- Instead, an invisible secure button does the action and /shuffle prepares it. Macro:
---     /shuffle
+-- Instead, an invisible secure button chooses and does the action when clicked. Macro:
 --     /click ShuffleDetectorShuffleButton
 local ADDON, ns = ...
 local say = ns.say
@@ -10,7 +9,7 @@ local say = ns.say
 local BUTTON_NAME = "ShuffleDetectorShuffleButton"
 local DISENCHANT_ID = 13262
 local PLAN_VERSION = 1
-local MACRO = "/shuffle\n/click " .. BUTTON_NAME
+local MACRO = "/click " .. BUTTON_NAME
 
 BINDING_HEADER_SHUFFLEDETECTOR = "ShuffleDetector"
 _G["BINDING_NAME_CLICK " .. BUTTON_NAME .. ":LeftButton"] = "Next shuffle step"
@@ -168,7 +167,7 @@ local function refreshTracker(step)
     elseif step.kind == "idle" then
         tracker.foot:SetText(step.label)
     else
-        tracker.foot:SetText("Run your /shuffle macro")
+        tracker.foot:SetText("Run your shuffle macro")
     end
 end
 
@@ -337,7 +336,7 @@ function ns.ToggleShuffleTracker()
     if show then apply() end
 end
 
--- /shuffle: prepare the next step. Meant to be the first line of a macro, before /click.
+-- /shuffle: prepare the next step by hand; the button also does this on every click.
 function ns.ShuffleStep()
     if not currentPlan() then
         say("no shuffle loaded. In the companion app choose a shuffle and use Addon > Send selected shuffle to game, then /reload.")
@@ -354,7 +353,7 @@ function ns.ToggleShuffleDebug()
 end
 
 function ns.PrintShuffleMacro()
-    say("make a macro with these two lines and press it repeatedly:")
+    say("make a macro with this line and press it repeatedly:")
     for line in MACRO:gmatch("[^\n]+") do say("  " .. line) end
 end
 
