@@ -1,9 +1,10 @@
 """PySide6 desktop GUI."""
 
 import html
+import os
 import sys
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
@@ -11,7 +12,7 @@ from PySide6.QtWidgets import (
     QTextBrowser, QVBoxLayout, QWidget, QAbstractItemView, QHeaderView, QProgressDialog,
 )
 
-from .. import addon_manager, calc, data_loader, updater
+from .. import addon_manager, calc, data_loader, plan, updater
 
 STATUS_TEXT = {"known": "Known", "learnable": "Learnable", "needs_skill": "Needs skill", "unknown": "?"}
 ADDON_STATUS_TEXT = {
@@ -80,6 +81,7 @@ class MainWindow(QMainWindow):
         self.scan = None
         self.ref = data_loader.load_reference()
         self.results = []
+        self.shown = []
         self.extra_ref = None
 
         open_act = QAction("Open SavedVariables...", self, triggered=self.open_file)
@@ -90,10 +92,13 @@ class MainWindow(QMainWindow):
         for a in (open_act, ref_act, wh_act, reload_act):
             menu.addAction(a)
         self.path = None
-
+        self.loaded_mtime = None
+        self.ref_mtime = self._generated_mtime()
         addon_menu = self.menuBar().addMenu("&Addon")
         self.install_act = QAction("Install / update addon", self, triggered=lambda: self.install_selected(True))
         addon_menu.addAction(self.install_act)
+        self.send_act = QAction("Send selected shuffle to game", self, triggered=self.send_plan)
+        addon_menu.addAction(self.send_act)
         addon_menu.addAction(QAction("Choose WoW folder...", self, triggered=self.choose_wow_folder))
         if not updater.from_source_tree():
             addon_menu.addAction(QAction("Check for updates...", self, triggered=self.check_updates))
@@ -126,7 +131,10 @@ class MainWindow(QMainWindow):
         self.cog = QToolButton()
         self.cog.setText("\u2699")
         self.cog.setToolTip("Calculation settings")
-        self.cog.setStyleSheet("QToolButton { font-size: 18px; padding: 0 6px; }")
+        cog_font = self.cog.font()
+        cog_font.setPointSizeF(max(cog_font.pointSizeF(), 9.0) * 1.6)
+        self.cog.setFont(cog_font)
+        self.cog.setStyleSheet("QToolButton { padding: 0 6px; }")
         self.flyout = QFrame(self, Qt.Popup)
         self.flyout.setFrameShape(QFrame.StyledPanel)
         form = QFormLayout(self.flyout)
@@ -147,6 +155,11 @@ class MainWindow(QMainWindow):
             controls.addWidget(w)
         controls.addWidget(self.known_only)
         controls.addWidget(self.cog)
+        self.send_btn = QToolButton()
+        self.send_btn.setText("Send to game")
+        self.send_btn.setToolTip("Write the selected shuffle to the addon for the in-game shuffle button (then /reload)")
+        self.send_btn.clicked.connect(self.send_plan)
+        controls.addWidget(self.send_btn)
         controls.addStretch()
         controls.addWidget(self.addon_label)
 
@@ -156,8 +169,7 @@ class MainWindow(QMainWindow):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().hide()
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(0, QHeaderView.Interactive)
+        header.setSectionResizeMode(QHeaderView.Interactive)
         header.setMinimumSectionSize(60)
         self.table.setColumnWidth(0, 230)
         self.table.setWordWrap(False)
@@ -192,6 +204,33 @@ class MainWindow(QMainWindow):
         path = path or next(iter(data_loader.candidate_saved_variables(self.wow_roots())), None)
         if path:
             self.load(str(path))
+        self.watch_timer = QTimer(self, interval=2000, timeout=self.check_for_changes)
+        self.watch_timer.start()
+
+    @staticmethod
+    def _generated_mtime():
+        try:
+            return data_loader.DEFAULT_REFERENCE.with_name("wowhead.json").stat().st_mtime
+        except OSError:
+            return None
+
+    def check_for_changes(self):
+        """Reload when the game rewrites the SavedVariables file (or one appears) or the Wowhead data changes."""
+        if self._generated_mtime() != self.ref_mtime:
+            self.reload()
+            self.statusBar().showMessage("Recipe data changed - recalculated", 8000)
+            return
+        try:
+            path = self.path or next(iter(data_loader.candidate_saved_variables(self.wow_roots())), None)
+            if not path:
+                return
+            mtime = os.stat(path).st_mtime
+        except OSError:
+            return
+        if self.path and mtime == self.loaded_mtime:
+            return
+        if self.load(str(path), silent=True):
+            self.statusBar().showMessage(f"Reloaded {path} (changed in game)", 8000)
 
     def wow_roots(self):
         saved = self.settings.value("wow_path", "", type=str)
@@ -229,6 +268,23 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(msg)
         if announce:
             QMessageBox.information(self, "Addon installed", msg)
+
+    def send_plan(self):
+        rows = self.table.selectionModel().selectedRows()
+        inst = self.client.currentData()
+        if not rows or inst is None:
+            QMessageBox.information(self, "Send to game", "Select a shuffle and a WoW client first.")
+            return
+        result = self.shown[rows[0].row()]
+        try:
+            plan.write_plan(inst, plan.build_plan(result))
+        except Exception as e:
+            QMessageBox.critical(self, "Send to game failed", str(e))
+            return
+        msg = (f"Sent {result.name} to {inst.flavor}. In game: /reload, then /shuffledetector shuffle "
+               "to show the button (or bind a key under Key Bindings > AddOns).")
+        self.statusBar().showMessage(msg)
+        QMessageBox.information(self, "Sent to game", msg)
 
     def auto_update_addon(self):
         if not self.auto_update.isChecked():
@@ -306,6 +362,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Loaded {n} recipes from Wowhead", 8000)
 
     def reload(self):
+        self.ref_mtime = self._generated_mtime()
         try:
             self.ref = data_loader.load_reference(extra=self.extra_ref)
         except Exception as e:
@@ -314,20 +371,31 @@ class MainWindow(QMainWindow):
         if self.path:
             self.load(self.path)
 
-    def load(self, path):
+    def load(self, path, silent=False):
         try:
+            mtime = os.stat(path).st_mtime
             self.scan = data_loader.load_scan_data(path)
         except Exception as e:
-            QMessageBox.critical(self, "Could not load data", str(e))
-            return
+            if not silent:
+                QMessageBox.critical(self, "Could not load data", str(e))
+            return False
         self.path = path
+        self.loaded_mtime = mtime
+        selected = (self.realm.currentText(), self.character.currentData())
         for box, values in ((self.realm, self.scan.realms), (self.character, [""] + sorted(self.scan.characters))):
             box.blockSignals(True)
             box.clear()
             for v in values:
                 box.addItem(v or "All characters", v or None)
             box.blockSignals(False)
+        for box, value in ((self.realm, selected[0]), (self.character, selected[1])):
+            idx = box.findData(value) if box is self.character else box.findText(value)
+            if idx >= 0:
+                box.blockSignals(True)
+                box.setCurrentIndex(idx)
+                box.blockSignals(False)
         self.refresh()
+        return True
 
     def show_flyout(self):
         self.flyout.adjustSize()
@@ -339,13 +407,21 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("No auction scans in file. Run /shuffledetector scan at the auction house.")
             return
         exits = tuple(n for n, b in self.exit_boxes.items() if b.isChecked())
+        rows = self.table.selectionModel().selectedRows()
+        keep = self.shown[rows[0].row()].name if rows and rows[0].row() < len(self.shown) else None
         settings = calc.Settings(ah_cut=self.cut.value() / 100, price_mode=self.mode.currentData(), exits=exits)
         self.results = calc.rank(self.scan, self.ref, settings, self.realm.currentText(), self.character.currentData())
         has_known = any(r.status == "known" for r in self.results)
+        self.known_only.setText("Known recipes only" if has_known else "Known recipes only (none recorded)")
+        self.known_only.setToolTip(
+            "" if has_known else "No known Tailoring recipes are recorded for this selection, so all recipes are shown. "
+            "In game, open the Tailoring window on the character, then /reload.")
         shown = [r for r in self.results if r.status == "known"] if self.known_only.isChecked() and has_known else self.results
         if self.sort.currentData() == "roi":
             shown = sorted(shown, key=lambda r: (r.roi is None, -(r.roi or 0)))
         self.shown = shown
+        self.table.setUpdatesEnabled(False)
+        self.table.blockSignals(True)
         self.table.setRowCount(len(shown))
         for row, r in enumerate(shown):
             roi = f"{r.roi * 100:.0f}%" if r.roi is not None else "-"
@@ -357,7 +433,11 @@ class MainWindow(QMainWindow):
                 if col == 4 and r.profit is not None:
                     item.setForeground(QColor("#2e9e44" if r.profit > 0 else "#d04040"))
                 self.table.setItem(row, col, item)
-        sugg = calc.suggestions(self.results)
+        for col in range(1, len(COLUMNS)):
+            self.table.resizeColumnToContents(col)
+        self.table.blockSignals(False)
+        self.table.setUpdatesEnabled(True)
+        sugg =calc.suggestions(self.results)
         self.suggest.setHtml(
             "<h3>Profitable recipes you don't know</h3>" + (
                 "<ol>" + "".join(
@@ -369,9 +449,12 @@ class MainWindow(QMainWindow):
         )
         scanned = self.scan.scans[self.realm.currentText()]
         note = " - Auctionator data (min prices only, no depth)" if scanned["shallow"] else ""
+        if self.known_only.isChecked() and not has_known:
+            note += " - no known recipes recorded: open your Tailoring window in game, then /reload"
         self.statusBar().showMessage(f"{self.path} - {len(scanned['items'])} items, {scanned['listings']} listings{note}")
         if shown:
-            self.table.selectRow(0)
+            self.table.selectRow(next((i for i, r in enumerate(shown) if r.name == keep), 0))
+            self.show_detail()
         else:
             self.detail.clear()
 
