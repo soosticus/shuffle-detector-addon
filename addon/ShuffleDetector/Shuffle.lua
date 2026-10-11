@@ -16,6 +16,11 @@ BINDING_HEADER_SHUFFLEDETECTOR = "ShuffleDetector"
 _G["BINDING_NAME_CLICK " .. BUTTON_NAME .. ":LeftButton"] = "Next shuffle step"
 
 local btn, tracker
+
+-- Per-press chat output, for diagnosing a macro: /shuffledetector shuffledebug
+local function debugSay(msg)
+    if AHSnapshotDB.shuffleDebug then say(msg) end
+end
 local lastClick -- GetTime() of the last click on the button, shown by /shuffle for diagnosing macros
 
 local function spellName(id, fallback)
@@ -158,7 +163,6 @@ local function refreshTracker(step)
 end
 
 local dirty = false -- a refresh was requested during combat
-local selfTest = false -- /shuffledetector selftest: the button runs "/target player" to prove secure actions work
 
 -- Attributes of a secure button can only change out of combat; the tracker can always update.
 local function apply()
@@ -178,10 +182,7 @@ local function apply()
         btn:SetAttribute("macrotext", nil)
         btn:SetAttribute("target-item", nil)
         btn.craftRecipe = nil
-        if selfTest then
-            btn:SetAttribute("type", "macro")
-            btn:SetAttribute("macrotext", "/target player")
-        elseif step.kind == "craft" then
+        if step.kind == "craft" then
             local plan = ns.plan
             if plan.spell and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
                 -- Casting a recipe by name does nothing in the modern profession UI; craft through it instead.
@@ -230,7 +231,7 @@ local function create()
         local now = GetTime()
         if lastClick and now - lastClick < 0.2 then return end -- down + up of one press
         lastClick = now
-        say(("click: %s (%s) down=%s"):format(self.craftRecipe and "tradeskill craft" or tostring(self:GetAttribute("type")),
+        debugSay(("click: %s (%s) down=%s"):format(self.craftRecipe and "tradeskill craft" or tostring(self:GetAttribute("type")),
             tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe), tostring(self.lastDown)))
         if self.craftRecipe then
             local T = C_TradeSkillUI
@@ -292,13 +293,12 @@ function ns.ShuffleStep()
     apply()
     local how = btn:GetAttribute("type") or (btn.craftRecipe and "tradeskill") or "none"
     local ago = lastClick and ("%.0fs ago"):format(GetTime() - lastClick) or "never"
-    say(("next: %s [action: %s; button last clicked %s]"):format(ns.NextShuffleStep().label, how, ago))
+    debugSay(("next: %s [action: %s; button last clicked %s]"):format(ns.NextShuffleStep().label, how, ago))
 end
 
-function ns.ShuffleSelfTest()
-    selfTest = not selfTest
-    apply()
-    say(selfTest and "self-test ON: pressing your macro should now target yourself. Run again to turn off." or "self-test off")
+function ns.ToggleShuffleDebug()
+    AHSnapshotDB.shuffleDebug = not AHSnapshotDB.shuffleDebug
+    say("shuffle debug output " .. (AHSnapshotDB.shuffleDebug and "on" or "off"))
 end
 
 function ns.PrintShuffleMacro()
@@ -312,7 +312,7 @@ function ns.DebugDisenchant()
     say(("spell %d: name=%s IsSpellKnown=%s spellbook-known=%s"):format(DISENCHANT_ID,
         tostring(spellName(DISENCHANT_ID)), tostring(IsSpellKnown and IsSpellKnown(DISENCHANT_ID)), tostring(book)))
     say("lookup by name 'Disenchant': " .. (info and ("id " .. tostring(info.spellID) .. ", " .. tostring(info.name)) or "not found"))
-    say("button macro: " .. tostring(btn:GetAttribute("macrotext")))
+    say("button action: " .. tostring(btn:GetAttribute("type")) .. " " .. tostring(btn:GetAttribute("spell")) .. " -> " .. tostring(btn:GetAttribute("target-item")))
 end
 
 function ns.PrintPlan()
@@ -351,9 +351,9 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3)
         -- Echo what the game says about a press for a few seconds after it, to see why an action did nothing.
         if lastClick and GetTime() - lastClick < 4 then
             if event == "UI_ERROR_MESSAGE" then
-                say("game: " .. tostring(a2))
+                debugSay("game: " .. tostring(a2))
             else
-                say(("cast %s: %s"):format(event:sub(15):lower(), tostring(spellName(a3, "spell " .. tostring(a3)))))
+                debugSay(("cast %s: %s"):format(event:sub(15):lower(), tostring(spellName(a3, "spell " .. tostring(a3)))))
             end
         end
         return

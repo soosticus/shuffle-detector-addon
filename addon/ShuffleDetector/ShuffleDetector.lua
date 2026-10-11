@@ -170,8 +170,8 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
         ns.PrintShuffleMacro()
     elseif msg == "plan" then
         ns.PrintPlan()
-    elseif msg == "selftest" then
-        ns.ShuffleSelfTest()
+    elseif msg == "shuffledebug" then
+        ns.ToggleShuffleDebug()
     elseif msg == "disenchant" then
         ns.DebugDisenchant()
     else
