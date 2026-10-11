@@ -16,7 +16,12 @@ BINDING_HEADER_SHUFFLEDETECTOR = "ShuffleDetector"
 _G["BINDING_NAME_CLICK " .. BUTTON_NAME .. ":LeftButton"] = "Next shuffle step"
 
 local btn, tracker
+local lastClick -- GetTime() of the last click on the button, shown by /shuffle for diagnosing macros
 
+local function recipeKnown(id)
+    if C_SpellBook and C_SpellBook.IsSpellKnown then return C_SpellBook.IsSpellKnown(id) end
+    return IsSpellKnown and IsSpellKnown(id)
+end
 local function spellName(id, fallback)
     local name
     if C_Spell and C_Spell.GetSpellName then
@@ -174,9 +179,16 @@ local function apply()
         btn:SetAttribute("type", nil)
         btn:SetAttribute("spell", nil)
         btn:SetAttribute("macrotext", nil)
+        btn.craftRecipe = nil
         if step.kind == "craft" then
-            btn:SetAttribute("type", "spell")
-            btn:SetAttribute("spell", ns.plan.recipe)
+            local plan = ns.plan
+            if plan.spell and not recipeKnown(plan.spell) and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
+                -- Profession recipes are not in the spellbook in the modern profession UI; craft through it instead.
+                btn.craftRecipe = plan.spell
+            else
+                btn:SetAttribute("type", "spell")
+                btn:SetAttribute("spell", plan.recipe)
+            end
         elseif step.kind == "disenchant" then
             btn:SetAttribute("type", "macro")
             btn:SetAttribute("macrotext", ("/cast %s\n/use %d %d"):format(spellName(DISENCHANT_ID, "Disenchant"), step.bag, step.slot))
@@ -204,7 +216,17 @@ local function create()
     btn:SetSize(1, 1)
     btn:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
     btn:EnableMouse(false)
-    btn:RegisterForClicks("AnyUp")
+    -- Macros /click with the key-down or key-up state of the action button, so accept both.
+    btn:RegisterForClicks("AnyUp", "AnyDown")
+    btn:HookScript("PostClick", function(self)
+        local now = GetTime()
+        if lastClick and now - lastClick < 0.2 then return end -- down + up of one press
+        lastClick = now
+        if self.craftRecipe then
+            local ok, err = pcall(C_TradeSkillUI.CraftRecipe, self.craftRecipe, 1)
+            if not ok then say("craft failed: " .. tostring(err)) end
+        end
+    end)
 
     tracker = CreateFrame("Frame", "ShuffleDetectorTracker", UIParent)
     tracker:SetSize(300, 94)
@@ -250,6 +272,9 @@ function ns.ShuffleStep()
         say("no shuffle loaded. In the companion app choose a shuffle and use Addon > Send selected shuffle to game, then /reload.")
     end
     apply()
+    local how = btn:GetAttribute("type") or (btn.craftRecipe and "tradeskill") or "none"
+    local ago = lastClick and ("%.0fs ago"):format(GetTime() - lastClick) or "never"
+    say(("next: %s [action: %s; button last clicked %s]"):format(ns.NextShuffleStep().label, how, ago))
 end
 
 function ns.PrintShuffleMacro()
