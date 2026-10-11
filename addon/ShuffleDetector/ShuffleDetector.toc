@@ -3,12 +3,14 @@
 ## Notes: Scans the auction house and records profession skill/recipes to SavedVariables for external tools.
 ## Author: Soost
 ## X-License: MIT
-## Version: 0.2.4
+## Version: 0.3.0
 ## OptionalDeps: Auctionator, LibAHTab
 ## SavedVariables: AHSnapshotDB
 
 ShuffleDetector.lua
+Plan.lua
 Scan.lua
 UI.lua
+Shuffle.lua
 
 

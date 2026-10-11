@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ADDON_NAME = "ShuffleDetector"
+PLAN_FILE = "Plan.lua"  # written by the companion; kept across addon updates
 _REPO_ADDON = Path(__file__).resolve().parents[3] / "addon" / ADDON_NAME
 _BUNDLED_ADDON = Path(__file__).resolve().parent / "_addon" / ADDON_NAME
 
@@ -51,6 +52,10 @@ class Install:
     @property
     def addon_dir(self):
         return self.addons_dir / ADDON_NAME
+
+    @property
+    def plan_file(self):
+        return self.addon_dir / PLAN_FILE
 
     @property
     def installed_version(self):
@@ -123,7 +128,8 @@ def status(install):
 
 
 def install_addon(install):
-    """Copy the bundled addon into the AddOns folder (swap in place; SavedVariables live in WTF, untouched)."""
+    """Copy the bundled addon into the AddOns folder (swap in place; SavedVariables live in WTF, untouched).
+    A previously sent Plan.lua is carried over."""
     src = bundled_addon_dir()
     if src is None:
         raise FileNotFoundError("Bundled addon files not found.")
@@ -133,6 +139,11 @@ def install_addon(install):
     for p in (tmp, old):
         _remove_tree(p)
     shutil.copytree(src, tmp, copy_function=shutil.copyfile)
+    try:
+        if install.plan_file.is_file():
+            shutil.copyfile(install.plan_file, tmp / PLAN_FILE)
+    except OSError:
+        pass
     try:
         if target.exists():
             target.rename(old)

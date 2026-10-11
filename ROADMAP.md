@@ -7,21 +7,12 @@ Open items only; finished work is removed. Release notes are generated from comm
 - Layer observed in-game disenchant results from the addon on top of the Wowhead yield rates.
 - Handle vendor faction/location restrictions.
 - Confirm the AH tab and recipe capture (`/shuffledetector recipes`) in the Forever client.
+- Confirm the in-game shuffle button in the Forever client: crafting via the `spell` attribute (recipe name), the Disenchant `/cast` + `/use <bag> <slot>` macro, and that each press registers.
+- Shuffle button follow-ups: a craft count or budget target, and steps beyond craft/disenchant (for example vendor or AH listing) once the calculator can name them.
 
 ## Planned: shuffle calculator
 
 Given a chosen shuffle, tell the user how many of each material to buy for a target (budget, craft count, or number of disenchants) and the expected profit. Show the per-step material quantities (including rounding up for yields), total cost at current AH/vendor prices, expected output, and net profit after AH cut, with a range that accounts for disenchant yield variance. Should reuse `calc.py` so it honors the exit filters and known-recipe settings.
-
-## Planned: in-game shuffle button
-
-A one-button action in the addon that walks the shuffle steps in order, so the user can press or spam it (or bind a key) instead of clicking each step. Ideas:
-
-- A secure action button (`SecureActionButtonTemplate`) whose type/spell/item attributes are updated after each step, so each press performs the next action: craft, then disenchant, then craft again.
-- Protected actions such as casting Disenchant need a hardware event per press, so one action per press is the realistic limit; a macro-style `/click` bind keeps it spammable.
-- Attribute changes are blocked in combat, so update the button only out of combat.
-- Fallback if full sequencing is not feasible: just simplify disenchanting, for example a button that targets the next disenchantable item in bags and casts Disenchant.
-- The companion could export the chosen shuffle (recipe, quantities, exit) to SavedVariables or a pasted string so the addon knows which steps to run.
-- Needs an in-game check of what the Forever client allows.
 
 ## Planned: more professions
 

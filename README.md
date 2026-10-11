@@ -36,6 +36,10 @@ To bundle the addon into a built package, run `python companion/scripts/bundle_a
 
 Copy `addon/ShuffleDetector` into `Interface/AddOns`.
 
+## In-game shuffle button
+
+Select a shuffle in the companion and choose Addon > "Send selected shuffle to game" (or the "Send to game" button; CLI: `--send-plan "Recipe Name"`). In game, `/reload`, then `/shuffledetector shuffle` shows the button (Shift-drag to move it). Each press does one step: disenchant a crafted piece in your bags, otherwise craft the next one, until the reagents run out. Bind a key under Key Bindings > AddOns > ShuffleDetector, or use `/click ShuffleDetectorShuffleButton`, to spam it. The button updates between presses and only out of combat. `/shuffledetector plan` shows the loaded shuffle and the next step.
+
 ## License
 
 [MIT](LICENSE).

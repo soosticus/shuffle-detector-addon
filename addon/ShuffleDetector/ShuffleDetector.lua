@@ -162,8 +162,12 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
         ns.DebugRecipes()
     elseif msg == "import" then
         ns.ImportAuctionator()
+    elseif msg == "shuffle" then
+        ns.ToggleShuffleButton()
+    elseif msg == "plan" then
+        ns.PrintPlan()
     else
-        say("usage: /shuffledetector scan | import (import uses Auctionator's prices). Open a profession window to record its recipes.")
+        say("usage: /shuffledetector scan | import | shuffle (show/hide the shuffle button) | plan. Open a profession window to record its recipes.")
     end
 end
 

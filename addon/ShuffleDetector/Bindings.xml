@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="SHUFFLEDETECTOR_SHUFFLE" header="SHUFFLEDETECTOR">
+        CLICK ShuffleDetectorShuffleButton:LeftButton
+    </Binding>
+</Bindings>

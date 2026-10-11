@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from . import calc, data_loader
+from . import addon_manager, calc, data_loader, plan
 
 
 def build_parser():
@@ -19,8 +19,25 @@ def build_parser():
     p.add_argument("--top", type=int, default=10)
     p.add_argument("--update-wowhead", action="store_true", help="download recipes/yields/vendor prices from Wowhead (Forever)")
     p.add_argument("--refresh", action="store_true", help="with --update-wowhead: ignore the page cache")
+    p.add_argument("--send-plan", metavar="RECIPE", help="write this recipe's shuffle to the addon's Plan.lua (then /reload in game)")
+    p.add_argument("--wow", help="WoW folder, flavor folder or AddOns folder to send the plan to (default: auto-detect)")
     p.add_argument("--detail", action="store_true", help="show step-by-step breakdown")
     return p
+
+
+def send_plan(args, results):
+    match = next((r for r in results if r.name.lower() == args.send_plan.lower()), None)
+    if match is None:
+        print(f"No recipe named {args.send_plan!r}.", file=sys.stderr)
+        return 2
+    installs = [i for i in addon_manager.discover_installs([args.wow] if args.wow else []) if i.installed_version]
+    if not installs:
+        print("No WoW install with the addon found; install the addon or pass --wow.", file=sys.stderr)
+        return 2
+    for inst in installs:
+        print(f"Sent {match.name} ({match.exit}) to {plan.write_plan(inst, plan.build_plan(match))}")
+    print("In game: /reload, then /shuffledetector shuffle")
+    return 0
 
 
 def main(argv=None):
@@ -45,6 +62,8 @@ def main(argv=None):
     exits = tuple(exit_names[x] for x in args.exits.lower().replace(" ", "").split(",") if x in exit_names)
     settings = calc.Settings(ah_cut=args.ah_cut, price_mode=args.price_mode, exits=exits)
     results = calc.rank(scan, ref, settings, args.realm, args.character)
+    if args.send_plan:
+        return send_plan(args, results)
     for r in results[: args.top]:
         print(f"{r.name:<28} profit {calc.fmt_money(r.profit):>12}  cost {calc.fmt_money(r.cost):>12}  via {r.exit:<11} [{r.status}]")
         if args.detail:
