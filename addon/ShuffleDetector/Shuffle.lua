@@ -18,10 +18,6 @@ _G["BINDING_NAME_CLICK " .. BUTTON_NAME .. ":LeftButton"] = "Next shuffle step"
 local btn, tracker
 local lastClick -- GetTime() of the last click on the button, shown by /shuffle for diagnosing macros
 
-local function recipeKnown(id)
-    if C_SpellBook and C_SpellBook.IsSpellKnown then return C_SpellBook.IsSpellKnown(id) end
-    return IsSpellKnown and IsSpellKnown(id)
-end
 local function spellName(id, fallback)
     local name
     if C_Spell and C_Spell.GetSpellName then
@@ -182,8 +178,8 @@ local function apply()
         btn.craftRecipe = nil
         if step.kind == "craft" then
             local plan = ns.plan
-            if plan.spell and not recipeKnown(plan.spell) and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
-                -- Profession recipes are not in the spellbook in the modern profession UI; craft through it instead.
+            if plan.spell and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
+                -- Casting a recipe by name does nothing in the modern profession UI; craft through it instead.
                 btn.craftRecipe = plan.spell
             else
                 btn:SetAttribute("type", "spell")
@@ -225,7 +221,11 @@ local function create()
         say(("click: %s (%s)"):format(self.craftRecipe and "tradeskill craft" or tostring(self:GetAttribute("type")),
             tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe)))
         if self.craftRecipe then
-            local ok, err = pcall(C_TradeSkillUI.CraftRecipe, self.craftRecipe, 1)
+            local T = C_TradeSkillUI
+            if T.GetRecipeInfo and not T.GetRecipeInfo(self.craftRecipe) then
+                say("the profession window has not loaded this recipe yet - open your profession window once, then try again.")
+            end
+            local ok, err = pcall(T.CraftRecipe, self.craftRecipe, 1)
             if not ok then say("craft failed: " .. tostring(err)) end
         end
     end)
