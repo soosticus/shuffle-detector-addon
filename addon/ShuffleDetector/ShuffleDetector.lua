@@ -170,6 +170,8 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
         ns.PrintShuffleMacro()
     elseif msg == "plan" then
         ns.PrintPlan()
+    elseif msg == "disenchant" then
+        ns.DebugDisenchant()
     else
         say("usage: /shuffledetector scan | import | shuffle (show/hide the step tracker) | step | macro | plan. Open a profession window to record its recipes.")
     end

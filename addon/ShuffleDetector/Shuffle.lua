@@ -288,6 +288,15 @@ function ns.PrintShuffleMacro()
     for line in MACRO:gmatch("[^\n]+") do say("  " .. line) end
 end
 
+function ns.DebugDisenchant()
+    local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo("Disenchant")
+    local book = C_SpellBook and C_SpellBook.IsSpellKnown and C_SpellBook.IsSpellKnown(DISENCHANT_ID)
+    say(("spell %d: name=%s IsSpellKnown=%s spellbook-known=%s"):format(DISENCHANT_ID,
+        tostring(spellName(DISENCHANT_ID)), tostring(IsSpellKnown and IsSpellKnown(DISENCHANT_ID)), tostring(book)))
+    say("lookup by name 'Disenchant': " .. (info and ("id " .. tostring(info.spellID) .. ", " .. tostring(info.name)) or "not found"))
+    say("button macro: " .. tostring(btn:GetAttribute("macrotext")))
+end
+
 function ns.PrintPlan()
     local plan = ns.plan
     if not plan then
