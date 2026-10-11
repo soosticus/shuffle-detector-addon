@@ -78,9 +78,33 @@ local function findCrafted(plan)
     return firstBag, firstSlot, count
 end
 
+-- Bolts in bags plus the bolts the raw cloth in bags could be crafted into.
+local function available(r)
+    local n = itemCount(r.item)
+    if r.cloth and (r.clothQty or 0) > 0 then n = n + math.floor(itemCount(r.cloth) / r.clothQty) end
+    return n
+end
+
 local function missingReagent(plan)
     for _, r in ipairs(plan.reagents or {}) do
-        if itemCount(r.item) < r.qty then return r end
+        if available(r) < r.qty then return r end
+    end
+end
+
+-- A reagent short on bolts that raw cloth can cover (only called when nothing is missing overall).
+local function boltToCraft(plan)
+    for _, r in ipairs(plan.reagents or {}) do
+        if r.cloth and itemCount(r.item) < r.qty then return r end
+    end
+end
+
+-- Recipe id of a crafted item by name, from the open profession window.
+local function findRecipeId(name)
+    local T = C_TradeSkillUI
+    if not (T and T.GetAllRecipeIDs and T.GetRecipeInfo) then return end
+    for _, id in ipairs(T.GetAllRecipeIDs() or {}) do
+        local info = T.GetRecipeInfo(id)
+        if info and info.learned and info.name == name then return id end
     end
 end
 
@@ -89,7 +113,7 @@ local function craftableCount(plan)
     local n
     for _, r in ipairs(plan.reagents or {}) do
         if r.qty > 0 then
-            local k = math.floor(itemCount(r.item) / r.qty)
+            local k = math.floor(available(r) / r.qty)
             if not n or k < n then n = k end
         end
     end
@@ -122,7 +146,19 @@ function ns.NextShuffleStep()
         if plan.exit ~= "Disenchant" then step.label = step.label .. " - sell: " .. tostring(plan.exit or "?") end
         return step
     end
+    local bolt = boltToCraft(plan)
+    if bolt then
+        local name = itemName(bolt.item)
+        step.kind, step.stage = "craft", 1
+        step.spell = findRecipeId(name)
+        step.label = "Make " .. name
+        if not step.spell then
+            step.kind, step.label = "idle", "Open your Tailoring window to make " .. name
+        end
+        return step
+    end
     step.kind, step.label, step.stage = "craft", "Craft " .. plan.recipe, 1
+    step.spell = plan.spell
     return step
 end
 
@@ -163,6 +199,8 @@ local function refreshTracker(step)
         tracker.foot:SetText("In combat - the next step is set when it ends")
     elseif step.kind == "idle" then
         tracker.foot:SetText(step.label)
+    elseif step.kind == "craft" and step.label:find("^Make ") then
+        tracker.foot:SetText(step.label .. " - run your /shuffle macro")
     else
         tracker.foot:SetText("Run your /shuffle macro")
     end
@@ -194,9 +232,9 @@ local function apply()
         clearAction()
         if step.kind == "craft" then
             local plan = ns.plan
-            if plan.spell and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
+            if step.spell and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
                 -- Casting a recipe by name does nothing in the modern profession UI; craft through it instead.
-                btn.craftRecipe = plan.spell
+                btn.craftRecipe = step.spell
             else
                 btn:SetAttribute("type", "spell")
                 btn:SetAttribute("spell", plan.recipe)
@@ -359,7 +397,9 @@ function ns.PrintPlan()
     end
     local reagents = {}
     for _, r in ipairs(plan.reagents or {}) do
-        reagents[#reagents + 1] = ("%d x %s"):format(r.qty, itemName(r.item))
+        local text = ("%d x %s"):format(r.qty, itemName(r.item))
+        if r.cloth then text = text .. (" (or %d x %s each)"):format(r.clothQty or 0, itemName(r.cloth)) end
+        reagents[#reagents + 1] = text
     end
     say(("shuffle: %s -> %s (%s)"):format(plan.recipe, tostring(plan.exit or "?"), table.concat(reagents, ", ")))
     say("next step: " .. ns.NextShuffleStep().label)

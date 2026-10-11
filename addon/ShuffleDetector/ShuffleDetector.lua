@@ -175,7 +175,7 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
     elseif msg == "disenchant" then
         ns.DebugDisenchant()
     else
-        say("usage: /shuffledetector scan | import | shuffle (show/hide the step tracker) | step | macro | plan. Open a profession window to record its recipes.")
+        say("usage: /shuffledetector scan | import | shuffle (show/hide the step tracker) | step | macro | plan | shuffledebug. Open a profession window to record its recipes.")
     end
 end
 

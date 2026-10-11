@@ -8,6 +8,7 @@ Open items only; finished work is removed. Release notes are generated from comm
 - Handle vendor faction/location restrictions.
 - Confirm the AH tab and recipe capture (`/shuffledetector recipes`) in the Forever client. Tailoring recipes were not being recorded for the main character, so the "known recipes only" filter falls back to showing everything; if `/shuffledetector recipes` still reports 0 after opening the Tailoring window and `/reload`, the recipe capture needs a fix for the Forever API. Enchanting (craft frame) recipes are not read by the addon.
 - Confirm in the Forever client that the shuffle macro works with just `/click ShuffleDetectorShuffleButton` (without the `/shuffle` line), and simplify the documented macro if so. The disenchant step now uses `type="spell"` with `target-item` and is confirmed working; crafting needs the profession window open.
+- Confirm in game that the addon makes bolts from raw cloth (plan reagents with `cloth`/`clothQty`) before crafting, and that the fast-press gating no longer repeats steps.
 - Shuffle follow-ups: take the craft count or budget from the calculator, and steps beyond craft/disenchant (for example vendor or AH listing) now that the calculator can name them.
 - Calculator follow-ups: model price impact when buying or selling large quantities (walk the sell side of the order book), use observed in-game disenchant results instead of Poisson for the range, and offer a "number of disenchants" target.
 
