@@ -227,6 +227,10 @@ local function create()
             end
             local ok, err = pcall(T.CraftRecipe, self.craftRecipe, 1)
             if not ok then say("craft failed: " .. tostring(err)) end
+        elseif self:GetAttribute("type") == "macro" and SpellIsTargeting and SpellIsTargeting() then
+            -- The cast was accepted but the item was never picked as its target; clear it so the next press starts clean.
+            say("Disenchant is waiting for a target: could not pick the item from your bags.")
+            if SpellStopTargeting then SpellStopTargeting() end
         end
     end)
 
@@ -310,7 +314,23 @@ ev:RegisterEvent("BAG_UPDATE_DELAYED")
 ev:RegisterEvent("PLAYER_REGEN_ENABLED")
 ev:RegisterEvent("PLAYER_REGEN_DISABLED")
 ev:RegisterEvent("SPELLS_CHANGED")
-ev:SetScript("OnEvent", function(_, event)
+ev:RegisterEvent("UI_ERROR_MESSAGE")
+pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_START", "player")
+pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_FAILED", "player")
+pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_INTERRUPTED", "player")
+pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_SUCCEEDED", "player")
+ev:SetScript("OnEvent", function(_, event, a1, a2, a3)
+    if event == "UI_ERROR_MESSAGE" or event:find("^UNIT_SPELLCAST") then
+        -- Echo what the game says about a press for a few seconds after it, to see why an action did nothing.
+        if lastClick and GetTime() - lastClick < 4 then
+            if event == "UI_ERROR_MESSAGE" then
+                say("game: " .. tostring(a2))
+            else
+                say(("cast %s: %s"):format(event:sub(15):lower(), tostring(spellName(a3, "spell " .. tostring(a3)))))
+            end
+        end
+        return
+    end
     if event == "PLAYER_LOGIN" then
         restorePosition()
         if AHSnapshotDB.shuffleTrackerShown ~= false and currentPlan() then tracker:Show() end
