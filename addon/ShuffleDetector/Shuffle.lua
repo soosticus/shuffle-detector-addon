@@ -126,6 +126,10 @@ function ns.NextShuffleStep()
     return step
 end
 
+-- Set from a press until its cast ends and the bags have updated; presses in between do nothing, so a fast
+-- presser cannot repeat a step before the next one is known.
+local busy, release
+
 local GREEN, GREY = { 0.35, 1, 0.35 }, { 0.6, 0.6, 0.6 }
 
 local function refreshTracker(step)
@@ -153,7 +157,9 @@ local function refreshTracker(step)
         local c = active and GREEN or GREY
         fs:SetTextColor(c[1], c[2], c[3])
     end
-    if InCombatLockdown() then
+    if busy then
+        tracker.foot:SetText("Working...")
+    elseif InCombatLockdown() then
         tracker.foot:SetText("In combat - the next step is set when it ends")
     elseif step.kind == "idle" then
         tracker.foot:SetText(step.label)
@@ -163,6 +169,14 @@ local function refreshTracker(step)
 end
 
 local dirty = false -- a refresh was requested during combat
+
+local function clearAction()
+    btn:SetAttribute("type", nil)
+    btn:SetAttribute("spell", nil)
+    btn:SetAttribute("macrotext", nil)
+    btn:SetAttribute("target-item", nil)
+    btn.craftRecipe = nil
+end
 
 -- Attributes of a secure button can only change out of combat; the tracker can always update.
 local function apply()
@@ -175,13 +189,9 @@ local function apply()
     end
     if InCombatLockdown() then
         dirty = true
-    else
+    elseif not busy then
         dirty = false
-        btn:SetAttribute("type", nil)
-        btn:SetAttribute("spell", nil)
-        btn:SetAttribute("macrotext", nil)
-        btn:SetAttribute("target-item", nil)
-        btn.craftRecipe = nil
+        clearAction()
         if step.kind == "craft" then
             local plan = ns.plan
             if plan.spell and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
@@ -198,6 +208,21 @@ local function apply()
         end
     end
     refreshTracker(step)
+end
+
+release = function()
+    busy = nil
+    apply()
+end
+
+-- Called right after a press that did something: disarm the button until the action has finished.
+local function startBusy()
+    local token = { started = false }
+    busy = token
+    clearAction()
+    -- No cast started: the press did nothing (wrong target, missing window...), so do not stay stuck.
+    C_Timer.After(1, function() if busy == token and not token.started then release() end end)
+    C_Timer.After(20, function() if busy == token then release() end end)
 end
 
 local function savePosition()
@@ -231,6 +256,8 @@ local function create()
         local now = GetTime()
         if lastClick and now - lastClick < 0.2 then return end -- down + up of one press
         lastClick = now
+        if busy then return end
+        local acted = (self.craftRecipe or self:GetAttribute("type")) and not InCombatLockdown()
         debugSay(("click: %s (%s) down=%s"):format(self.craftRecipe and "tradeskill craft" or tostring(self:GetAttribute("type")),
             tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe), tostring(self.lastDown)))
         if self.craftRecipe then
@@ -239,12 +266,17 @@ local function create()
                 say("the profession window has not loaded this recipe yet - open your profession window once, then try again.")
             end
             local ok, err = pcall(T.CraftRecipe, self.craftRecipe, 1)
-            if not ok then say("craft failed: " .. tostring(err)) end
+            if not ok then
+                say("craft failed: " .. tostring(err))
+                acted = false
+            end
         elseif self:GetAttribute("type") == "spell" and SpellIsTargeting and SpellIsTargeting() then
             -- The cast was accepted but the item was never picked as its target; clear it so the next press starts clean.
             say("Disenchant is waiting for a target: could not pick the item from your bags.")
             if SpellStopTargeting then SpellStopTargeting() end
+            acted = false
         end
+        if acted then startBusy() end
     end)
 
     tracker = CreateFrame("Frame", "ShuffleDetectorTracker", UIParent)
@@ -356,8 +388,20 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3)
                 debugSay(("cast %s: %s"):format(event:sub(15):lower(), tostring(spellName(a3, "spell " .. tostring(a3)))))
             end
         end
+        if busy and event:find("^UNIT_SPELLCAST") then
+            local token = busy
+            if event == "UNIT_SPELLCAST_START" then
+                token.started = true
+            elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+                token.started, token.done = true, true
+                C_Timer.After(0.5, function() if busy == token then release() end end)
+            else
+                release()
+            end
+        end
         return
     end
+    if event == "BAG_UPDATE_DELAYED" and busy and busy.done then busy = nil end
     if event == "PLAYER_LOGIN" then
         restorePosition()
         if AHSnapshotDB.shuffleTrackerShown ~= false and currentPlan() then tracker:Show() end
