@@ -195,7 +195,7 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.cog)
         self.send_btn = QToolButton()
         self.send_btn.setText("Send to game")
-        self.send_btn.setToolTip("Write the selected shuffle to the addon for the in-game shuffle button (then /reload)")
+        self.send_btn.setToolTip("Write the selected shuffle to the addon for the in-game shuffle tracker and macro (then /reload)")
         self.send_btn.clicked.connect(self.send_plan)
         controls.addWidget(self.send_btn)
         controls.addStretch()

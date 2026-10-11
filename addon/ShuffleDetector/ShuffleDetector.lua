@@ -163,11 +163,18 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
     elseif msg == "import" then
         ns.ImportAuctionator()
     elseif msg == "shuffle" then
-        ns.ToggleShuffleButton()
+        ns.ToggleShuffleTracker()
+    elseif msg == "step" then
+        ns.ShuffleStep()
+    elseif msg == "macro" then
+        ns.PrintShuffleMacro()
     elseif msg == "plan" then
         ns.PrintPlan()
     else
-        say("usage: /shuffledetector scan | import | shuffle (show/hide the shuffle button) | plan. Open a profession window to record its recipes.")
+        say("usage: /shuffledetector scan | import | shuffle (show/hide the step tracker) | step | macro | plan. Open a profession window to record its recipes.")
     end
 end
+
+SLASH_SHUFFLEDETECTORSTEP1 = "/shuffle"
+SlashCmdList["SHUFFLEDETECTORSTEP"] = function() ns.ShuffleStep() end
 

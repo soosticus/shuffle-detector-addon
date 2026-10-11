@@ -40,9 +40,18 @@ Copy `addon/ShuffleDetector` into `Interface/AddOns`.
 
 The GUI's Calculator tab plans a batch of the selected shuffle either by number of crafts or by budget. CLI: `shuffledetector --calc "Recipe Name" --crafts 20` or `--budget 250g`. It lists how many of each material to buy (from the AH, walking the cheapest listings, or from a vendor if that is cheaper), the total cost, the expected output, and the net profit after the AH cut. For disenchants it adds a 90% range from yield variance (yields are modelled as independent Poisson counts, so the range is rough for small batches). It honors the exit and price settings, buys no more than is listed, and values output at current prices, so large batches will move the market.
 
-## In-game shuffle button
+## In-game shuffle
 
-Select a shuffle in the companion and choose Addon > "Send selected shuffle to game" (or the "Send to game" button; CLI: `--send-plan "Recipe Name"`). In game, `/reload`, then `/shuffledetector shuffle` shows the button (Shift-drag to move it). Each press does one step: disenchant a crafted piece in your bags, otherwise craft the next one, until the reagents run out. Bind a key under Key Bindings > AddOns > ShuffleDetector, or use `/click ShuffleDetectorShuffleButton`, to spam it. The button updates between presses and only out of combat. `/shuffledetector plan` shows the loaded shuffle and the next step.
+Select a shuffle in the companion and choose Addon > "Send selected shuffle to game" (or the "Send to game" button; CLI: `--send-plan "Recipe Name"`), then `/reload` in game. A small tracker appears showing the shuffle's steps with the current one highlighted, plus how many crafts your reagents allow and how many crafted pieces are in your bags. Drag it to move it; `/shuffledetector shuffle` shows or hides it.
+
+To run the shuffle, make a macro (`/shuffledetector macro` prints it) and press it repeatedly:
+
+```
+/shuffle
+/click ShuffleDetectorShuffleButton
+```
+
+Each press does one step: disenchant a crafted piece in your bags, otherwise craft the next one, until the reagents run out. `/shuffle` only prepares the step: WoW doesn't let chat commands cast spells, so the second line presses an invisible secure button that does the action. You can also bind a key under Key Bindings > AddOns > ShuffleDetector. The step only changes out of combat. `/shuffledetector plan` prints the loaded shuffle and the next step.
 
 ## License
 

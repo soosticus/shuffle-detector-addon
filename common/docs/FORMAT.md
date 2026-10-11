@@ -25,7 +25,7 @@ AHSnapshotDB = {
 `prices` holds the cheapest 40 listings sorted ascending, used to cost bulk purchases.
 Shallow scans (imported from Auctionator) carry one `{min, 1}` entry per item; the companion
 treats them as unlimited quantity at the minimum price. The addon also stores UI state
-(`shuffleButton`, `shuffleButtonShown`) in the same table; the companion ignores it.
+(`shuffleTracker`, `shuffleTrackerShown`) in the same table; the companion ignores it.
 
 # Shuffle plan (companion -> addon)
 
@@ -46,9 +46,11 @@ ns.plan = {
 }
 ```
 
-The shuffle button (`/shuffledetector shuffle`, or the "Next shuffle step" key binding) runs one
-step per press: disenchant a crafted piece in the bags if the exit is Disenchant, otherwise craft
-the next one, until the reagents run out.
+The shuffle runs one step per press of a macro (`/shuffle` then `/click ShuffleDetectorShuffleButton`)
+or the "Next shuffle step" key binding: disenchant a crafted piece in the bags if the exit is
+Disenchant, otherwise craft the next one, until the reagents run out. A tracker frame
+(`/shuffledetector shuffle` to show or hide) highlights the current step. The secure button is
+invisible; `/shuffle` only prepares it, because chat commands cannot cast.
 
 # Reference data
 

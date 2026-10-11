@@ -1,4 +1,4 @@
-"""Export a chosen shuffle to the addon's Plan.lua so the in-game shuffle button knows what to run."""
+"""Export a chosen shuffle to the addon's Plan.lua so the in-game shuffle tracker and macro know what to run."""
 
 import os
 import time
