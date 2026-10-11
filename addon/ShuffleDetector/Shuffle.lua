@@ -261,7 +261,12 @@ local function create()
     -- may send either; match the attribute to each click before the template sees it (allowed out of combat).
     btn:HookScript("PreClick", function(self, _, down)
         self.lastDown = down and true or false
-        if not InCombatLockdown() then self:SetAttribute("useOnKeyDown", self.lastDown) end
+        if not InCombatLockdown() then
+            self:SetAttribute("useOnKeyDown", self.lastDown)
+            -- Choose the action as the click happens, so it matches the bags and cast state right now.
+            local now = GetTime()
+            if not lastClick or now - lastClick >= 0.2 then apply() end
+        end
     end)
     btn:HookScript("PostClick", function(self)
         local now = GetTime()
