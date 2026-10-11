@@ -187,7 +187,7 @@ local function apply()
             end
         elseif step.kind == "disenchant" then
             btn:SetAttribute("type", "macro")
-            btn:SetAttribute("macrotext", ("/cast %s\n/use %d %d"):format(spellName(DISENCHANT_ID, "Disenchant"), step.bag, step.slot))
+            btn:SetAttribute("macrotext", ("/cast %s\n/use %s"):format(spellName(DISENCHANT_ID, "Disenchant"), ns.plan.itemName or ns.plan.recipe))
         end
     end
     refreshTracker(step)
