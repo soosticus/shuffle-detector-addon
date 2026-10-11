@@ -130,6 +130,10 @@ end
 -- presser cannot repeat a step before the next one is known.
 local busy, release
 
+local function isCasting()
+    return (UnitCastingInfo and UnitCastingInfo("player") ~= nil) or (UnitChannelInfo and UnitChannelInfo("player") ~= nil)
+end
+
 local GREEN, GREY = { 0.35, 1, 0.35 }, { 0.6, 0.6, 0.6 }
 
 local function refreshTracker(step)
@@ -192,7 +196,10 @@ local function apply()
     elseif not busy then
         dirty = false
         clearAction()
-        if step.kind == "craft" then
+        -- Anything pressed during a cast is rejected by the game ("Another action is in progress") or repeats the step.
+        if isCasting() then
+            step = { kind = "idle", label = "Casting...", crafted = step.crafted, craftable = step.craftable, stage = step.stage }
+        elseif step.kind == "craft" then
             local plan = ns.plan
             if plan.spell and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
                 -- Casting a recipe by name does nothing in the modern profession UI; craft through it instead.
@@ -222,7 +229,11 @@ local function startBusy()
     clearAction()
     -- No cast started: the press did nothing (wrong target, missing window...), so do not stay stuck.
     C_Timer.After(1, function() if busy == token and not token.started then release() end end)
-    C_Timer.After(20, function() if busy == token then release() end end)
+    local function failsafe()
+        if busy ~= token then return end
+        if isCasting() then C_Timer.After(5, failsafe) else release() end -- a long cast is still working
+    end
+    C_Timer.After(20, failsafe)
 end
 
 local function savePosition()
@@ -257,6 +268,10 @@ local function create()
         if lastClick and now - lastClick < 0.2 then return end -- down + up of one press
         lastClick = now
         if busy then return end
+        if isCasting() then
+            debugSay("click ignored: still casting")
+            return
+        end
         local acted = (self.craftRecipe or self:GetAttribute("type")) and not InCombatLockdown()
         debugSay(("click: %s (%s) down=%s"):format(self.craftRecipe and "tradeskill craft" or tostring(self:GetAttribute("type")),
             tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe), tostring(self.lastDown)))
@@ -387,6 +402,10 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3)
             else
                 debugSay(("cast %s: %s"):format(event:sub(15):lower(), tostring(spellName(a3, "spell " .. tostring(a3)))))
             end
+        end
+        if not busy and event:find("^UNIT_SPELLCAST") and event ~= "UNIT_SPELLCAST_START" then
+            -- A cast that this addon did not start has ended; arm the button again.
+            C_Timer.After(0.2, apply)
         end
         if busy and event:find("^UNIT_SPELLCAST") then
             local token = busy
