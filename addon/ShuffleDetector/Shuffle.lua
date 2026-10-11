@@ -214,6 +214,9 @@ local function create()
     btn:EnableMouse(false)
     -- Macros /click with the key-down or key-up state of the action button, so accept both.
     btn:RegisterForClicks("AnyUp", "AnyDown")
+    -- A macro's /click is a key-up. With the default ActionButtonUseKeyDown the secure template ignores key-up
+    -- clicks, so the spell/macro action silently never ran; make this button act on key-up.
+    btn:SetAttribute("useOnKeyDown", false)
     btn:HookScript("PostClick", function(self)
         local now = GetTime()
         if lastClick and now - lastClick < 0.2 then return end -- down + up of one press
