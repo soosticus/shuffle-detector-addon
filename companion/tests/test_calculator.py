@@ -194,3 +194,30 @@ def test_shopping_list_all_raw_cloth_and_availability():
     assert [p.item for p in plan] == [3] and plan[0].qty == 6 and plan[0].short == 0
     b = calculator.calculate(res, items, ref, settings, budget=10**9)
     assert b.crafts > 0 and all(p.short == 0 for p in b.purchases)
+
+
+def test_time_counts_craft_and_disenchant_per_piece():
+    ref, items, settings, res = make()
+    settings.craft_seconds, settings.disenchant_seconds = 30, 3
+    res = calc.evaluate(RECIPE, items, ref, settings)
+    assert res.exit == "Disenchant" and res.seconds == 33
+    b = calculator.calculate(res, items, ref, settings, crafts=3)
+    assert b.crafts == 3 and b.seconds == 99
+    assert b.profit_per_hour == b.profit / 99 * 3600
+    assert "Expected time: 1m 39s" in calculator.format_batch(b)
+
+
+def test_time_has_no_disenchant_for_sell_exit_and_recipe_override():
+    ref, items, settings, _ = make()
+    settings.exits = ("Sell on AH",)
+    items = dict(items)
+    items[1] = {"min": 5000, "qty": 5, "prices": [(5000, 5)]}
+    recipe = dict(RECIPE, craft_seconds=10)
+    res = calc.evaluate(recipe, items, ref, settings)
+    assert res.exit == "Sell on AH" and res.seconds == 10
+
+
+def test_fmt_duration():
+    assert calc.fmt_duration(45) == "45s"
+    assert calc.fmt_duration(750) == "12m 30s"
+    assert calc.fmt_duration(3900) == "1h 5m"

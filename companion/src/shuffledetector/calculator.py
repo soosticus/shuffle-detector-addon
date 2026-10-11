@@ -60,6 +60,8 @@ class Batch:
     profit_low: float | None = None
     profit_high: float | None = None
     roi: float | None = None
+    seconds: float = 0                # casting time for the whole batch
+    profit_per_hour: float | None = None
     notes: list = field(default_factory=list)
 
 
@@ -239,6 +241,9 @@ def calculate(result, items, ref, settings, crafts=None, budget=None):
         batch.profit_low = batch.revenue_low - batch.cost
         batch.profit_high = batch.revenue_high - batch.cost
         batch.roi = batch.profit / batch.cost if batch.cost else None
+    batch.seconds = result.seconds * n
+    if batch.profit is not None and batch.seconds > 0:
+        batch.profit_per_hour = batch.profit / batch.seconds * 3600
     if n == 0:
         batch.notes.append("Nothing can be bought with these limits.")
     if batch.limited_by == "availability" and crafts is not None:
@@ -253,6 +258,8 @@ def calculate(result, items, ref, settings, crafts=None, budget=None):
         batch.notes.append("Range is 90%, assuming disenchant yields are independent Poisson counts; "
                            "it is rough for small batches.")
     if n:
+        batch.notes.append("Time is casting time only (crafts and disenchants); it leaves out buying, selling, "
+                           "and crafting bolts from raw cloth.")
         batch.notes.append("Sale value uses current prices; selling many units will push the price down.")
     return batch
 
@@ -268,6 +275,8 @@ def format_batch(b):
                                        f"{p.short} unavailable" if p.short else "") if x)
         lines.append(f"  {p.qty} x {p.name}: {where or '-'}  (total {m(p.total)})" + (f" [{p.note}]" if p.note else ""))
     lines.append(f"Total cost: {m(b.cost)}")
+    if b.seconds:
+        lines.append(f"Expected time: {calc.fmt_duration(b.seconds)}")
     if b.outputs:
         lines.append(f"Expected output ({b.exit}):")
         for o in b.outputs:
@@ -279,5 +288,7 @@ def format_batch(b):
         lines.append(f"Net revenue: {m(b.revenue)}{rng(b.revenue_low, b.revenue_high)}")
         roi = f", ROI {b.roi * 100:.0f}%" if b.roi is not None else ""
         lines.append(f"Profit: {m(b.profit)}{rng(b.profit_low, b.profit_high)}{roi}")
+        if b.profit_per_hour is not None:
+            lines.append(f"Profit per hour: {m(b.profit_per_hour)}")
     lines += [f"Note: {n}" for n in b.notes]
     return "\n".join(lines)

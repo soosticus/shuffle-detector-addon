@@ -10,6 +10,7 @@ Open items only; finished work is removed. Release notes are generated from comm
 - Confirm in the Forever client that the shuffle macro works with just `/click ShuffleDetectorShuffleButton` (without the `/shuffle` line), and simplify the documented macro if so. The disenchant step now uses `type="spell"` with `target-item` and is confirmed working; crafting needs the profession window open.
 - Confirm in game that the fast-press gating no longer repeats a craft or disenchant step.
 - Shuffle follow-ups: take the craft count or budget from the calculator, and steps beyond craft/disenchant (for example vendor or AH listing) now that the calculator can name them.
+- Per-recipe craft times: the calculator uses one default craft time (30 s) unless a recipe sets `craft_seconds`; read the real cast times from the game or Wowhead.
 - Calculator follow-ups: model price impact when buying or selling large quantities (walk the sell side of the order book), use observed in-game disenchant results instead of Poisson for the range, and offer a "number of disenchants" target.
 
 ## Planned: more professions

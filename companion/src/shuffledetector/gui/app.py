@@ -22,7 +22,7 @@ ADDON_STATUS_TEXT = {
     "newer": "newer than bundled",
     "no_bundle": "bundled addon missing",
 }
-COLUMNS = ["Recipe", "Status", "Cost", "Net revenue", "Profit", "ROI", "Best exit"]
+COLUMNS = ["Recipe", "Status", "Cost", "Net revenue", "Profit", "ROI", "Best exit", "Time/craft", "Profit/hour"]
 
 
 def _breakdown_html(r):
@@ -97,7 +97,8 @@ def _batch_html(b):
     parts = [f"<h3>{html.escape(b.result.name)}: {b.crafts:,} crafts"
              + (f" <small>({limits[b.limited_by]})</small>" if b.limited_by else "") + "</h3>",
              "<p><b>Buy</b></p><table cellpadding='3' width='100%'>" + "".join(buy) + "</table>",
-             f"<p>Total cost: <b>{m(b.cost)}</b></p>"]
+             f"<p>Total cost: <b>{m(b.cost)}</b>"
+             + (f" &nbsp; Expected time: <b>{calc.fmt_duration(b.seconds)}</b>" if b.seconds else "") + "</p>"]
     if out:
         parts.append(f"<p><b>Expected output</b> ({html.escape(b.exit)}"
                      + (", 90% range per item" if b.exit == "Disenchant" else "") + ")</p>"
@@ -107,7 +108,8 @@ def _batch_html(b):
         roi = f", ROI {b.roi * 100:.0f}%" if b.roi is not None else ""
         parts += [f"<p>Net revenue after the AH cut: <b>{m(b.revenue)}</b>{rng(b.revenue_low, b.revenue_high)}</p>",
                   f"<h3>Profit: <span style='color:{color}'>{m(b.profit)}</span>{roi}</h3>"
-                  + (f"<p style='color:gray'>Likely range: {m(b.profit_low)} to {m(b.profit_high)}</p>" if spread else "")]
+                  + (f"<p style='color:gray'>Likely range: {m(b.profit_low)} to {m(b.profit_high)}</p>" if spread else "")
+                  + (f"<p>Profit per hour: <b>{m(b.profit_per_hour)}</b></p>" if b.profit_per_hour is not None else "")]
     parts += [f"<p style='color:gray'><i>{html.escape(n)}</i></p>" for n in b.notes]
     return "".join(parts)
 
@@ -161,6 +163,11 @@ class MainWindow(QMainWindow):
         self.sort = QComboBox()
         self.sort.addItem("Profit", "profit")
         self.sort.addItem("ROI", "roi")
+        self.sort.addItem("Profit per hour", "hour")
+        self.craft_time = QDoubleSpinBox(minimum=0, maximum=600, value=30, suffix=" s", singleStep=1)
+        self.craft_time.setToolTip("Casting time of one craft. A recipe's own craft_seconds in the reference data overrides it.")
+        self.de_time = QDoubleSpinBox(minimum=0, maximum=60, value=3, suffix=" s", singleStep=0.5)
+        self.de_time.setToolTip("Casting time of one disenchant")
         self.exit_boxes = {}
         for label, tip in (("Disenchant", "Disenchant the crafted piece"), ("Sell on AH", "Resell the crafted piece on the AH"),
                            ("Vendor", "Sell the crafted piece to a vendor")):
@@ -182,6 +189,8 @@ class MainWindow(QMainWindow):
         form.addRow("WoW client", self.client)
         form.addRow("AH cut", self.cut)
         form.addRow("Sell price", self.mode)
+        form.addRow("Craft time", self.craft_time)
+        form.addRow("Disenchant time", self.de_time)
         form.addRow("Sort by", self.sort)
         exits_col = QVBoxLayout()
         for box in self.exit_boxes.values():
@@ -254,7 +263,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         self.statusBar().showMessage("Open the addon's SavedVariables file to begin.")
 
-        for sig in [b.toggled for b in self.exit_boxes.values()] + [self.cut.valueChanged, self.mode.currentIndexChanged, self.known_only.toggled, self.sort.currentIndexChanged]:
+        for sig in [b.toggled for b in self.exit_boxes.values()] + [self.cut.valueChanged, self.craft_time.valueChanged, self.de_time.valueChanged, self.mode.currentIndexChanged, self.known_only.toggled, self.sort.currentIndexChanged]:
             sig.connect(self.refresh)
         self.realm.currentIndexChanged.connect(self.refresh)
         self.character.currentIndexChanged.connect(self.refresh)
@@ -469,7 +478,8 @@ class MainWindow(QMainWindow):
         exits = tuple(n for n, b in self.exit_boxes.items() if b.isChecked())
         rows = self.table.selectionModel().selectedRows()
         keep = self.shown[rows[0].row()].name if rows and rows[0].row() < len(self.shown) else None
-        settings = calc.Settings(ah_cut=self.cut.value() / 100, price_mode=self.mode.currentData(), exits=exits)
+        settings = calc.Settings(ah_cut=self.cut.value() / 100, price_mode=self.mode.currentData(), exits=exits,
+                                 craft_seconds=self.craft_time.value(), disenchant_seconds=self.de_time.value())
         self.results = calc.rank(self.scan, self.ref, settings, self.realm.currentText(), self.character.currentData())
         has_known = any(r.status == "known" for r in self.results)
         self.known_only.setText("Known recipes only" if has_known else "Known recipes only (none recorded)")
@@ -479,16 +489,19 @@ class MainWindow(QMainWindow):
         shown = [r for r in self.results if r.status == "known"] if self.known_only.isChecked() and has_known else self.results
         if self.sort.currentData() == "roi":
             shown = sorted(shown, key=lambda r: (r.roi is None, -(r.roi or 0)))
+        elif self.sort.currentData() == "hour":
+            shown = sorted(shown, key=lambda r: (r.profit_per_hour is None, -(r.profit_per_hour or 0)))
         self.shown = shown
         self.table.setUpdatesEnabled(False)
         self.table.blockSignals(True)
         self.table.setRowCount(len(shown))
         for row, r in enumerate(shown):
             roi = f"{r.roi * 100:.0f}%" if r.roi is not None else "-"
-            vals = [r.name, STATUS_TEXT[r.status], calc.fmt_money(r.cost),             calc.fmt_money(r.net), calc.fmt_money(r.profit), roi, r.exit]
+            vals = [r.name, STATUS_TEXT[r.status], calc.fmt_money(r.cost),             calc.fmt_money(r.net), calc.fmt_money(r.profit), roi, r.exit,
+                    calc.fmt_duration(r.seconds), calc.fmt_money(r.profit_per_hour)]
             for col, v in enumerate(vals):
                 item = QTableWidgetItem(v)
-                if 2 <= col <= 5:
+                if 2 <= col <= 5 or col >= 7:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if col == 4 and r.profit is not None:
                     item.setForeground(QColor("#2e9e44" if r.profit > 0 else "#d04040"))
@@ -541,7 +554,8 @@ class MainWindow(QMainWindow):
                 self.calc_out.setHtml(f"<p style='color:#c60'>{html.escape(str(e))}</p>")
                 return
         exits = tuple(n for n, b in self.exit_boxes.items() if b.isChecked())
-        settings = calc.Settings(ah_cut=self.cut.value() / 100, price_mode=self.mode.currentData(), exits=exits)
+        settings = calc.Settings(ah_cut=self.cut.value() / 100, price_mode=self.mode.currentData(), exits=exits,
+                                 craft_seconds=self.craft_time.value(), disenchant_seconds=self.de_time.value())
         items = calculator.realm_items(self.scan, self.realm.currentText())
         batch = calculator.calculate(self.shown[rows[0].row()], items, self.ref, settings,
                                      crafts=None if by_budget else self.calc_crafts.value(), budget=budget)

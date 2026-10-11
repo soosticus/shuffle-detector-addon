@@ -16,6 +16,8 @@ def build_parser():
     p.add_argument("--price-mode", choices=calc.PRICE_MODES, default="avg_low")
     p.add_argument("--exits", default="disenchant,ah,vendor",
                    help="comma list of exit strategies to consider: disenchant, ah, vendor")
+    p.add_argument("--craft-seconds", type=float, default=30.0, help="seconds to craft one piece (default 30)")
+    p.add_argument("--disenchant-seconds", type=float, default=3.0, help="seconds to disenchant one piece (default 3)")
     p.add_argument("--top", type=int, default=10)
     p.add_argument("--update-wowhead", action="store_true", help="download recipes/yields/vendor prices from Wowhead (Forever)")
     p.add_argument("--refresh", action="store_true", help="with --update-wowhead: ignore the page cache")
@@ -85,7 +87,8 @@ def main(argv=None):
     ref = data_loader.load_reference(extra=args.data)
     exit_names = {"disenchant": "Disenchant", "ah": "Sell on AH", "vendor": "Vendor"}
     exits = tuple(exit_names[x] for x in args.exits.lower().replace(" ", "").split(",") if x in exit_names)
-    settings = calc.Settings(ah_cut=args.ah_cut, price_mode=args.price_mode, exits=exits)
+    settings = calc.Settings(ah_cut=args.ah_cut, price_mode=args.price_mode, exits=exits,
+                             craft_seconds=args.craft_seconds, disenchant_seconds=args.disenchant_seconds)
     results = calc.rank(scan, ref, settings, args.realm, args.character)
     if args.send_plan:
         return send_plan(args, results)
@@ -97,6 +100,8 @@ def main(argv=None):
             for l in r.reagents:
                 print(f"    buy   {l.qty:g} x {l.name} ({l.source}) = {calc.fmt_money(l.total)}  [AH {calc.fmt_money(l.ah_unit)}, vendor {calc.fmt_money(l.vendor_unit)}"
                       + (f", raw cloth {calc.fmt_money(l.raw_unit)}" if l.raw_item else "") + "]")
+            per_hour = f", {calc.fmt_money(r.profit_per_hour)} profit/hour" if r.profit_per_hour is not None else ""
+            print(f"    time  {calc.fmt_duration(r.seconds)} per craft{per_hour}")
             for e in r.exits:
                 print(f"    exit  {e.label:<11} {calc.fmt_money(e.net)}{' <-' if e.label == r.exit else ''}")
             for l in r.yields:

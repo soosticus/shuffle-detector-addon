@@ -11,6 +11,8 @@ class Settings:
     price_mode: str = "avg_low"   # how to value items you sell
     low_units: int = 5            # units averaged by the avg_low mode
     exits: tuple = ("Disenchant", "Sell on AH", "Vendor")  # exit strategies considered
+    craft_seconds: float = 30.0       # time to craft one piece (a recipe's own "craft_seconds" overrides this)
+    disenchant_seconds: float = 3.0   # time to disenchant one piece
 
 
 @dataclass
@@ -51,6 +53,8 @@ class Result:
     exits: list = field(default_factory=list)
     exit: str = ""               # label of the chosen exit
     allowed: tuple = ()          # exits that were enabled for this evaluation
+    seconds: float = 0           # casting time per craft: the craft, plus the disenchant when that is the exit
+    profit_per_hour: float | None = None
 
     @property
     def name(self):
@@ -165,6 +169,10 @@ def evaluate(recipe, items, ref, settings, skill=None, known=frozenset()):
     if res.cost is not None and res.net is not None:
         res.profit = res.net - res.cost
         res.roi = res.profit / res.cost if res.cost else None
+    res.seconds = recipe.get("craft_seconds", settings.craft_seconds) + (
+        settings.disenchant_seconds if res.exit == "Disenchant" else 0)
+    if res.profit is not None and res.seconds > 0:
+        res.profit_per_hour = res.profit / res.seconds * 3600
     if recipe["name"].lower() in known:
         res.status = "known"
     elif skill is None:
@@ -192,6 +200,16 @@ def rank(scan, ref, settings=None, realm=None, character=None):
 def suggestions(results):
     """Profitable recipes you do not know yet, best first."""
     return [r for r in results if r.status != "known" and r.profit is not None and r.profit > 0]
+
+
+def fmt_duration(seconds):
+    """Format seconds as '1h 5m', '12m 30s' or '45s'."""
+    s = int(round(seconds))
+    h, rem = divmod(s, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}h {m}m"
+    return f"{m}m {s}s" if m else f"{s}s"
 
 
 def fmt_money(copper):
