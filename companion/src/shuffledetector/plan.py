@@ -16,14 +16,8 @@ def build_plan(result, now=None):
         "exit": result.exit if result.exit and result.exit != "-" else "",
         "reagents": [],
     }
-    raw = {l.item: l for l in result.reagents if l.raw_item}
     for x in r.get("reagents", []):
-        entry = {"item": x["item"], "qty": x["qty"]}
-        if x["item"] in raw:
-            # A bolt that can be made from raw cloth: the addon crafts bolts from this when the bolts run short.
-            entry["cloth"] = raw[x["item"]].raw_item
-            entry["clothQty"] = raw[x["item"]].raw_qty
-        plan["reagents"].append(entry)
+        plan["reagents"].append({"item": x["item"], "qty": x["qty"]})
     if r.get("spell"):
         plan["spell"] = r["spell"]
     if r.get("item"):
