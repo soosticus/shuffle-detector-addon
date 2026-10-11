@@ -214,15 +214,18 @@ local function create()
     btn:EnableMouse(false)
     -- Macros /click with the key-down or key-up state of the action button, so accept both.
     btn:RegisterForClicks("AnyUp", "AnyDown")
-    -- A macro's /click is a key-up. With the default ActionButtonUseKeyDown the secure template ignores key-up
-    -- clicks, so the spell/macro action silently never ran; make this button act on key-up.
-    btn:SetAttribute("useOnKeyDown", false)
+    -- The secure template only acts when the click's down/up state matches useOnKeyDown, and a macro's /click
+    -- may send either; match the attribute to each click before the template sees it (allowed out of combat).
+    btn:HookScript("PreClick", function(self, _, down)
+        self.lastDown = down and true or false
+        if not InCombatLockdown() then self:SetAttribute("useOnKeyDown", self.lastDown) end
+    end)
     btn:HookScript("PostClick", function(self)
         local now = GetTime()
         if lastClick and now - lastClick < 0.2 then return end -- down + up of one press
         lastClick = now
-        say(("click: %s (%s)"):format(self.craftRecipe and "tradeskill craft" or tostring(self:GetAttribute("type")),
-            tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe)))
+        say(("click: %s (%s) down=%s"):format(self.craftRecipe and "tradeskill craft" or tostring(self:GetAttribute("type")),
+            tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe), tostring(self.lastDown)))
         if self.craftRecipe then
             local T = C_TradeSkillUI
             if T.GetRecipeInfo and not T.GetRecipeInfo(self.craftRecipe) then
