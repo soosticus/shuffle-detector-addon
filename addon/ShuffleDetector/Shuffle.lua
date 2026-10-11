@@ -418,14 +418,19 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3)
                 token.started = true
             elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
                 token.started, token.done = true, true
-                C_Timer.After(0.5, function() if busy == token then release() end end)
+                -- The item or reagent changes reach the bags a moment after the cast; BAG_UPDATE_DELAYED releases
+                -- the button then. This is only the fallback for a cast that changes nothing.
+                C_Timer.After(2, function() if busy == token then release() end end)
             else
                 release()
             end
         end
         return
     end
-    if event == "BAG_UPDATE_DELAYED" and busy and busy.done then busy = nil end
+    if event == "BAG_UPDATE_DELAYED" and busy and busy.done then
+        debugSay("bags updated")
+        busy = nil
+    end
     if event == "PLAYER_LOGIN" then
         restorePosition()
         if AHSnapshotDB.shuffleTrackerShown ~= false and currentPlan() then tracker:Show() end
