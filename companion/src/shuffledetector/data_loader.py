@@ -50,7 +50,16 @@ class Reference:
             merged = dict(by_name.get(r["name"].lower()) or {"yields": [], "source": "Recorded in game"})
             merged.update(r)
             by_name[r["name"].lower()] = merged
-        out.recipes = list(by_name.values())
+        yields_by_item = observed_yields(scan.disenchants)
+        final = {}
+        for name, recipe in by_name.items():
+            obs = yields_by_item.get(recipe.get("item"))
+            if obs:
+                recipe = dict(recipe)
+                recipe["yields"] = obs["yields"]
+                recipe["yield_samples"] = obs["samples"]
+            final[name] = recipe
+        out.recipes = list(final.values())
         for item_id, entry in derive_refined(out.recipes).items():
             out.refined.setdefault(item_id, entry)
         return out
@@ -62,6 +71,7 @@ class ScanData:
     characters: dict = field(default_factory=dict)
     items: dict = field(default_factory=dict)        # item id -> {"name", "sell"} as recorded in game
     vendor: dict = field(default_factory=dict)       # item id -> copper to buy one from a vendor, as seen in game
+    disenchants: list = field(default_factory=list)  # [{"item", "quality", "ilvl", "loot": [{"item","qty"}], "time"}, ...]
 
     @property
     def realms(self):
@@ -120,7 +130,16 @@ def load_scan_data(path):
         if isinstance(e, dict):
             items[int(item_id)] = {"name": e.get("name"), "sell": int(e.get("sell") or 0)}
     vendor = {int(k): int(v) for k, v in (db.get("vendor") or {}).items() if isinstance(v, (int, float))}
-    return ScanData(scans=scans, characters=db.get("characters") or {}, items=items, vendor=vendor)
+    disenchants = []
+    for d in _as_list(db.get("disenchants")):
+        if not isinstance(d, dict) or not d.get("item"):
+            continue
+        loot = [{"item": int(x["item"]), "qty": int(x.get("qty") or 1)}
+                for x in _as_list(d.get("loot")) if isinstance(x, dict) and x.get("item")]
+        disenchants.append({"item": int(d["item"]), "quality": d.get("quality"), "ilvl": d.get("ilvl"),
+                            "loot": loot, "time": d.get("time")})
+    return ScanData(scans=scans, characters=db.get("characters") or {}, items=items, vendor=vendor,
+                    disenchants=disenchants)
 
 
 def _as_list(value):
@@ -159,6 +178,30 @@ def observed_recipes(characters):
                             recipe["source"] = str(r["source"])
                     found.setdefault(r["name"].lower(), recipe)
     return list(found.values())
+
+
+def observed_yields(disenchants):
+    """Average disenchant loot observed in game, by the disenchanted item id.
+
+    item id -> {"yields": [{"item", "avg"}, ...], "samples": number of disenchants of that item}
+    """
+    totals = {}
+    for d in disenchants or []:
+        item = d.get("item")
+        if not item:
+            continue
+        bucket = totals.setdefault(item, {"count": 0, "loot": {}})
+        bucket["count"] += 1
+        for x in d.get("loot") or []:
+            bucket["loot"][x["item"]] = bucket["loot"].get(x["item"], 0) + x.get("qty", 1)
+    return {
+        item: {
+            "yields": [{"item": loot_item, "avg": qty / bucket["count"]}
+                      for loot_item, qty in sorted(bucket["loot"].items())],
+            "samples": bucket["count"],
+        }
+        for item, bucket in totals.items()
+    }
 
 
 def derive_refined(recipes):

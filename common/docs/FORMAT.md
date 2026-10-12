@@ -29,6 +29,10 @@ AHSnapshotDB = {
   },
   items = { [itemID] = { name = "Linen Cloth", sell = <vendor sell price, copper> } },  -- from GetItemInfo
   vendor = { [itemID] = <copper to buy one from a vendor> },  -- from the merchant window, gold-only items
+  disenchants = {   -- one entry per successful Disenchant cast, oldest first, capped at 500
+    { item = <id disenchanted>, quality = <item quality>, ilvl = <item level>,
+      loot = { { item = <id>, qty = <n> }, ... }, time = <unix> },
+  },
 }
 ```
 
@@ -45,6 +49,12 @@ their status is "unknown" until a skill requirement is available.
 
 `vendor` is recorded whenever a merchant window is opened (price per single item; reputation discounts
 are included in what the game shows) and replaces the bundled vendor buy price.
+
+`disenchants` is recorded whenever a Disenchant cast succeeds and a loot window follows within a few
+seconds (`Disenchant.lua`, which hooks `SpellTargetItem` to see what item the cast targeted). The
+companion averages the loot per disenchant by the disenchanted item id (`data_loader.observed_yields`)
+and, once any samples exist, uses that average and the sample count (`recipe["yield_samples"]`) in place
+of a recipe's bundled `yields` for its crafted item.
 
 `prices` holds the cheapest 40 listings sorted ascending, used to cost bulk purchases.
 Shallow scans (imported from Auctionator) carry one `{min, 1}` entry per item; the companion

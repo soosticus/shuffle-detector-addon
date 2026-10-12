@@ -23,7 +23,7 @@ The plan is three steps, in this order:
 1. **The addon records what the game already knows (built, confirmed in game).** For the character's own professions: recipes with their reagents and the pieces made (profession API), item names and vendor sell prices (`GetItemInfo`), written to SavedVariables and read by the companion. No external source is needed for recipes the user already knows. Status and design notes are under "Step 1 status" below.
 2. **Recipes the character does not know, and vendor buy prices, also recorded in game (built and confirmed in game, addon 0.6.5).** The profession window lists every recipe of the profession, learned or not (`GetAllRecipeIDs`), so the addon stores the unlearned ones with reagents, pieces made, the trivial skill level and, if the API offers it, the source text, in a per-profession `available` list. Vendor buy prices are read from the merchant window whenever one is opened (gold-only items, per single item) into a top-level `vendor` table that replaces the bundled prices. Limits: only professions the character has, and no required skill level (only the trivial level), so these recipes show status "unknown".
    - wago.tools (the client tables, for a character with no profession or for skill requirements) is **paused**: its `robots.txt` disallows everything except the home page and it has no terms page, so automated downloads are not permitted as it stands. Do not bulk fetch it. Possible route: ask the author (Discord or GitHub `QartemisT`) for permission first. It does list the Classic Beta build (1.60.1.70338, matching this client). One request was made to `/api/builds/wow_classic_beta/latest` while investigating, before the `robots.txt` was read; no table data was downloaded.
-3. **Disenchant yields from observation.** The addon logs every disenchant result (item level, quality, what dropped) to SavedVariables. The companion shows observed averages and sample counts, with a small hand-written approximate table as the fallback until enough samples exist. `ItemDisenchantLoot` in the client tables only maps items to loot IDs; the loot itself is server-side, so observation is the only permitted source of rates. No copying from Wowhead or other crowdsourced sites without checking terms.
+3. **Disenchant yields from observation (built, addon 0.6.6; not yet confirmed in game).** The addon logs every disenchant result (item level, quality, what dropped) to SavedVariables. The companion shows observed averages and sample counts, with a small hand-written approximate table as the fallback until enough samples exist. `ItemDisenchantLoot` in the client tables only maps items to loot IDs; the loot itself is server-side, so observation is the only permitted source of rates. No copying from Wowhead or other crowdsourced sites without checking terms. Status and design notes are under "Step 3 status" below.
 
 Suggestions from an outside (Gemini) answer that must not be used as stated: a "Copy table" button on wago.tools and ForeverDB.net as a data source are unverified or against the spirit of the Wowhead removal, so check terms first. It also named the wrong tables (`ItemModifiedAppearance`, `ItemEffect`); use the ones above.
 
@@ -40,6 +40,24 @@ Still to do for step 1:
 - Open the remaining profession windows on each character (Alchemy, Cooking on the second character, Herbalism has none) and confirm they record; check Mining/smelting, Blacksmithing, Leatherworking, Engineering and First Aid when a character has them.
 - Recorded recipes have no skill requirement (the game's list only gives learned recipes) and no disenchant yields until step 2 or 3 supplies them; a recipe known by one character shows as learnable for another character of any skill until the skill levels come from step 2.
 - Record names for scanned items too (the scan stores IDs only, so items outside the recipes show as "Item N" unless the bundled data names them), and recipes the character does not know cannot be recorded at all, which is what step 2 is for.
+
+### Step 3 status
+
+Built (addon 0.6.6): `Disenchant.lua` hooks `SpellTargetItem(bag, slot)` (how a bag click completes an
+item-targeted spell, the usual place addons such as Enchantrix read a disenchant target) to capture the
+item being disenchanted, then on a successful Disenchant cast (`UNIT_SPELLCAST_SUCCEEDED`, spell 13262)
+records its quality and item level and waits up to 3 seconds for a `LOOT_OPENED` loot window, which it
+treats as that cast's result; one entry per cast is appended to `AHSnapshotDB.disenchants`, capped at 500.
+`data_loader.observed_yields` averages the loot per disenchant by the disenchanted item id, and
+`Reference.with_observed` uses that average and the sample count (`recipe["yield_samples"]`) in place of
+a recipe's bundled `yields` once any samples exist; the CLI `--detail` output and the GUI result panel
+both show the sample count (or that the yields are still a seed estimate). Covered by
+`companion/tests/test_observed.py`.
+
+Not yet confirmed in game: whether `SpellTargetItem` is actually called for a disenchant driven by the
+shuffle secure button's `target-item` attribute (manual disenchanting, by clicking a bag item while the
+cast is targeting, should work either way). Ask the user to disenchant a few items, `/reload`, and check
+`AHSnapshotDB.disenchants` in SavedVariables, then rerun the companion against that file.
 
 ## Planned: faster and automatic reference data builds
 

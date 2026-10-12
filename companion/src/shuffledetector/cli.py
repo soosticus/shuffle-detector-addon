@@ -99,6 +99,10 @@ def main(argv=None):
                 print(f"    exit  {e.label:<11} {calc.fmt_money(e.net)}{' <-' if e.label == r.exit else ''}")
             for l in r.yields:
                 print(f"    yield {l.qty:g} x {l.name} @ {calc.fmt_money(l.unit)} = {calc.fmt_money(l.total)}")
+            if r.yields:
+                samples = r.recipe.get("yield_samples")
+                print(f"    yield source: {samples} observed disenchant(s)" if samples
+                      else "    yield source: seed estimate, unverified")
     return 0
 
 

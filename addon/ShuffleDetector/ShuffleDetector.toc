@@ -3,11 +3,12 @@
 ## Notes: Scans the auction house, records professions, recipes, item and vendor data to SavedVariables, and runs shuffle plans.
 ## Author: Soost
 ## X-License: MIT
-## Version: 0.6.5
+## Version: 0.6.6
 ## OptionalDeps: Auctionator, LibAHTab
 ## SavedVariables: AHSnapshotDB
 
 ShuffleDetector.lua
+Disenchant.lua
 Plan.lua
 Scan.lua
 UI.lua

@@ -103,3 +103,52 @@ def test_observed_vendor_prices_override_bundled(tmp_path):
     assert scan.vendor == {2320: 25}
     ref = Reference(vendor={2320: 99, 5: 7}).with_observed(scan)
     assert ref.vendor == {2320: 25, 5: 7}
+
+
+DISENCHANT_LUA = LUA.rstrip().rstrip("}") + """
+  disenchants = {
+    { item = 7054, quality = 2, ilvl = 20, loot = { { item = 10938, qty = 2 } }, time = 111 },
+    { item = 7054, quality = 2, ilvl = 20, loot = { { item = 10938, qty = 4 }, { item = 10998, qty = 1 } }, time = 222 },
+  },
+}
+"""
+
+
+def test_loads_observed_disenchants(tmp_path):
+    p = tmp_path / "ShuffleDetector.lua"
+    p.write_text(DISENCHANT_LUA)
+    scan = data_loader.load_scan_data(str(p))
+    assert len(scan.disenchants) == 2
+    assert scan.disenchants[0] == {"item": 7054, "quality": 2, "ilvl": 20,
+                                   "loot": [{"item": 10938, "qty": 2}], "time": 111}
+
+
+def test_observed_yields_averages_loot_per_disenchant(tmp_path):
+    p = tmp_path / "ShuffleDetector.lua"
+    p.write_text(DISENCHANT_LUA)
+    scan = data_loader.load_scan_data(str(p))
+    obs = data_loader.observed_yields(scan.disenchants)
+    assert obs[7054]["samples"] == 2
+    assert obs[7054]["yields"] == [{"item": 10938, "avg": 3.0}, {"item": 10998, "avg": 0.5}]
+
+
+def test_with_observed_overrides_seed_yields_once_disenchants_are_recorded(tmp_path):
+    p = tmp_path / "ShuffleDetector.lua"
+    p.write_text(DISENCHANT_LUA)
+    scan = data_loader.load_scan_data(str(p))
+    seed = {"name": "test robe", "item": 7054, "skill": 40, "yields": [{"item": 1, "avg": 1.0}],
+            "reagents": [{"item": 9, "qty": 9}]}
+    ref = Reference(recipes=[seed]).with_observed(scan)
+    robe = next(r for r in ref.recipes if r["name"].lower() == "test robe")
+    assert robe["yield_samples"] == 2
+    assert robe["yields"] == [{"item": 10938, "avg": 3.0}, {"item": 10998, "avg": 0.5}]
+    assert seed["yields"] == [{"item": 1, "avg": 1.0}]  # the seed recipe itself is untouched
+
+
+def test_with_observed_keeps_seed_yields_when_no_disenchants_recorded(tmp_path):
+    seed = {"name": "test robe", "item": 7054, "skill": 40, "yields": [{"item": 1, "avg": 1.0}],
+            "reagents": [{"item": 9, "qty": 9}]}
+    ref = Reference(recipes=[seed]).with_observed(load(tmp_path))
+    robe = next(r for r in ref.recipes if r["name"].lower() == "test robe")
+    assert "yield_samples" not in robe
+    assert robe["yields"] == [{"item": 1, "avg": 1.0}]
