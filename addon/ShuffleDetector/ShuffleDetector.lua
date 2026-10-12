@@ -69,6 +69,7 @@ local function snapshotSkills()
     end
     AHSnapshotDB.characters = AHSnapshotDB.characters or {}
     local c = AHSnapshotDB.characters[charKey()] or { professions = {} }
+    c.professions[""] = nil
     for name, p in pairs(profs) do
         local old = c.professions[name]
         p.recipes = old and old.recipes or {}
@@ -114,7 +115,17 @@ local function readModern()
                                       reagents = reagents and #reagents > 0 and reagents or nil }
         end
     end
-    return base.professionName, base.skillLevel, base.maxSkillLevel, recipes
+    local pname, skill, max = base.professionName, base.skillLevel, base.maxSkillLevel
+    -- The window's profession name can lag behind its recipe list; the recipe itself knows its profession.
+    if T.GetProfessionInfoByRecipeID and recipes[1] then
+        local okInfo, owner = pcall(T.GetProfessionInfoByRecipeID, recipes[1].spell)
+        if okInfo and type(owner) == "table" and owner.professionName and owner.professionName ~= "" then
+            if owner.professionName ~= pname then
+                pname, skill, max = owner.professionName, owner.skillLevel or skill, owner.maxSkillLevel or max
+            end
+        end
+    end
+    return pname, skill, max, recipes
 end
 
 -- Classic profession UI (GetTradeSkill* functions).
@@ -234,6 +245,10 @@ function ns.DebugRecipes()
         end
         say(("window: profession=%s skill=%s, %d recipe ids, %d learned"):format(
             tostring(base and base.professionName), tostring(base and base.skillLevel), #ids, learned))
+        if T.GetProfessionInfoByRecipeID and ids[1] then
+            local okInfo, owner = pcall(T.GetProfessionInfoByRecipeID, ids[1])
+            say("  first recipe belongs to: " .. tostring(okInfo and type(owner) == "table" and owner.professionName or owner))
+        end
         if first then
             local keys = {}
             for k, v in pairs(first) do keys[#keys + 1] = k .. "=" .. tostring(v) end
