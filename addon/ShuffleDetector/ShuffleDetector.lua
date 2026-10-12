@@ -206,6 +206,24 @@ function ns.DebugRecipes()
     say(("GetProfessions=%s GetNumSkillLines=%s C_TradeSkillUI.GetAllRecipeIDs=%s GetNumTradeSkills=%s"):format(
         tostring(GetProfessions ~= nil), tostring(GetNumSkillLines ~= nil),
         tostring(C_TradeSkillUI and C_TradeSkillUI.GetAllRecipeIDs ~= nil), tostring(GetNumTradeSkills ~= nil)))
+    local T = C_TradeSkillUI
+    if T and T.GetBaseProfessionInfo then
+        local base = T.GetBaseProfessionInfo()
+        local ids = T.GetAllRecipeIDs and T.GetAllRecipeIDs() or {}
+        local learned, first = 0, nil
+        for _, id in ipairs(ids) do
+            local info = T.GetRecipeInfo(id)
+            if info and info.learned then learned = learned + 1 end
+            first = first or info
+        end
+        say(("window: profession=%s skill=%s, %d recipe ids, %d learned"):format(
+            tostring(base and base.professionName), tostring(base and base.skillLevel), #ids, learned))
+        if first then
+            local keys = {}
+            for k, v in pairs(first) do keys[#keys + 1] = k .. "=" .. tostring(v) end
+            say("  first recipe: " .. table.concat(keys, ", "))
+        end
+    end
     local c = snapshotSkills()
     for name, p in pairs(c.professions) do
         local withReagents = 0
