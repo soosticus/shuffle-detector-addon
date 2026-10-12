@@ -38,13 +38,12 @@ What the addon records (details in FORMAT.md): AH scans; per character and profe
 
 ## Status (addon 0.6.5)
 
-- Confirmed in game: AH scanning, Auctionator import, the shuffle tracker and macro, recipe capture with reagents for Tailoring, Enchanting and Cooking, item names and sell prices.
-- Built but NOT yet confirmed in game: `available` (unlearned) recipes and vendor buy price capture (0.6.5). First thing to do: have the user `/reload`, open a profession window and a vendor, `/reload` again, then check the SavedVariables for `available` and `vendor`. Unlearned recipes have no required skill (only `trivial`), so their status is "unknown".
-- Not started: step 3 of the data plan, observed disenchant logging (item level, quality, what dropped) with the companion showing averages and sample counts and a hand-written fallback table. The bundled disenchant `yields` are seed guesses.
+- Confirmed in game: AH scanning, Auctionator import, the shuffle tracker and macro, recipe capture with reagents for Tailoring, Enchanting and Cooking, item names and sell prices, and (2026-10-11) `available` unlearned recipes and `vendor` buy prices. `GetRecipeSourceText` never returned a value on this client across ~430 unlearned recipes, so the `source` field is effectively unused; not worth chasing.
+- Not started: step 3 of the data plan, observed disenchant logging (item level, quality, what dropped) with the companion showing averages and sample counts and a hand-written fallback table. The bundled disenchant `yields` are seed guesses. This is now the main open item in the data plan.
 - Other open items are in ROADMAP.md (vendor faction restrictions, fast-press gating check, calculator price impact, more professions, faster builds, CurseForge release, checking that the `v0.2.4a` tag push did not start a release run). Local main is ahead of origin; none of this work is pushed. The backup bundle `C:\Users\soost\ShuffleDetector-backup.bundle` can be deleted.
 
 ## Suggested next steps
 
-1. Confirm 0.6.5 in game as above, and fix whatever the API does differently (for example `GetRecipeSourceText` may not exist, or `C_MerchantFrame.GetItemInfo` may return different fields).
-2. Step 3: add a `disenchants` log to the addon (after a Disenchant cast, record the item id, item level, quality and the looted items), read it in `data_loader`, and use it in `calc.py` in place of the seed yields once there are enough samples. Update FORMAT.md and the tests.
-3. Open the remaining profession windows on each character to confirm capture.
+1. Step 3: add a `disenchants` log to the addon (after a Disenchant cast, record the item id, item level, quality and the looted items), read it in `data_loader`, and use it in `calc.py` in place of the seed yields once there are enough samples. Update FORMAT.md and the tests.
+2. Open the remaining profession windows on each character to confirm `recipes`/`available` capture everywhere (only Tailoring, Enchanting and Cooking confirmed so far).
+3. Confirm in game that the fast-press gating no longer repeats a craft or disenchant step (ROADMAP.md item).
