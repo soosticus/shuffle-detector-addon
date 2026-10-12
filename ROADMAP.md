@@ -12,6 +12,26 @@ Open items only; finished work is removed. Release notes are generated from comm
 - Per-recipe craft times: the calculator uses one default craft time (30 s) unless a recipe sets `craft_seconds`; read the real cast times from the game or Wowhead.
 - Calculator follow-ups: model price impact when buying or selling large quantities (walk the sell side of the order book), use observed in-game disenchant results instead of Poisson for the range, and offer a "number of disenchants" target.
 
+## Planned: replace the Wowhead scraper with a permitted data source
+
+Scraping Wowhead appears to be against its terms of service and risks an IP block, so the Wowhead download (`wowhead.py`, `--update-wowhead`, the GUI menu entry) should not be run and should be replaced. Scraping stopped on 2026-10-11 part way through a first full build.
+
+- Candidate source: wago.tools (database tables for game data, including recipes, reagents, items and vendor prices). Check its terms, whether it offers Classic or the "Forever" client builds, and what it provides for disenchant yields (the DB tables hold the disenchant loot table, not community drop rates). Other options: in-game data read by the addon, or hand-maintained data in `reference.json`.
+- Review what is already committed: `common/data/wowhead.json` and the `wowhead.py` scraper came from Wowhead. Decide whether to keep, regenerate from the new source, or remove them, and remove the page cache on disk (`wowhead.cache_dir()`).
+- Until a replacement exists, disable or remove the CLI and GUI entry points so nobody triggers a scrape by accident.
+- The new source should keep the same output shape (`items`, `vendor`, `vendor_sell`, `recipes` with `profession` and `makes`, `refined`) so the calculator does not change.
+
+## Planned: faster and automatic reference data builds
+
+Applies to whichever source replaces Wowhead (see above); most of it is about downloading less and not hammering any site.
+
+- Incremental builds: Classic item data (names, vendor prices, disenchant rates) is effectively static. Fetch the small per-profession recipe lists first (9 requests), compare them with the saved data, and fetch only items not seen before. If nothing is new, stop after those requests. Cache item data with no expiry and let a `--refresh` flag force a re-pull.
+- Smaller requests: prefer bulk or table downloads (many items per request) over one page per item, and only fetch disenchant data for green-or-better armor and weapons.
+- Parallel downloads: a small worker pool (3 or 4) sharing one rate limiter, only if the source tolerates it. Lower priority than the two points above.
+- Scheduled build: a GitHub Actions workflow, weekly plus manual trigger (nightly is more often than static data needs), that runs the change check and, when something changed, rebuilds and publishes the data file as a release asset or a commit. Test one manual run first, since some sites block GitHub's runner IPs.
+- Companion: add a "download latest data" option that fetches the published bundle, so end users never scrape anything themselves.
+- Confirm the source's terms allow republishing the derived bundle before making it public.
+
 ## Planned: CurseForge release
 
 Prepare the addon for CurseForge. Check CurseForge's current requirements before submitting, since they change.
