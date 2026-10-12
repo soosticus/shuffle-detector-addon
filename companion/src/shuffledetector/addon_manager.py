@@ -10,6 +10,7 @@ from pathlib import Path
 
 ADDON_NAME = "ShuffleDetector"
 PLAN_FILE = "Plan.lua"  # written by the companion; kept across addon updates
+ITEM_LIST_FILE = "ItemList.lua"  # likewise
 _REPO_ADDON = Path(__file__).resolve().parents[3] / "addon" / ADDON_NAME
 _BUNDLED_ADDON = Path(__file__).resolve().parent / "_addon" / ADDON_NAME
 
@@ -58,6 +59,10 @@ class Install:
         return self.addon_dir / PLAN_FILE
 
     @property
+    def item_list_file(self):
+        return self.addon_dir / ITEM_LIST_FILE
+
+    @property
     def installed_version(self):
         return toc_version(self.addon_dir) if self.addon_dir.is_dir() else None
 
@@ -71,8 +76,10 @@ def default_roots():
     if env:
         roots.append(Path(env))
     if sys.platform == "win32":
-        for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles"), "C:\\Games"):
-            if base:
+        # The literal paths cover shells (Git Bash) that do not pass "ProgramFiles(x86)" to child processes.
+        for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles"),
+                     "C:\\Program Files (x86)", "C:\\Program Files", "C:\\Games"):
+            if base and (Path(base) / "World of Warcraft") not in roots:
                 roots.append(Path(base) / "World of Warcraft")
     elif sys.platform == "darwin":
         roots.append(Path("/Applications/World of Warcraft"))
@@ -129,7 +136,7 @@ def status(install):
 
 def install_addon(install):
     """Copy the bundled addon into the AddOns folder (swap in place; SavedVariables live in WTF, untouched).
-    A previously sent Plan.lua is carried over."""
+    A previously sent Plan.lua and ItemList.lua are carried over."""
     src = bundled_addon_dir()
     if src is None:
         raise FileNotFoundError("Bundled addon files not found.")
@@ -139,11 +146,12 @@ def install_addon(install):
     for p in (tmp, old):
         _remove_tree(p)
     shutil.copytree(src, tmp, copy_function=shutil.copyfile)
-    try:
-        if install.plan_file.is_file():
-            shutil.copyfile(install.plan_file, tmp / PLAN_FILE)
-    except OSError:
-        pass
+    for kept, name in ((install.plan_file, PLAN_FILE), (install.item_list_file, ITEM_LIST_FILE)):
+        try:
+            if kept.is_file():
+                shutil.copyfile(kept, tmp / name)
+        except OSError:
+            pass
     try:
         if target.exists():
             target.rename(old)

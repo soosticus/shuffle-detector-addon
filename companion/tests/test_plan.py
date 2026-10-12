@@ -58,3 +58,27 @@ def test_write_plan_and_survives_addon_update(tmp_path, monkeypatch):
     (inst.addon_dir / f"{am.ADDON_NAME}.toc").write_text("## Version: 0.2.0\n")
     am.install_addon(inst)
     assert "generated = 5," in inst.plan_file.read_text(encoding="utf-8")
+
+
+def test_wanted_items_and_item_list():
+    ref = data_loader.Reference(recipes=[RECIPE, {"name": "Bare", "reagents": [], "yields": []}],
+                                refined={2997: (2996, 2)})
+    assert plan.wanted_items(ref) == [2996, 2997, 4291, 4305, 7054, 11083]
+    text = plan.render_item_list([1, 2, 3])
+    assert "local _, ns = ..." in text and "ns.wantedItems = {\n    1, 2, 3,\n}" in text
+
+
+def test_item_list_written_and_survives_addon_update(tmp_path, monkeypatch):
+    bundle = tmp_path / "bundle"
+    make_addon(bundle, "0.3.0")
+    monkeypatch.setenv("SHUFFLEDETECTOR_ADDON", str(bundle / am.ADDON_NAME))
+    addons = tmp_path / "wow" / "_classic_" / "Interface" / "AddOns"
+    addons.mkdir(parents=True)
+    inst = am.Install("_classic_", addons)
+    am.install_addon(inst)
+    path = plan.write_item_list(inst, [4305, 4291])
+    assert path == inst.item_list_file and "4305, 4291," in path.read_text(encoding="utf-8")
+
+    (inst.addon_dir / f"{am.ADDON_NAME}.toc").write_text("## Version: 0.2.0\n")
+    am.install_addon(inst)
+    assert "4305, 4291," in inst.item_list_file.read_text(encoding="utf-8")

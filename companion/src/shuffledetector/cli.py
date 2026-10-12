@@ -22,6 +22,8 @@ def build_parser():
     p.add_argument("--top", type=int, default=10)
     p.add_argument("--send-plan", metavar="RECIPE", help="write this recipe's shuffle to the addon's Plan.lua (then /reload in game)")
     p.add_argument("--wow", help="WoW folder, flavor folder or AddOns folder to send the plan to (default: auto-detect)")
+    p.add_argument("--send-items", action="store_true",
+                   help="write the ids of every recipe item to the addon's ItemList.lua, so the addon asks the game for their names and sell prices (then /reload)")
     p.add_argument("--local-recipes", action="store_true",
                    help="read recipes (reagents, trivial levels, craft times) from the game install's own data files (slow: a few seconds)")
     p.add_argument("--detail", action="store_true", help="show step-by-step breakdown")
@@ -68,6 +70,18 @@ def send_plan(args, results):
     return 0
 
 
+def send_items(args, ref):
+    installs = [i for i in addon_manager.discover_installs([args.wow] if args.wow else []) if i.installed_version]
+    if not installs:
+        print("No WoW install with the addon found; install the addon or pass --wow.", file=sys.stderr)
+        return 2
+    ids = plan.wanted_items(ref)
+    for inst in installs:
+        print(f"Sent {len(ids)} item ids to {plan.write_item_list(inst, ids)}")
+    print("In game: /reload (the addon requests them after login, or run /shuffledetector items)")
+    return 0
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
     path = args.savedvars
@@ -86,6 +100,8 @@ def main(argv=None):
             return 2
         ref = ref.with_local(local["recipes"])
     ref = ref.with_observed(scan)
+    if args.send_items:
+        return send_items(args, ref)
     exit_names = {"disenchant": "Disenchant", "ah": "Sell on AH", "vendor": "Vendor"}
     exits = tuple(exit_names[x] for x in args.exits.lower().replace(" ", "").split(",") if x in exit_names)
     settings = calc.Settings(ah_cut=args.ah_cut, price_mode=args.price_mode, exits=exits,

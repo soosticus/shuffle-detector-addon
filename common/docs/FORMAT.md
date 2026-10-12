@@ -48,7 +48,9 @@ add recipes no character knows (a recipe the character knows always wins); they 
 their status is "unknown" until a skill requirement is available.
 
 `vendor` is recorded whenever a merchant window is opened (price per single item; reputation discounts
-are included in what the game shows) and replaces the bundled vendor buy price.
+are included in what the game shows) and replaces the bundled vendor buy price. Only unlimited-stock
+listings count (as in Auctionator): a limited-stock listing is not recorded, and drops an existing
+entry for that item. The game has no bulk query for buy prices, so they fill in as vendors are visited.
 
 `disenchants` is recorded whenever a Disenchant cast succeeds and a loot window follows within a few
 seconds (`Disenchant.lua`, which hooks `SpellTargetItem` to see what item the cast targeted). The
@@ -60,6 +62,17 @@ of a recipe's bundled `yields` for its crafted item.
 Shallow scans (imported from Auctionator) carry one `{min, 1}` entry per item; the companion
 treats them as unlimited quantity at the minimum price. The addon also stores UI state
 (`shuffleTracker`, `shuffleTrackerShown`) in the same table; the companion ignores it.
+
+# Item list (companion -> addon)
+
+The vendor sell price and name of any item are in the game's own item cache, so the addon can fetch
+them for items it has never seen. The companion writes
+`Interface/AddOns/ShuffleDetector/ItemList.lua` (`ns.wantedItems = { id, id, ... }`, every reagent,
+product, disenchant yield and refined raw of the recipes it knows, including ones read from the
+game's files with `--local-recipes`) with `shuffledetector --send-items`. After `/reload` the addon
+asks the game for the ids not yet in `items`, in batches of 40 per second, starting 5 seconds after
+login (or run `/shuffledetector items`), and records the answers in `items`. Addon updates keep an
+existing `ItemList.lua`.
 
 # Shuffle plan (companion -> addon)
 

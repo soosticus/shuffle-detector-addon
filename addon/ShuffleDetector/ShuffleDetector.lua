@@ -46,6 +46,50 @@ local function recordItem(id)
 end
 ns.RecordItem = recordItem
 
+-- Ask the game for every item in ns.wantedItems (ItemList.lua, written by the companion) that is not recorded
+-- yet. Requests go out in small batches; answers arrive on GET_ITEM_INFO_RECEIVED and are recorded by recordItem.
+local BATCH, BATCH_DELAY = 40, 1
+function ns.LoadWantedItems(quiet)
+    local list = ns.wantedItems
+    if type(list) ~= "table" or #list == 0 then
+        if not quiet then say("no item list; send items from the companion app, then /reload") end
+        return
+    end
+    local known = AHSnapshotDB.items or {}
+    local todo = {}
+    for _, id in ipairs(list) do
+        if not known[id] then
+            todo[#todo + 1] = id
+            awaiting[id] = nil
+        end
+    end
+    if #todo == 0 then
+        if not quiet then say(("all %d listed items are already recorded"):format(#list)) end
+        return
+    end
+    say(("requesting %d of %d listed items from the game"):format(#todo, #list))
+    local i = 1
+    local function step()
+        for _ = 1, BATCH do
+            if not todo[i] then break end
+            recordItem(todo[i])
+            i = i + 1
+        end
+        if todo[i] then
+            C_Timer.After(BATCH_DELAY, step)
+        else
+            C_Timer.After(10, function()
+                local got = 0
+                for _, id in ipairs(todo) do
+                    if AHSnapshotDB.items and AHSnapshotDB.items[id] then got = got + 1 end
+                end
+                say(("received %d of %d requested items"):format(got, #todo))
+            end)
+        end
+    end
+    step()
+end
+
 -- Professions: skill levels and known recipes, recorded for every profession.
 local function charKey()
     return (UnitName("player") or "?") .. "-" .. realmKey()
@@ -219,27 +263,32 @@ local function snapshotWithRetry()
 end
 
 -- Vendor buy prices, per single item, as the merchant window shows them (gold only; item-cost
--- vendors are skipped). Reputation discounts are baked into the price the game shows.
+-- vendors are skipped). Reputation discounts are baked into the price the game shows. Only unlimited-stock
+-- items count as a standing price; a limited-stock listing is dropped so it is not mistaken for one.
 local function snapshotMerchant()
     if not (GetMerchantNumItems and GetMerchantItemLink) then return end
     local n = GetMerchantNumItems() or 0
     for i = 1, n do
-        local price, qty, extended
+        local price, qty, extended, stock
         if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
             local okInfo, info = pcall(C_MerchantFrame.GetItemInfo, i)
             if okInfo and type(info) == "table" then
-                price, qty, extended = info.price, info.stackCount, info.hasExtendedCost
+                price, qty, extended, stock = info.price, info.stackCount, info.hasExtendedCost, info.numAvailable
             end
         end
         if price == nil and GetMerchantItemInfo then
-            local _, _, p, q, _, _, _, ext = GetMerchantItemInfo(i)
-            price, qty, extended = p, q, ext
+            local _, _, p, q, n, _, _, ext = GetMerchantItemInfo(i)
+            price, qty, extended, stock = p, q, ext, n
         end
         local id = itemIdFromLink(GetMerchantItemLink(i))
         if id and price and price > 0 and not extended then
             AHSnapshotDB.vendor = AHSnapshotDB.vendor or {}
-            AHSnapshotDB.vendor[id] = math.floor(price / math.max(qty or 1, 1) + 0.5)
-            recordItem(id)
+            if stock == nil or stock == -1 then
+                AHSnapshotDB.vendor[id] = math.floor(price / math.max(qty or 1, 1) + 0.5)
+                recordItem(id)
+            else
+                AHSnapshotDB.vendor[id] = nil
+            end
         end
     end
 end
@@ -272,6 +321,9 @@ frame:SetScript("OnEvent", function(_, event, itemId)
         scheduleSnapshot()
     else
         snapshotSkills()
+        if event == "PLAYER_LOGIN" then
+            C_Timer.After(5, function() ns.LoadWantedItems(true) end)
+        end
     end
 end)
 
@@ -337,8 +389,10 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
         ns.ToggleShuffleDebug()
     elseif msg == "disenchant" then
         ns.DebugDisenchant()
+    elseif msg == "items" then
+        ns.LoadWantedItems()
     else
-        say("usage: /shuffledetector scan | import | shuffle (show/hide the step tracker) | step | macro | plan | shuffledebug. Open a profession window to record its recipes.")
+        say("usage: /shuffledetector scan | import | items (request recipe item names and prices) | shuffle (show/hide the step tracker) | step | macro | plan | shuffledebug. Open a profession window to record its recipes.")
     end
 end
 
