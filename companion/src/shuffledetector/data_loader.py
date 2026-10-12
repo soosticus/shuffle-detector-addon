@@ -156,7 +156,9 @@ def derive_refined(recipes):
         item = r.get("item")
         if item in used and len(r["reagents"]) == 1 and r["reagents"][0]["item"] != item:
             raw = r["reagents"][0]
-            refined.setdefault(item, (raw["item"], raw["qty"] / (r.get("makes") or 1)))
+            per, rem = divmod(raw["qty"], r.get("makes") or 1)
+            if per and not rem:
+                refined.setdefault(item, (raw["item"], per))
     return refined
 
 

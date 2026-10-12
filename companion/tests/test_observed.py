@@ -67,6 +67,12 @@ def test_with_observed_keeps_seed_yields_and_skill(tmp_path):
     assert seed["reagents"][0]["item"] == 9
 
 
+def test_refined_skips_fractional_ratios():
+    recipes = [{"name": "Split", "item": 5, "makes": 3, "reagents": [{"item": 1, "qty": 1}]},
+               {"name": "Use", "item": 9, "reagents": [{"item": 5, "qty": 1}, {"item": 2, "qty": 1}]}]
+    assert data_loader.derive_refined(recipes) == {}
+
+
 def test_recorded_recipe_ranks_as_known(tmp_path):
     scan = load(tmp_path)
     scan.scans["R"] = {"items": {2589: {"min": 10, "qty": 100, "prices": [(10, 100)]},

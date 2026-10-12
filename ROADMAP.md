@@ -5,7 +5,7 @@ Open items only; finished work is removed. Release notes are generated from comm
 ## Open items
 
 - Handle vendor faction/location restrictions.
-- Confirm the AH tab and recipe capture (`/shuffledetector recipes`) in the Forever client. Tailoring recipes were not being recorded for the main character, so the "known recipes only" filter falls back to showing everything; if `/shuffledetector recipes` still reports 0 after opening the Tailoring window and `/reload`, the recipe capture needs a fix for the Forever API. Enchanting (craft frame) recipes are not read by the addon. Step 1 of the data plan below depends on this working.
+- Confirm the AH tab and recipe capture (`/shuffledetector recipes`) in the Forever client. Tailoring recipes were not being recorded for the main character, so the "known recipes only" filter falls back to showing everything; if `/shuffledetector recipes` still reports 0 after opening the Tailoring window and `/reload`, the recipe capture needs a fix for the Forever API. Step 1 of the data plan below depends on this working.
 - Confirm in game that the fast-press gating no longer repeats a craft or disenchant step.
 - Shuffle follow-ups: take the craft count or budget from the calculator, and steps beyond craft/disenchant (for example vendor or AH listing) now that the calculator can name them.
 - Calculator follow-ups: model price impact when buying or selling large quantities (walk the sell side of the order book), and offer a "number of disenchants" target. Use the observed disenchant results (data plan step 3) for the range instead of Poisson once there are enough samples.
@@ -31,9 +31,11 @@ Suggestions from an outside (Gemini) answer that must not be used as stated: a "
 
 Built (addon 0.6.0, not yet confirmed in game): the addon records, per recipe, the reagent item IDs and counts, the item made and pieces made (modern `GetRecipeSchematic`, or the classic `GetTradeSkillReagent*` functions), plus `GetItemInfo` names and vendor sell prices into a top-level `items` table. The companion reads them (`ScanData.items`) and `Reference.with_observed` layers them over the bundled data: recorded names and sell prices win, recorded recipes replace the bundled one of the same name but keep its skill, yields and source, and `refined` is derived. Layout is in `common/docs/FORMAT.md`.
 
+Confirmed in game (2026-10-11, addon 0.6.4): Tailoring, Enchanting and Cooking recipes are recorded with reagents through the modern API (`GetAllRecipeIDs`, `GetRecipeSchematic`), item names and sell prices are written, and the companion ranks them as known. Notes from that testing: the window's profession name can lag behind its recipe list for a moment after switching windows (so the addon takes the profession from `GetProfessionInfoByRecipeID`), and no final list event arrives after opening a window (so it retries for about 6 seconds). `/shuffledetector recipes` prints the window's recipe counts for debugging.
+
 Still to do for step 1:
 
-- Confirm in game: `/reload`, open each profession window, then `/shuffledetector recipes` should report recipes "with reagents". If the Forever client lacks `GetRecipeSchematic` and the classic functions, find the API it does have. Check that `/reload` writes `items` and that the companion lists those recipes as known.
+- Open the remaining profession windows on each character (Alchemy, Cooking on the second character, Herbalism has none) and confirm they record; check Mining/smelting, Blacksmithing, Leatherworking, Engineering and First Aid when a character has them.
 - Recorded recipes have no skill requirement (the game's list only gives learned recipes) and no disenchant yields until step 2 or 3 supplies them; a recipe known by one character shows as learnable for another character of any skill until the skill levels come from step 2.
 - Record names for scanned items too (the scan stores IDs only, so items outside the recipes show as "Item N" unless the bundled data names them), and recipes the character does not know cannot be recorded at all, which is what step 2 is for.
 
