@@ -16,11 +16,26 @@ AHSnapshotDB = {
   },
   characters = {
     ["Name-Realm-Faction"] = {
-      professions = { Tailoring = { skill = n, max = n, recipes = { { name, item, difficulty }, ... } } },
+      professions = { Tailoring = { skill = n, max = n, recipes = {
+        { name = "Bolt of Linen Cloth", spell = <id>, item = <id made>, makes = <n, only if > 1>,
+          difficulty = "optimal" | ...,   -- classic API only
+          reagents = { { item = <id>, qty = <n> }, ... } },
+        ...
+      } } },
     },
   },
+  items = { [itemID] = { name = "Linen Cloth", sell = <vendor sell price, copper> } },  -- from GetItemInfo
 }
 ```
+
+Recipes are recorded for the professions a character has, as the game's profession window reports
+them; `reagents` (basic reagents only, no optional or finishing slots), `item`, `makes` and `spell`
+are present when the game's API supplied them. `items` holds the name and vendor sell price of every
+reagent and product of those recipes. The companion layers both over the bundled reference data
+(`Reference.with_observed`): recorded names and sell prices replace the bundled ones, and recorded
+recipes replace the bundled recipe of the same name but keep its skill, yields and source. Recipes
+without bundled yields can still be sold on the AH or to a vendor. `refined` entries (bolts, bars) are
+derived from recipes with a single reagent whose product is a reagent elsewhere.
 
 `prices` holds the cheapest 40 listings sorted ascending, used to cost bulk purchases.
 Shallow scans (imported from Auctionator) carry one `{min, 1}` entry per item; the companion

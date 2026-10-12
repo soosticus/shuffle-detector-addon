@@ -30,11 +30,36 @@ class Reference:
     def name(self, item_id):
         return self.items.get(item_id, f"Item {item_id}")
 
+    def with_observed(self, scan):
+        """Copy of this reference with what the addon recorded in game layered on top.
+
+        Item names and vendor sell prices from the game replace the bundled ones. Recipes the
+        characters know (with the reagents and pieces made as the game reports them) replace the
+        bundled recipe of the same name, keeping its skill, yields and source; unknown recipes are added.
+        """
+        out = Reference(items=dict(self.items), vendor=dict(self.vendor), vendor_sell=dict(self.vendor_sell),
+                        recipes=[], refined=dict(self.refined))
+        for item_id, e in scan.items.items():
+            if e.get("name"):
+                out.items[item_id] = e["name"]
+            if e.get("sell"):
+                out.vendor_sell[item_id] = e["sell"]
+        by_name = {r["name"].lower(): r for r in self.recipes}
+        for r in observed_recipes(scan.characters):
+            merged = dict(by_name.get(r["name"].lower()) or {"yields": [], "skill": 0, "source": "Recorded in game"})
+            merged.update(r)
+            by_name[r["name"].lower()] = merged
+        out.recipes = list(by_name.values())
+        for item_id, entry in derive_refined(out.recipes).items():
+            out.refined.setdefault(item_id, entry)
+        return out
+
 
 @dataclass
 class ScanData:
     scans: dict = field(default_factory=dict)
     characters: dict = field(default_factory=dict)
+    items: dict = field(default_factory=dict)        # item id -> {"name", "sell"} as recorded in game
 
     @property
     def realms(self):
@@ -88,7 +113,51 @@ def load_scan_data(path):
             "source": scan.get("source") or "scan",
             "shallow": shallow,
         }
-    return ScanData(scans=scans, characters=db.get("characters") or {})
+    items = {}
+    for item_id, e in (db.get("items") or {}).items():
+        if isinstance(e, dict):
+            items[int(item_id)] = {"name": e.get("name"), "sell": int(e.get("sell") or 0)}
+    return ScanData(scans=scans, characters=db.get("characters") or {}, items=items)
+
+
+def _as_list(value):
+    """A Lua array parsed as a list, or an index-keyed table parsed as a dict."""
+    if isinstance(value, dict):
+        return [value[k] for k in sorted(value, key=lambda k: (not isinstance(k, int), k))]
+    return value or []
+
+
+def observed_recipes(characters):
+    """Recipes in the characters' saved profession data that carry reagents, as reference recipes."""
+    found = {}
+    for c in characters.values():
+        for pname, prof in (c.get("professions") or {}).items():
+            for r in _as_list(prof.get("recipes")):
+                reagents = [{"item": int(x["item"]), "qty": int(x.get("qty") or 1)}
+                            for x in _as_list(r.get("reagents")) if isinstance(x, dict) and x.get("item")]
+                if not (r.get("name") and reagents):
+                    continue
+                recipe = {"name": r["name"], "profession": pname, "reagents": reagents}
+                if r.get("item"):
+                    recipe["item"] = int(r["item"])
+                if r.get("spell"):
+                    recipe["spell"] = int(r["spell"])
+                if (r.get("makes") or 1) > 1:
+                    recipe["makes"] = int(r["makes"])
+                found.setdefault(r["name"].lower(), recipe)
+    return list(found.values())
+
+
+def derive_refined(recipes):
+    """Single-input intermediates (bolts, bars) that other recipes use as a reagent: item -> (raw item, raw per piece)."""
+    used = {x["item"] for r in recipes for x in r["reagents"]}
+    refined = {}
+    for r in recipes:
+        item = r.get("item")
+        if item in used and len(r["reagents"]) == 1 and r["reagents"][0]["item"] != item:
+            raw = r["reagents"][0]
+            refined.setdefault(item, (raw["item"], raw["qty"] / (r.get("makes") or 1)))
+    return refined
 
 
 def candidate_saved_variables(extra_roots=()):

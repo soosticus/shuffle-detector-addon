@@ -76,7 +76,7 @@ def main(argv=None):
             return 2
         path = str(found[0])
     scan = data_loader.load_scan_data(path)
-    ref = data_loader.load_reference(extra=args.data)
+    ref = data_loader.load_reference(extra=args.data).with_observed(scan)
     exit_names = {"disenchant": "Disenchant", "ah": "Sell on AH", "vendor": "Vendor"}
     exits = tuple(exit_names[x] for x in args.exits.lower().replace(" ", "").split(",") if x in exit_names)
     settings = calc.Settings(ah_cut=args.ah_cut, price_mode=args.price_mode, exits=exits,

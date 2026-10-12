@@ -23,6 +23,29 @@ local function itemIdFromLink(link)
     return link and tonumber(link:match("item:(%d+)"))
 end
 
+-- Item names and vendor sell prices as the game reports them (GetItemInfo), keyed by item id.
+-- Item data may not be cached yet, so ids it cannot answer for are retried on GET_ITEM_INFO_RECEIVED.
+local awaiting = {}
+
+local function recordItem(id)
+    if not id then return end
+    local name, sell, _
+    if C_Item and C_Item.GetItemInfo then
+        name, _, _, _, _, _, _, _, _, _, sell = C_Item.GetItemInfo(id)
+    elseif GetItemInfo then
+        name, _, _, _, _, _, _, _, _, _, sell = GetItemInfo(id)
+    end
+    if name then
+        awaiting[id] = nil
+        AHSnapshotDB.items = AHSnapshotDB.items or {}
+        AHSnapshotDB.items[id] = { name = name, sell = sell or 0 }
+    elseif not awaiting[id] then
+        awaiting[id] = true
+        if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, id) end
+    end
+end
+ns.RecordItem = recordItem
+
 -- Professions: skill levels and known recipes, recorded for every profession.
 local function charKey()
     return (UnitName("player") or "?") .. "-" .. realmKey()
@@ -55,6 +78,21 @@ local function snapshotSkills()
     return c
 end
 
+-- Reagents (item id and count) and the item made, from the modern profession schematic.
+local function modernDetails(T, id)
+    if not T.GetRecipeSchematic then return end
+    local ok, s = pcall(T.GetRecipeSchematic, id, false)
+    if not (ok and type(s) == "table") then return end
+    local reagents = {}
+    for _, slot in ipairs(s.reagentSlotSchematics or {}) do
+        local first = slot.reagents and slot.reagents[1]
+        if first and first.itemID and (slot.reagentType == nil or slot.reagentType == 1) then
+            reagents[#reagents + 1] = { item = first.itemID, qty = slot.quantityRequired or 1 }
+        end
+    end
+    return reagents, s.outputItemID, s.quantityMin
+end
+
 -- Modern profession UI (C_TradeSkillUI recipe IDs).
 local function readModern()
     local T = C_TradeSkillUI
@@ -66,7 +104,14 @@ local function readModern()
     for _, id in ipairs(ids) do
         local info = T.GetRecipeInfo(id)
         if info and info.learned and info.name then
-            recipes[#recipes + 1] = { name = info.name, spell = id }
+            local reagents, item, makes = modernDetails(T, id)
+            if not item and T.GetRecipeItemLink then
+                local okLink, link = pcall(T.GetRecipeItemLink, id)
+                item = okLink and itemIdFromLink(link) or nil
+            end
+            recipes[#recipes + 1] = { name = info.name, spell = id, item = item,
+                                      makes = makes and makes > 1 and makes or nil,
+                                      reagents = reagents and #reagents > 0 and reagents or nil }
         end
     end
     return base.professionName, base.skillLevel, base.maxSkillLevel, recipes
@@ -82,7 +127,18 @@ local function readClassic()
         local rname, kind = GetTradeSkillInfo(i)
         if rname and kind ~= "header" then
             local link = GetTradeSkillItemLink and GetTradeSkillItemLink(i)
-            recipes[#recipes + 1] = { name = rname, item = itemIdFromLink(link), difficulty = kind }
+            local reagents = {}
+            if GetTradeSkillNumReagents and GetTradeSkillReagentInfo and GetTradeSkillReagentItemLink then
+                for j = 1, GetTradeSkillNumReagents(i) or 0 do
+                    local _, _, count = GetTradeSkillReagentInfo(i, j)
+                    local id = itemIdFromLink(GetTradeSkillReagentItemLink(i, j))
+                    if id then reagents[#reagents + 1] = { item = id, qty = count or 1 } end
+                end
+            end
+            local makes = GetTradeSkillNumMade and GetTradeSkillNumMade(i)
+            recipes[#recipes + 1] = { name = rname, item = itemIdFromLink(link), difficulty = kind,
+                                      makes = makes and makes > 1 and makes or nil,
+                                      reagents = #reagents > 0 and reagents or nil }
         end
     end
     return name, rank, maxRank, recipes
@@ -110,6 +166,10 @@ local function snapshotRecipes(quiet)
         end
     end
     c.professions[name] = { skill = rank, max = maxRank, recipes = recipes }
+    for _, r in ipairs(recipes) do
+        recordItem(r.item)
+        for _, x in ipairs(r.reagents or {}) do recordItem(x.item) end
+    end
     if not quiet then
         say(("saved %d %s recipes (skill %s/%s)"):format(#recipes, name, tostring(rank), tostring(maxRank)))
     end
@@ -129,8 +189,11 @@ frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("TRADE_SKILL_SHOW")
 frame:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 frame:RegisterEvent("SKILL_LINES_CHANGED")
-frame:SetScript("OnEvent", function(_, event)
-    if event == "TRADE_SKILL_SHOW" then
+frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+frame:SetScript("OnEvent", function(_, event, itemId)
+    if event == "GET_ITEM_INFO_RECEIVED" then
+        if awaiting[itemId] then recordItem(itemId) end
+    elseif event == "TRADE_SKILL_SHOW" then
         snapshotRecipes()
     elseif event == "TRADE_SKILL_LIST_UPDATE" then
         scheduleSnapshot()
@@ -145,7 +208,12 @@ function ns.DebugRecipes()
         tostring(C_TradeSkillUI and C_TradeSkillUI.GetAllRecipeIDs ~= nil), tostring(GetNumTradeSkills ~= nil)))
     local c = snapshotSkills()
     for name, p in pairs(c.professions) do
-        say(("  %s skill %s/%s, %d recipes saved"):format(name, tostring(p.skill), tostring(p.max), #(p.recipes or {})))
+        local withReagents = 0
+        for _, r in ipairs(p.recipes or {}) do
+            if r.reagents then withReagents = withReagents + 1 end
+        end
+        say(("  %s skill %s/%s, %d recipes saved (%d with reagents)"):format(
+            name, tostring(p.skill), tostring(p.max), #(p.recipes or {}), withReagents))
     end
     snapshotRecipes()
 end

@@ -29,7 +29,13 @@ Suggestions from an outside (Gemini) answer that must not be used as stated: a "
 
 ### Step 1 status
 
-Addon (`ShuffleDetector.lua`): recipes were recorded as `{name, spell}` (modern API) or `{name, item, difficulty}` (classic API) with no reagents. To do: for each recipe also record the reagent item IDs and counts and the item made with its count, record `GetItemInfo` names and vendor sell prices for every item seen (reagents, products, scanned items), and keep it in a new top-level SavedVariables table (`items`) rather than per character. Companion: `load_scan_data` currently reads only `scans` and `characters`; it needs to read the new fields, and `load_reference` should merge them under the seed data (seed and the later wago.tools file override observed data by lowercase recipe name). Update `common/docs/FORMAT.md` for every new field.
+Built (addon 0.6.0, not yet confirmed in game): the addon records, per recipe, the reagent item IDs and counts, the item made and pieces made (modern `GetRecipeSchematic`, or the classic `GetTradeSkillReagent*` functions), plus `GetItemInfo` names and vendor sell prices into a top-level `items` table. The companion reads them (`ScanData.items`) and `Reference.with_observed` layers them over the bundled data: recorded names and sell prices win, recorded recipes replace the bundled one of the same name but keep its skill, yields and source, and `refined` is derived. Layout is in `common/docs/FORMAT.md`.
+
+Still to do for step 1:
+
+- Confirm in game: `/reload`, open each profession window, then `/shuffledetector recipes` should report recipes "with reagents". If the Forever client lacks `GetRecipeSchematic` and the classic functions, find the API it does have. Check that `/reload` writes `items` and that the companion lists those recipes as known.
+- Recorded recipes have no skill requirement (the game's list only gives learned recipes) and no disenchant yields until step 2 or 3 supplies them; a recipe known by one character shows as learnable for another character of any skill until the skill levels come from step 2.
+- Record names for scanned items too (the scan stores IDs only, so items outside the recipes show as "Item N" unless the bundled data names them), and recipes the character does not know cannot be recorded at all, which is what step 2 is for.
 
 ## Planned: faster and automatic reference data builds
 

@@ -122,7 +122,7 @@ class MainWindow(QMainWindow):
         self.resize(1100, 680)
         self.settings = settings or QSettings("ShuffleDetector", "ShuffleDetector")
         self.scan = None
-        self.ref = data_loader.load_reference()
+        self.base_ref = self.ref = data_loader.load_reference()
         self.results = []
         self.shown = []
         self.extra_ref = None
@@ -397,7 +397,8 @@ class MainWindow(QMainWindow):
 
     def reload(self):
         try:
-            self.ref = data_loader.load_reference(extra=self.extra_ref)
+            self.base_ref = data_loader.load_reference(extra=self.extra_ref)
+            self.ref = self.base_ref.with_observed(self.scan) if self.scan else self.base_ref
         except Exception as e:
             QMessageBox.critical(self, "Reference data", str(e))
             return
@@ -427,6 +428,8 @@ class MainWindow(QMainWindow):
             return False
         self.path = path
         self.loaded_mtime = mtime
+        self.ref = self.base_ref.with_observed(self.scan)
+        self.populate_professions()
         selected = (self.realm.currentText(), self.character.currentData())
         for box, values in ((self.realm, self.scan.realms), (self.character, [""] + sorted(self.scan.characters))):
             box.blockSignals(True)
