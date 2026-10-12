@@ -6,11 +6,13 @@
     python run.py --test       run the test suite
     python run.py --setup      only create/refresh the virtualenv
 
-The first run creates .venv and installs the companion (editable) with GUI dependencies;
+The first run creates a per-machine virtualenv (.venv-<hostname>) and installs the companion (editable) with GUI dependencies;
 it re-installs automatically when companion/pyproject.toml changes.
 """
 
 import hashlib
+import re
+import socket
 import subprocess
 import sys
 import venv
@@ -18,7 +20,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 COMPANION = ROOT / "companion"
-VENV = ROOT / ".venv"
+HOST = re.sub(r"[^A-Za-z0-9_.-]", "_", socket.gethostname()) or "host"
+# The checkout is shared between machines (OneDrive), and a venv is not portable, so each host gets its own.
+VENV = ROOT / f".venv-{HOST}"
 STAMP = VENV / ".install-stamp"
 
 
@@ -33,7 +37,7 @@ def pyproject_hash():
 def ensure_env():
     py = venv_python()
     if not py.exists():
-        print("Creating virtualenv in .venv ...", flush=True)
+        print(f"Creating virtualenv in {VENV.name} ...", flush=True)
         venv.EnvBuilder(with_pip=True).create(VENV)
     want = pyproject_hash()
     if not STAMP.exists() or STAMP.read_text() != want:

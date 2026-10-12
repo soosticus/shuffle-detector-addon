@@ -15,7 +15,7 @@ python run.py --cli ARGS   # command-line interface
 python run.py --test       # run the tests
 ```
 
-The first run creates `.venv` and installs the dependencies; it reinstalls when `companion/pyproject.toml` changes.
+The first run creates a per-machine virtualenv, `.venv-<hostname>`, and installs the dependencies; it reinstalls when `companion/pyproject.toml` changes.
 
 ## Run the companion (manual)
 

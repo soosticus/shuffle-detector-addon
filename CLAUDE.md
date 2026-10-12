@@ -27,7 +27,7 @@ What the addon records (details in FORMAT.md): AH scans; per character and profe
 
 ## Environment quirks (Windows, Git Bash)
 
-- Tests: `cd companion && PYTHONPATH=src ../.venv/Scripts/python.exe -m pytest -q -p no:cacheprovider tests` (51 pass). `python run.py --test` also works.
+- Tests: `cd companion && PYTHONPATH=src ../.venv-$(hostname)/Scripts/python.exe -m pytest -q -p no:cacheprovider tests` (51 pass). `python run.py --test` also works.
 - Source files are CRLF. The Edit tool can trip on that, so for multi-line edits use a Python script that reads with `newline=''`, normalises to `\n`, edits, and writes back with `\r\n`. Chaining several heredocs in one Bash call failed once; keep them in separate calls.
 - Bash `/tmp` is not the same as the Windows Python `/tmp`: pipe data into python rather than saving to `/tmp` and reading it from Windows Python.
 - Lua syntax check: needs the `lupa` package (it lived in `/tmp/sdvenv`, which may need recreating with `python -m venv /tmp/sdvenv` then `pip install lupa`). Run `python -c "import lupa; l=lupa.LuaRuntime(); f=l.eval('function(p) local f,e=loadfile(p) return e end'); print(f('addon/ShuffleDetector/ShuffleDetector.lua'))"`; `None` means it parses. A lupa smoke harness that stubs the WoW API was kept in `/tmp` (not in the repo); rebuild a small one if needed.
