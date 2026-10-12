@@ -4,7 +4,7 @@ Find the most profitable crafting shuffle (any profession, with Disenchanting, A
 
 - `addon/ShuffleDetector/` - WoW addon. Scans the auction house (`/shuffledetector scan`, `/ahsnap` also works) and records profession skill and known recipes to SavedVariables.
 - `companion/` - cross-platform Python app (CLI + PySide6 GUI) that reads those SavedVariables and ranks shuffles for every profession (`--profession`, or the GUI profession box), with a per-step cost/yield breakdown and suggestions for recipes to acquire.
-- `common/` - shared data format doc and reference data (`data/reference.json`: items, vendor prices, recipes, disenchant yields). The bundled values are unverified seed data; `--update-wowhead` (or the GUI menu) downloads recipes for all professions from Wowhead (`--update-profession SLUG` for one).
+- `common/` - shared data format doc and reference data (`data/reference.json`: items, vendor prices, recipes, disenchant yields). The bundled values are unverified seed data. More recipes for other professions need a permitted data source (see [ROADMAP.md](ROADMAP.md)).
 
 ## Run from the source tree
 

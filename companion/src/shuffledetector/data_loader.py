@@ -41,12 +41,11 @@ class ScanData:
         return sorted(self.scans)
 
 
-def load_reference(path=None, extra=None, include_generated=True):
+def load_reference(path=None, extra=None):
     """Load reference JSON. `extra` (a second file) overrides/extends the base."""
     merged = Reference()
     base = Path(path or DEFAULT_REFERENCE)
-    generated = base.with_name("wowhead.json")  # produced by the Wowhead updater; overrides seed data
-    for p in (path or DEFAULT_REFERENCE, generated if include_generated and generated.is_file() else None, extra):
+    for p in (path or DEFAULT_REFERENCE, extra):
         if p is DEFAULT_REFERENCE and not Path(p).is_file():
             raise FileNotFoundError(f"reference data not found at {p}; set SHUFFLEDETECTOR_DATA")
         if not p:

@@ -77,7 +77,7 @@ def test_rank_end_to_end(tmp_path):
     path = tmp_path / "ShuffleDetector.lua"
     path.write_text(SAMPLE, encoding="utf-8")
     scan = data_loader.load_scan_data(path)
-    ref = data_loader.load_reference(include_generated=False)
+    ref = data_loader.load_reference()
     results = calc.rank(scan, ref, calc.Settings(price_mode="min"))
     vest = next(r for r in results if r.name == "Green Woolen Vest")
     # 4 bolts: 2@100 + 2@150 = 500; 2 fine thread: vendor 100*2 = 200 vs AH 100 -> AH
@@ -87,23 +87,6 @@ def test_rank_end_to_end(tmp_path):
     assert vest.status == "known"
     assert results[-1].profit is None  # recipes with no scanned prices sort last
     assert vest in results[: results.index(results[-1]) + 1]
-
-from shuffledetector import wowhead
-
-
-def test_wowhead_parsing():
-    html = (
-        "id: 'disenchanting',\n    data: [{\"id\":10940,\"name\":\"Strange Dust\",\"count\":50,\"outof\":100,"
-        "\"pctstack\":\"{1: 50,2: 50}\"}],\n});"
-    )
-    (y,) = wowhead.parse_disenchant(html)
-    assert y["item"] == 10940 and y["n"] == 100
-    assert abs(y["avg"] - 0.5 * 1.5) < 1e-9
-    vendor = "id: 'sold-by',\n data: [{\"stock\":-1,\"cost\":[[9]],\"stack\":1}],\n});"
-    assert wowhead.parse_vendor_price(vendor) == 9
-    js = '[{"name":"A, b: c","quality":2,popularity:5}]'
-    assert wowhead._loads_js(js) == [{"name": "A, b: c", "quality": 2, "popularity": 5}]
-
 
 def _exit_result(ah, vendor, de_price):
     items = {

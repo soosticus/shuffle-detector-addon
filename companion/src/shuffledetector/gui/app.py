@@ -9,7 +9,7 @@ from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
     QMainWindow, QMessageBox, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
-    QTextBrowser, QVBoxLayout, QWidget, QAbstractItemView, QHeaderView, QProgressDialog,
+    QTextBrowser, QVBoxLayout, QWidget, QAbstractItemView, QHeaderView,
 )
 
 from .. import addon_manager, calc, calculator, data_loader, plan, updater
@@ -131,12 +131,10 @@ class MainWindow(QMainWindow):
         ref_act = QAction("Load extra reference data...", self, triggered=self.open_reference)
         reload_act = QAction("Reload", self, triggered=self.reload)
         menu = self.menuBar().addMenu("&File")
-        wh_act = QAction("Update recipes && yields from Wowhead...", self, triggered=self.update_from_wowhead)
-        for a in (open_act, ref_act, wh_act, reload_act):
+        for a in (open_act, ref_act, reload_act):
             menu.addAction(a)
         self.path = None
         self.loaded_mtime = None
-        self.ref_mtime = self._generated_mtime()
         addon_menu = self.menuBar().addMenu("&Addon")
         self.install_act = QAction("Install / update addon", self, triggered=lambda: self.install_selected(True))
         addon_menu.addAction(self.install_act)
@@ -280,19 +278,8 @@ class MainWindow(QMainWindow):
         self.watch_timer = QTimer(self, interval=2000, timeout=self.check_for_changes)
         self.watch_timer.start()
 
-    @staticmethod
-    def _generated_mtime():
-        try:
-            return data_loader.DEFAULT_REFERENCE.with_name("wowhead.json").stat().st_mtime
-        except OSError:
-            return None
-
     def check_for_changes(self):
-        """Reload when the game rewrites the SavedVariables file (or one appears) or the Wowhead data changes."""
-        if self._generated_mtime() != self.ref_mtime:
-            self.reload()
-            self.statusBar().showMessage("Recipe data changed - recalculated", 8000)
-            return
+        """Reload when the game rewrites the SavedVariables file (or one appears)."""
         try:
             path = self.path or next(iter(data_loader.candidate_saved_variables(self.wow_roots())), None)
             if not path:
@@ -408,34 +395,7 @@ class MainWindow(QMainWindow):
             self.extra_ref = p
             self.reload()
 
-    def update_from_wowhead(self):
-        from .. import wowhead
-        dlg = QProgressDialog("Contacting Wowhead...", "Cancel", 0, 100, self)
-        dlg.setWindowTitle("Wowhead")
-        dlg.setWindowModality(Qt.WindowModal)
-        dlg.setMinimumDuration(0)
-
-        def progress(done, total, msg):
-            dlg.setMaximum(total)
-            dlg.setValue(done)
-            dlg.setLabelText(f"{msg}  ({done}/{total})")
-            QApplication.processEvents()
-            return not dlg.wasCanceled()
-
-        try:
-            path, n = wowhead.update(progress=progress)  # all professions
-        except KeyboardInterrupt:
-            return
-        except Exception as e:
-            QMessageBox.critical(self, "Wowhead", f"Update failed: {e}")
-            return
-        finally:
-            dlg.close()
-        self.reload()
-        self.statusBar().showMessage(f"Loaded {n} recipes from Wowhead", 8000)
-
     def reload(self):
-        self.ref_mtime = self._generated_mtime()
         try:
             self.ref = data_loader.load_reference(extra=self.extra_ref)
         except Exception as e:

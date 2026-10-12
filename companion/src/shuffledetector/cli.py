@@ -20,9 +20,6 @@ def build_parser():
     p.add_argument("--disenchant-seconds", type=float, default=3.0, help="seconds to disenchant one piece (default 3)")
     p.add_argument("--profession", help="only show this profession (e.g. Tailoring, Alchemy, First Aid)")
     p.add_argument("--top", type=int, default=10)
-    p.add_argument("--update-wowhead", action="store_true", help="download recipes/yields/vendor prices from Wowhead (Forever)")
-    p.add_argument("--refresh", action="store_true", help="with --update-wowhead: ignore the page cache")
-    p.add_argument("--update-profession", metavar="SLUG", help="with --update-wowhead: only this profession (default: all)")
     p.add_argument("--send-plan", metavar="RECIPE", help="write this recipe's shuffle to the addon's Plan.lua (then /reload in game)")
     p.add_argument("--wow", help="WoW folder, flavor folder or AddOns folder to send the plan to (default: auto-detect)")
     p.add_argument("--detail", action="store_true", help="show step-by-step breakdown")
@@ -71,14 +68,6 @@ def send_plan(args, results):
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    if args.update_wowhead:
-        from . import wowhead
-        def show(done, total, msg):
-            print(f"\r[{done}/{total}] {msg:<40}", end="", flush=True)
-        out, n = wowhead.update(professions=[args.update_profession] if args.update_profession else None,
-                                progress=show, use_cache=not args.refresh)
-        print(f"\nWrote {n} recipes to {out}")
-        return 0
     path = args.savedvars
     if not path:
         found = data_loader.candidate_saved_variables()

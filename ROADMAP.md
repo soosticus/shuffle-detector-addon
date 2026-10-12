@@ -4,26 +4,25 @@ Open items only; finished work is removed. Release notes are generated from comm
 
 ## Open items
 
-- Layer observed in-game disenchant results from the addon on top of the Wowhead yield rates.
+- Layer observed in-game disenchant results from the addon on top of the yield rates from the data source.
 - Handle vendor faction/location restrictions.
 - Confirm the AH tab and recipe capture (`/shuffledetector recipes`) in the Forever client. Tailoring recipes were not being recorded for the main character, so the "known recipes only" filter falls back to showing everything; if `/shuffledetector recipes` still reports 0 after opening the Tailoring window and `/reload`, the recipe capture needs a fix for the Forever API. Enchanting (craft frame) recipes are not read by the addon.
 - Confirm in game that the fast-press gating no longer repeats a craft or disenchant step.
 - Shuffle follow-ups: take the craft count or budget from the calculator, and steps beyond craft/disenchant (for example vendor or AH listing) now that the calculator can name them.
-- Per-recipe craft times: the calculator uses one default craft time (30 s) unless a recipe sets `craft_seconds`; read the real cast times from the game or Wowhead.
+- Per-recipe craft times: the calculator uses one default craft time (30 s) unless a recipe sets `craft_seconds`; read the real cast times from the game or the data source.
 - Calculator follow-ups: model price impact when buying or selling large quantities (walk the sell side of the order book), use observed in-game disenchant results instead of Poisson for the range, and offer a "number of disenchants" target.
 
-## Planned: replace the Wowhead scraper with a permitted data source
+## Planned: a permitted source for recipe and yield data
 
-Scraping Wowhead appears to be against its terms of service and risks an IP block, so the Wowhead download (`wowhead.py`, `--update-wowhead`, the GUI menu entry) should not be run and should be replaced. Scraping stopped on 2026-10-11 part way through a first full build.
+All Wowhead scraping, data and code has been removed (its terms appear to forbid scraping and it risked an IP block). The scraper, its generated `wowhead.json` and its page cache are gone from the working tree and the local cache, so the companion now only has the small hand-written seed data in `common/data/reference.json` (mostly Tailoring). Other professions have no recipes until a new source is added.
 
-- Candidate source: wago.tools (database tables for game data, including recipes, reagents, items and vendor prices). Check its terms, whether it offers Classic or the "Forever" client builds, and what it provides for disenchant yields (the DB tables hold the disenchant loot table, not community drop rates). Other options: in-game data read by the addon, or hand-maintained data in `reference.json`.
-- Review what is already committed: `common/data/wowhead.json` and the `wowhead.py` scraper came from Wowhead. Decide whether to keep, regenerate from the new source, or remove them, and remove the page cache on disk (`wowhead.cache_dir()`).
-- Until a replacement exists, disable or remove the CLI and GUI entry points so nobody triggers a scrape by accident.
-- The new source should keep the same output shape (`items`, `vendor`, `vendor_sell`, `recipes` with `profession` and `makes`, `refined`) so the calculator does not change.
+- Candidate source: wago.tools (database tables for game data, including recipes, reagents, items and vendor prices). Check its terms, whether it offers Classic or the "Forever" client builds, and what it provides for disenchant yields (the DB tables hold the disenchant loot table, not community drop rates). Other options: data read by the addon in game, or hand-maintained data in `reference.json`.
+- The new source should produce the same shape as before (`items`, `vendor`, `vendor_sell`, `recipes` with `profession` and optional `makes`, `refined`) so the calculator does not change; `load_reference` merges the seed file with an extra file. Derive `refined` (single-input intermediates such as bolts and bars that are reagents elsewhere) from the recipes.
+- Remove the Wowhead data from git history. `common/data/wowhead.json` (and earlier versions) are in already-pushed commits, so this needs a history rewrite and a force push.
 
 ## Planned: faster and automatic reference data builds
 
-Applies to whichever source replaces Wowhead (see above); most of it is about downloading less and not hammering any site.
+Applies to whichever source is chosen (see above); most of it is about downloading less and not hammering any site.
 
 - Incremental builds: Classic item data (names, vendor prices, disenchant rates) is effectively static. Fetch the small per-profession recipe lists first (9 requests), compare them with the saved data, and fetch only items not seen before. If nothing is new, stop after those requests. Cache item data with no expiry and let a `--refresh` flag force a re-pull.
 - Smaller requests: prefer bulk or table downloads (many items per request) over one page per item, and only fetch disenchant data for green-or-better armor and weapons.
