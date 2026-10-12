@@ -14,11 +14,11 @@ Open items only; finished work is removed. Release notes are generated from comm
 
 ## Planned: a permitted source for recipe and yield data
 
-All Wowhead scraping, data and code has been removed (its terms appear to forbid scraping and it risked an IP block). The scraper, its generated `wowhead.json` and its page cache are gone from the working tree and the local cache, so the companion now only has the small hand-written seed data in `common/data/reference.json` (mostly Tailoring). Other professions have no recipes until a new source is added.
+All Wowhead scraping, data and code has been removed (its terms appear to forbid scraping and it risked an IP block). The scraper, its generated `wowhead.json` and its page cache are gone from the working tree, history and the local cache, so the companion now only has the small hand-written seed data in `common/data/reference.json` (mostly Tailoring). Other professions have no recipes until a new source is added.
 
 - Candidate source: wago.tools (database tables for game data, including recipes, reagents, items and vendor prices). Check its terms, whether it offers Classic or the "Forever" client builds, and what it provides for disenchant yields (the DB tables hold the disenchant loot table, not community drop rates). Other options: data read by the addon in game, or hand-maintained data in `reference.json`.
 - The new source should produce the same shape as before (`items`, `vendor`, `vendor_sell`, `recipes` with `profession` and optional `makes`, `refined`) so the calculator does not change; `load_reference` merges the seed file with an extra file. Derive `refined` (single-input intermediates such as bolts and bars that are reagents elsewhere) from the recipes.
-- Remove the Wowhead data from git history. `common/data/wowhead.json` (and earlier versions) are in already-pushed commits, so this needs a history rewrite and a force push.
+- The Wowhead files were also removed from all git history (rewritten and force-pushed on 2026-10-11; the repo is private).
 
 ## Planned: faster and automatic reference data builds
 
