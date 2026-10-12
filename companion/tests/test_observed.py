@@ -11,6 +11,7 @@ AHSnapshotDB = {
     [2996] = { name = "Bolt of Linen Cloth", sell = 50 },
     [7054] = { name = "Test Robe", sell = 0 },
   },
+  vendor = { [2320] = 25, [2589] = "bad" },
   characters = {
     ["Me-Realm-Alliance"] = {
       professions = {
@@ -19,6 +20,10 @@ AHSnapshotDB = {
             reagents = { { item = 2589, qty = 2 } } },
           { name = "Test Robe", item = 7054, spell = 1, reagents = { { item = 2996, qty = 3 }, { item = 2320, qty = 1 } } },
           { name = "Old Entry", spell = 9 },
+        }, available = {
+          { name = "Test Cloak", item = 7055, spell = 2, trivial = 90, source = "Trainer",
+            reagents = { { item = 2996, qty = 2 } } },
+          { name = "Test Robe", item = 7054, spell = 1, reagents = { { item = 1, qty = 1 } } },
         } },
         Cooking = { skill = 10, max = 75, recipes = {
           { name = "Boiled Clams", item = 5525, makes = 2, reagents = { { item = 5503, qty = 1 } } },
@@ -43,7 +48,16 @@ def test_loads_recorded_items(tmp_path):
 
 def test_observed_recipes_need_reagents(tmp_path):
     names = {r["name"] for r in data_loader.observed_recipes(load(tmp_path).characters)}
-    assert names == {"Bolt of Linen Cloth", "Test Robe", "Boiled Clams"}
+    assert names == {"Bolt of Linen Cloth", "Test Robe", "Boiled Clams", "Test Cloak"}
+
+
+def test_available_recipes_are_added_but_never_override_known(tmp_path):
+    recipes = {r["name"]: r for r in data_loader.observed_recipes(load(tmp_path).characters)}
+    assert recipes["Test Cloak"]["trivial"] == 90 and recipes["Test Cloak"]["source"] == "Trainer"
+    assert [x["item"] for x in recipes["Test Robe"]["reagents"]] == [2996, 2320]
+    ref = Reference().with_observed(load(tmp_path))
+    cloak = next(r for r in ref.recipes if r["name"] == "Test Cloak")
+    assert "skill" not in cloak and cloak["yields"] == []
 
 
 def test_with_observed_adds_recipes_names_and_refined(tmp_path):
@@ -82,3 +96,10 @@ def test_recorded_recipe_ranks_as_known(tmp_path):
     res = calc.rank(scan, ref, calc.Settings(price_mode="min", exits=("Sell on AH",)), "R", "Me-Realm-Alliance",
                     professions=["Cooking"])
     assert len(res) == 1 and res[0].status == "known" and res[0].profit > 0
+
+
+def test_observed_vendor_prices_override_bundled(tmp_path):
+    scan = load(tmp_path)
+    assert scan.vendor == {2320: 25}
+    ref = Reference(vendor={2320: 99, 5: 7}).with_observed(scan)
+    assert ref.vendor == {2320: 25, 5: 7}

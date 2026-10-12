@@ -73,6 +73,7 @@ local function snapshotSkills()
     for name, p in pairs(profs) do
         local old = c.professions[name]
         p.recipes = old and old.recipes or {}
+        p.available = old and old.available
         c.professions[name] = p
     end
     AHSnapshotDB.characters[charKey()] = c
@@ -101,18 +102,29 @@ local function readModern()
     local base = T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
     local ids = T.GetAllRecipeIDs()
     if not (base and base.professionName and ids and #ids > 0) then return end
-    local recipes = {}
+    local recipes, available = {}, {}
     for _, id in ipairs(ids) do
         local info = T.GetRecipeInfo(id)
-        if info and info.learned and info.name then
+        if info and info.name and not info.isDummyRecipe then
             local reagents, item, makes = modernDetails(T, id)
             if not item and T.GetRecipeItemLink then
                 local okLink, link = pcall(T.GetRecipeItemLink, id)
                 item = okLink and itemIdFromLink(link) or nil
             end
-            recipes[#recipes + 1] = { name = info.name, spell = id, item = item,
-                                      makes = makes and makes > 1 and makes or nil,
-                                      reagents = reagents and #reagents > 0 and reagents or nil }
+            local entry = { name = info.name, spell = id, item = item,
+                            makes = makes and makes > 1 and makes or nil,
+                            reagents = reagents and #reagents > 0 and reagents or nil }
+            if info.learned then
+                recipes[#recipes + 1] = entry
+            else
+                -- Recipes in the window that the character has not learned: what to acquire later.
+                entry.trivial = info.maxTrivialLevel
+                if T.GetRecipeSourceText then
+                    local okSrc, text = pcall(T.GetRecipeSourceText, id)
+                    if okSrc and type(text) == "string" and text ~= "" then entry.source = text end
+                end
+                available[#available + 1] = entry
+            end
         end
     end
     local pname, skill, max = base.professionName, base.skillLevel, base.maxSkillLevel
@@ -125,7 +137,7 @@ local function readModern()
             end
         end
     end
-    return pname, skill, max, recipes
+    return pname, skill, max, recipes, available
 end
 
 -- Classic profession UI (GetTradeSkill* functions).
@@ -156,7 +168,7 @@ local function readClassic()
 end
 
 local function snapshotRecipes(quiet)
-    local ok, name, rank, maxRank, recipes = pcall(readModern)
+    local ok, name, rank, maxRank, recipes, available = pcall(readModern)
     if not (ok and name) then
         ok, name, rank, maxRank, recipes = pcall(readClassic)
     end
@@ -177,13 +189,17 @@ local function snapshotRecipes(quiet)
             if table.concat(other, "|") == sig then return false end
         end
     end
-    c.professions[name] = { skill = rank, max = maxRank, recipes = recipes }
-    for _, r in ipairs(recipes) do
-        recordItem(r.item)
-        for _, x in ipairs(r.reagents or {}) do recordItem(x.item) end
+    c.professions[name] = { skill = rank, max = maxRank, recipes = recipes,
+                            available = available and #available > 0 and available or nil }
+    for _, list in ipairs({ recipes, available or {} }) do
+        for _, r in ipairs(list) do
+            recordItem(r.item)
+            for _, x in ipairs(r.reagents or {}) do recordItem(x.item) end
+        end
     end
     if not quiet then
-        say(("saved %d %s recipes (skill %s/%s)"):format(#recipes, name, tostring(rank), tostring(maxRank)))
+        say(("saved %d %s recipes (skill %s/%s)%s"):format(#recipes, name, tostring(rank), tostring(maxRank),
+            available and #available > 0 and (" and %d not yet learned"):format(#available) or ""))
     end
     return true
 end
@@ -202,6 +218,32 @@ local function snapshotWithRetry()
     try(1)
 end
 
+-- Vendor buy prices, per single item, as the merchant window shows them (gold only; item-cost
+-- vendors are skipped). Reputation discounts are baked into the price the game shows.
+local function snapshotMerchant()
+    if not (GetMerchantNumItems and GetMerchantItemLink) then return end
+    local n = GetMerchantNumItems() or 0
+    for i = 1, n do
+        local price, qty, extended
+        if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+            local okInfo, info = pcall(C_MerchantFrame.GetItemInfo, i)
+            if okInfo and type(info) == "table" then
+                price, qty, extended = info.price, info.stackCount, info.hasExtendedCost
+            end
+        end
+        if price == nil and GetMerchantItemInfo then
+            local _, _, p, q, _, _, _, ext = GetMerchantItemInfo(i)
+            price, qty, extended = p, q, ext
+        end
+        local id = itemIdFromLink(GetMerchantItemLink(i))
+        if id and price and price > 0 and not extended then
+            AHSnapshotDB.vendor = AHSnapshotDB.vendor or {}
+            AHSnapshotDB.vendor[id] = math.floor(price / math.max(qty or 1, 1) + 0.5)
+            recordItem(id)
+        end
+    end
+end
+
 local pending
 local function scheduleSnapshot()
     if pending then return end
@@ -217,9 +259,13 @@ frame:RegisterEvent("TRADE_SKILL_SHOW")
 frame:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 frame:RegisterEvent("SKILL_LINES_CHANGED")
 frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+frame:RegisterEvent("MERCHANT_SHOW")
+frame:RegisterEvent("MERCHANT_UPDATE")
 frame:SetScript("OnEvent", function(_, event, itemId)
     if event == "GET_ITEM_INFO_RECEIVED" then
         if awaiting[itemId] then recordItem(itemId) end
+    elseif event == "MERCHANT_SHOW" or event == "MERCHANT_UPDATE" then
+        pcall(snapshotMerchant)
     elseif event == "TRADE_SKILL_SHOW" then
         snapshotWithRetry()
     elseif event == "TRADE_SKILL_LIST_UPDATE" then

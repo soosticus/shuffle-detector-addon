@@ -3,7 +3,7 @@
 ## Notes: Scans the auction house and records profession skill/recipes to SavedVariables for external tools.
 ## Author: Soost
 ## X-License: MIT
-## Version: 0.6.4
+## Version: 0.6.5
 ## OptionalDeps: Auctionator, LibAHTab
 ## SavedVariables: AHSnapshotDB
 

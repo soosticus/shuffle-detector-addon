@@ -44,9 +44,10 @@ class Reference:
                 out.items[item_id] = e["name"]
             if e.get("sell"):
                 out.vendor_sell[item_id] = e["sell"]
+        out.vendor.update(scan.vendor)
         by_name = {r["name"].lower(): r for r in self.recipes}
         for r in observed_recipes(scan.characters):
-            merged = dict(by_name.get(r["name"].lower()) or {"yields": [], "skill": 0, "source": "Recorded in game"})
+            merged = dict(by_name.get(r["name"].lower()) or {"yields": [], "source": "Recorded in game"})
             merged.update(r)
             by_name[r["name"].lower()] = merged
         out.recipes = list(by_name.values())
@@ -60,6 +61,7 @@ class ScanData:
     scans: dict = field(default_factory=dict)
     characters: dict = field(default_factory=dict)
     items: dict = field(default_factory=dict)        # item id -> {"name", "sell"} as recorded in game
+    vendor: dict = field(default_factory=dict)       # item id -> copper to buy one from a vendor, as seen in game
 
     @property
     def realms(self):
@@ -117,7 +119,8 @@ def load_scan_data(path):
     for item_id, e in (db.get("items") or {}).items():
         if isinstance(e, dict):
             items[int(item_id)] = {"name": e.get("name"), "sell": int(e.get("sell") or 0)}
-    return ScanData(scans=scans, characters=db.get("characters") or {}, items=items)
+    vendor = {int(k): int(v) for k, v in (db.get("vendor") or {}).items() if isinstance(v, (int, float))}
+    return ScanData(scans=scans, characters=db.get("characters") or {}, items=items, vendor=vendor)
 
 
 def _as_list(value):
@@ -128,23 +131,33 @@ def _as_list(value):
 
 
 def observed_recipes(characters):
-    """Recipes in the characters' saved profession data that carry reagents, as reference recipes."""
+    """Recipes in the characters' saved profession data that carry reagents, as reference recipes.
+
+    Learned recipes come first; recipes the profession window listed but the character has not
+    learned ("available") fill in names no character knows, with the game's trivial level and source text.
+    """
     found = {}
-    for c in characters.values():
-        for pname, prof in (c.get("professions") or {}).items():
-            for r in _as_list(prof.get("recipes")):
-                reagents = [{"item": int(x["item"]), "qty": int(x.get("qty") or 1)}
-                            for x in _as_list(r.get("reagents")) if isinstance(x, dict) and x.get("item")]
-                if not (r.get("name") and reagents):
-                    continue
-                recipe = {"name": r["name"], "profession": pname, "reagents": reagents}
-                if r.get("item"):
-                    recipe["item"] = int(r["item"])
-                if r.get("spell"):
-                    recipe["spell"] = int(r["spell"])
-                if (r.get("makes") or 1) > 1:
-                    recipe["makes"] = int(r["makes"])
-                found.setdefault(r["name"].lower(), recipe)
+    for key in ("recipes", "available"):
+        for c in characters.values():
+            for pname, prof in (c.get("professions") or {}).items():
+                for r in _as_list(prof.get(key)):
+                    reagents = [{"item": int(x["item"]), "qty": int(x.get("qty") or 1)}
+                                for x in _as_list(r.get("reagents")) if isinstance(x, dict) and x.get("item")]
+                    if not (r.get("name") and reagents):
+                        continue
+                    recipe = {"name": r["name"], "profession": pname, "reagents": reagents}
+                    if r.get("item"):
+                        recipe["item"] = int(r["item"])
+                    if r.get("spell"):
+                        recipe["spell"] = int(r["spell"])
+                    if (r.get("makes") or 1) > 1:
+                        recipe["makes"] = int(r["makes"])
+                    if key == "available":
+                        if r.get("trivial"):
+                            recipe["trivial"] = int(r["trivial"])
+                        if r.get("source"):
+                            recipe["source"] = str(r["source"])
+                    found.setdefault(r["name"].lower(), recipe)
     return list(found.values())
 
 
