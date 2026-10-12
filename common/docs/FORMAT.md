@@ -54,6 +54,6 @@ invisible and chooses the step as it is clicked, because chat commands cannot ca
 
 # Reference data
 
-`common/data/reference.json` holds item names, vendor prices, recipes (reagents), `bolts` (bolt item -> raw cloth item and quantity per bolt) and average
+`common/data/reference.json` holds item names, vendor prices, recipes (reagents, plus optional `profession` (default Tailoring) and `makes`, the pieces one craft produces), `refined` (bolt or bar item -> raw item and quantity per piece) and average
 disenchant yields. The bundled values are unverified seed data; edit them or pass an extra file
 that overrides recipes by name.

@@ -27,10 +27,10 @@ Prepare the addon for CurseForge. Check CurseForge's current requirements before
 
 ## Planned: more professions
 
-Go beyond Tailoring -> Enchanting and consider every profession the scanned characters actually have. The addon already records each character's professions and known recipes, so the companion should read that list and evaluate shuffles for all of them, not just Tailoring.
+The companion now evaluates every crafting profession in this client (Tailoring, Leatherworking, Blacksmithing, Engineering, Enchanting, Alchemy, Mining/smelting, Cooking and First Aid), using each profession's own skill and known recipes from the scan. What is left:
 
-- Generalize `calc.py` from the hard-coded Tailoring-only known-recipe check to any profession's recipes, with the character filter using whichever professions are present in the scan.
-- Extend the Wowhead resolver to fetch recipes, reagents, vendor prices and yields for the other crafting professions (Blacksmithing, Leatherworking, Engineering, Alchemy, Jewelcrafting, Inscription, Cooking, and others available in the client), and for the gathering and processing steps (Mining/smelting, Herbalism/milling, Skinning, prospecting).
-- Support other exit steps beyond disenchanting, such as prospecting, milling and salvage, in the same exit comparison.
-- Allow chains across professions held by different characters (craft on one, process on another).
-- GUI: a profession filter alongside the character selector.
+- Confirm the addon records known recipes for every profession (it was only verified for Tailoring); the "known only" filter falls back to showing everything for a profession with none recorded. Also confirm the shuffle button can craft recipes of other professions when their window is open.
+- Gathering and processing: Herbalism, Skinning and Mining as sources of raw materials, and buying or gathering inputs versus the AH price.
+- Other exit steps (for example salvage) in the same exit comparison. Prospecting and milling do not exist in this client because it has no Jewelcrafting or Inscription.
+- Allow chains across professions held by different characters (craft on one, process on another), and chains where one craft feeds another profession's craft.
+- Per-recipe craft times; the calculator uses 30 s unless a recipe sets `craft_seconds`.

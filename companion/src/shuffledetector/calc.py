@@ -1,8 +1,9 @@
-"""Profit calculation for Tailoring -> Enchanting shuffles."""
+"""Profit calculation for crafting shuffles: craft something, then disenchant it or sell it."""
 
 from dataclasses import dataclass, field
 
 PRICE_MODES = ("avg_low", "min")
+DEFAULT_PROFESSION = "Tailoring"  # recipes without a profession are Tailoring (the original seed data)
 
 
 @dataclass
@@ -25,9 +26,9 @@ class Line:
     source: str = ""
     ah_unit: float | None = None      # per-unit AH price (what it would cost / fetch)
     vendor_unit: float | None = None  # per-unit vendor price
-    raw_unit: float | None = None     # per-unit cost when made from raw cloth (bolts only)
-    raw_item: int | None = None       # the raw cloth item a bolt is made from
-    raw_qty: int = 0                  # raw cloth per bolt
+    raw_unit: float | None = None     # per-unit cost when made from the raw item (refined items such as bolts and bars)
+    raw_item: int | None = None       # the raw item a refined item is made from
+    raw_qty: int = 0                  # raw items per refined piece
 
 
 @dataclass
@@ -53,12 +54,17 @@ class Result:
     exits: list = field(default_factory=list)
     exit: str = ""               # label of the chosen exit
     allowed: tuple = ()          # exits that were enabled for this evaluation
+    profession: str = DEFAULT_PROFESSION
     seconds: float = 0           # casting time per craft: the craft, plus the disenchant when that is the exit
     profit_per_hour: float | None = None
 
     @property
     def name(self):
         return self.recipe["name"]
+
+
+def recipe_profession(recipe):
+    return recipe.get("profession") or DEFAULT_PROFESSION
 
 
 def buy_cost(entry, qty):
@@ -93,20 +99,23 @@ def sell_price(entry, settings):
     return total / taken if taken else entry["min"]
 
 
-def _skill_and_known(characters, character):
+def _skills_and_known(characters, character):
+    """({profession: best skill}, {profession: {known recipe names}}) over the chosen character (or all), keys lowercase."""
     chars = characters if character is None else {character: characters.get(character, {})}
-    known, skill = set(), None
+    skills, known = {}, {}
     for c in chars.values():
         for pname, prof in (c.get("professions") or {}).items():
-            if pname.lower() == "tailoring":
-                skill = max(skill or 0, prof.get("skill") or 0)
-                for r in prof.get("recipes") or []:
-                    known.add(r.get("name", "").lower())
-    return skill, known
+            key = pname.lower()
+            skills[key] = max(skills.get(key) or 0, prof.get("skill") or 0)
+            names = known.setdefault(key, set())
+            for r in prof.get("recipes") or []:
+                names.add(r.get("name", "").lower())
+    return skills, known
 
 
 def evaluate(recipe, items, ref, settings, skill=None, known=frozenset()):
-    res = Result(recipe=recipe)
+    res = Result(recipe=recipe, profession=recipe_profession(recipe))
+    makes = recipe.get("makes") or 1
     cost = 0
     for r in recipe["reagents"]:
         item, qty = r["item"], r["qty"]
@@ -114,10 +123,10 @@ def evaluate(recipe, items, ref, settings, skill=None, known=frozenset()):
         vendor = ref.vendor.get(item)
         vendor_total = vendor * qty if vendor is not None else None
         options = [(t, s) for t, s in ((ah, "AH"), (vendor_total, "Vendor")) if t is not None]
-        # Bolts can also be crafted from raw cloth; the cheapest of buying a bolt or making one wins.
+        # Bolts, bars and the like can also be made from their raw item; the cheapest of buying or making one wins.
         raw_total, raw_item, raw_per = None, None, 0
-        if item in ref.bolts:
-            raw_item, raw_per = ref.bolts[item]
+        if item in ref.refined:
+            raw_item, raw_per = ref.refined[item]
             need = raw_per * qty
             cloth_vendor = ref.vendor.get(raw_item)
             raw_options = [t for t in (buy_cost(items.get(raw_item), need),
@@ -154,13 +163,13 @@ def evaluate(recipe, items, ref, settings, skill=None, known=frozenset()):
     ah_price = sell_price(items.get(crafted_id), settings) if crafted_id else None
     vendor_price = ref.vendor_sell.get(crafted_id) if crafted_id else None
     if crafted_id:
-        res.crafted = Line(crafted_id, ref.name(crafted_id), 1, None, None, "", ah_price, vendor_price)
-    res.exits.append(Exit("Disenchant", de_net if recipe["yields"] else None,
-                          "" if gross else "no priced yields"))
+        res.crafted = Line(crafted_id, ref.name(crafted_id), makes, None, None, "", ah_price, vendor_price)
+    if recipe["yields"]:
+        res.exits.append(Exit("Disenchant", de_net, "" if gross else "no priced yields"))
     if ah_price is not None:
-        res.exits.append(Exit("Sell on AH", ah_price * (1 - settings.ah_cut)))
+        res.exits.append(Exit("Sell on AH", ah_price * makes * (1 - settings.ah_cut)))
     if vendor_price:
-        res.exits.append(Exit("Vendor", float(vendor_price)))
+        res.exits.append(Exit("Vendor", float(vendor_price) * makes))
     priced = [e for e in res.exits if e.net and e.label in settings.exits]
     best = max(priced, key=lambda e: e.net) if priced else None
     res.net = best.net if best else None
@@ -184,15 +193,20 @@ def evaluate(recipe, items, ref, settings, skill=None, known=frozenset()):
     return res
 
 
-def rank(scan, ref, settings=None, realm=None, character=None):
+def rank(scan, ref, settings=None, realm=None, character=None, professions=None):
     """Evaluate all recipes for a realm; best profit first (incomplete data last)."""
     settings = settings or Settings()
     realm = realm or next(iter(sorted(scan.scans)), None)
     if realm is None:
         return []
     items = scan.scans[realm]["items"]
-    skill, known = _skill_and_known(scan.characters, character)
-    results = [evaluate(r, items, ref, settings, skill, known) for r in ref.recipes]
+    skills, known = _skills_and_known(scan.characters, character)
+    wanted = {p.lower() for p in professions} if professions else None
+    results = []
+    for r in ref.recipes:
+        key = recipe_profession(r).lower()
+        if wanted is None or key in wanted:
+            results.append(evaluate(r, items, ref, settings, skills.get(key), known.get(key, frozenset())))
     results.sort(key=lambda r: (r.profit is None, -(r.profit or 0)))
     return results
 

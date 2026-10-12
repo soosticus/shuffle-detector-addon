@@ -117,9 +117,9 @@ def buy_mix(entry, vendor_unit, qty):
     return ah_qty, ah_cost, 0, 0.0, max(need, 0)
 
 
-def _bolt_sources(bolt, qty, items, ref):
+def _refined_sources(bolt, qty, items, ref):
     """Ways to get bolts as (cost per bolt, count, "bolt" | "cloth"), cheapest first: buy them, or buy raw cloth."""
-    cloth, per = ref.bolts[bolt]
+    cloth, per = ref.refined[bolt]
     sources = []
     if items.get(bolt):
         sources += [(u, c, "bolt") for u, c in _segments(items[bolt])]
@@ -136,11 +136,11 @@ def _bolt_sources(bolt, qty, items, ref):
     return sorted(sources, key=lambda s: (s[0], s[2]))
 
 
-def _bolt_purchases(bolt, qty, items, ref):
+def _refined_purchases(bolt, qty, items, ref):
     """Cheapest mix of bought bolts and bolts made from raw cloth, as purchases of the bolt and of the cloth."""
-    cloth, per = ref.bolts[bolt]
+    cloth, per = ref.refined[bolt]
     taken, need = {"bolt": 0, "cloth": 0}, qty
-    for _, count, kind in _bolt_sources(bolt, qty, items, ref):
+    for _, count, kind in _refined_sources(bolt, qty, items, ref):
         if need <= 0:
             break
         take = min(count, need)
@@ -164,8 +164,8 @@ def shopping_list(recipe, items, ref, crafts):
     out = []
     for r in recipe["reagents"]:
         qty = r["qty"] * crafts
-        if r["item"] in ref.bolts:
-            out += _bolt_purchases(r["item"], qty, items, ref)
+        if r["item"] in ref.refined:
+            out += _refined_purchases(r["item"], qty, items, ref)
             continue
         mix = buy_mix(items.get(r["item"]), ref.vendor.get(r["item"]), qty)
         out.append(Purchase(r["item"], ref.name(r["item"]), qty, *mix))
@@ -201,7 +201,9 @@ def _outputs(result, crafts, cut):
     elif result.crafted:
         c = result.crafted
         unit = c.ah_unit if result.exit == "Sell on AH" else c.vendor_unit
-        outs.append(Output(c.item, c.name, crafts, crafts, crafts, unit, unit * crafts if unit is not None else None))
+        total = c.qty * crafts
+        outs.append(Output(c.item, c.name, total, math.floor(total), math.ceil(total), unit,
+                           unit * total if unit is not None else None))
     return outs, math.sqrt(var)
 
 
@@ -259,7 +261,7 @@ def calculate(result, items, ref, settings, crafts=None, budget=None):
                            "it is rough for small batches.")
     if n:
         batch.notes.append("Time is casting time only (crafts and disenchants); it leaves out buying, selling, "
-                           "and crafting bolts from raw cloth.")
+                           "and making bolts, bars and the like from raw materials.")
         batch.notes.append("Sale value uses current prices; selling many units will push the price down.")
     return batch
 

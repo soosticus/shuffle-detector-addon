@@ -149,7 +149,7 @@ BOLT_RECIPE = {
 
 
 def bolt_setup(bolt_price, cloth_price, bolt_qty=100, cloth_qty=100):
-    ref = Reference(items={1: "Vest", 2: "Bolt", 3: "Cloth", 4: "Dust"}, bolts={2: (3, 2)}, recipes=[BOLT_RECIPE])
+    ref = Reference(items={1: "Vest", 2: "Bolt", 3: "Cloth", 4: "Dust"}, refined={2: (3, 2)}, recipes=[BOLT_RECIPE])
     items = {
         2: {"min": bolt_price, "qty": bolt_qty, "prices": [(bolt_price, bolt_qty)]},
         3: {"min": cloth_price, "qty": cloth_qty, "prices": [(cloth_price, cloth_qty)]},
@@ -221,3 +221,38 @@ def test_fmt_duration():
     assert calc.fmt_duration(45) == "45s"
     assert calc.fmt_duration(750) == "12m 30s"
     assert calc.fmt_duration(3900) == "1h 5m"
+
+
+POTION = {
+    "name": "Test Potion", "profession": "Alchemy", "item": 1, "skill": 50, "makes": 2,
+    "reagents": [{"item": 2, "qty": 1}], "yields": [],
+}
+
+
+def potion_setup():
+    ref = Reference(items={1: "Potion", 2: "Herb"}, vendor_sell={1: 40}, recipes=[POTION, RECIPE])
+    items = {2: {"min": 100, "qty": 50, "prices": [(100, 50)]}, 1: {"min": 300, "qty": 20, "prices": [(300, 20)]}}
+    return ref, items, calc.Settings(price_mode="min", ah_cut=0.0, exits=("Disenchant", "Sell on AH", "Vendor"))
+
+
+def test_makes_multiplies_output_and_skips_disenchant_without_yields():
+    ref, items, settings = potion_setup()
+    res = calc.evaluate(POTION, items, ref, settings)
+    assert res.profession == "Alchemy" and res.crafted.qty == 2
+    assert [e.label for e in res.exits] == ["Sell on AH", "Vendor"]
+    assert res.exit == "Sell on AH" and res.net == 600 and res.profit == 500 and res.seconds == 30
+    b = calculator.calculate(res, items, ref, settings, crafts=3)
+    assert b.crafts == 3 and b.cost == 300
+
+
+def test_rank_uses_each_recipes_own_profession_skill_and_filter():
+    ref, items, settings = potion_setup()
+    from shuffledetector.data_loader import ScanData
+    scan = ScanData(scans={"R": {"items": items, "listings": 1, "shallow": False}},
+                    characters={"Me": {"professions": {
+                        "Alchemy": {"skill": 60, "recipes": [{"name": "Test Potion"}]},
+                        "Tailoring": {"skill": 5, "recipes": []}}}})
+    by_name = {r.name: r for r in calc.rank(scan, ref, settings, "R")}
+    assert by_name["Test Potion"].status == "known" and by_name["Test Vest"].status == "needs_skill"
+    only = calc.rank(scan, ref, settings, "R", professions=["alchemy"])
+    assert [r.name for r in only] == ["Test Potion"]

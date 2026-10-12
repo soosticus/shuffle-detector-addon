@@ -22,7 +22,7 @@ ADDON_STATUS_TEXT = {
     "newer": "newer than bundled",
     "no_bundle": "bundled addon missing",
 }
-COLUMNS = ["Recipe", "Status", "Cost", "Net revenue", "Profit", "ROI", "Best exit", "Time/craft", "Profit/hour"]
+COLUMNS = ["Recipe", "Profession", "Status", "Cost", "Net revenue", "Profit", "ROI", "Best exit", "Time/craft", "Profit/hour"]
 
 
 def _breakdown_html(r):
@@ -38,7 +38,7 @@ def _breakdown_html(r):
                 f"<tr><td>{l.qty:g} &times; {html.escape(l.name)}</td><td>{html.escape(l.source)}</td>{extra}"
                 f"<td align='right'>{calc.fmt_money(l.unit)}</td><td align='right'>{calc.fmt_money(l.total)}</td></tr>"
             )
-        extra_h = "<th align='right'>AH</th><th align='right'>Vendor</th><th align='right'>Raw cloth</th>" if prices else ""
+        extra_h = "<th align='right'>AH</th><th align='right'>Vendor</th><th align='right'>Raw</th>" if prices else ""
         return (f"<h4>{label}</h4><table cellpadding='3' width='100%'><tr><th align='left'>Item</th><th align='left'>Source</th>"
                 f"{extra_h}<th align='right'>Each</th><th align='right'>Total</th></tr>{''.join(out)}</table>")
 
@@ -59,12 +59,13 @@ def _breakdown_html(r):
         f"<p>Status: <b>{STATUS_TEXT[r.status]}</b> &middot; Required skill: {r.recipe.get('skill', '?')} "
         f"&middot; Source: {html.escape(r.recipe.get('source', 'unknown'))}</p>",
         "<p><i>Reference data for this recipe is unverified.</i></p>" if not r.recipe.get("verified") else "",
-        "<p><b>Step 1 - Craft (Tailoring)</b></p>" + rows(r.reagents, "Materials (cheapest source is used)", prices=True),
+        f"<p><b>{'Step 1 - ' if r.yields else ''}Craft ({html.escape(r.profession)})</b></p>"
+        + rows(r.reagents, "Materials (cheapest source is used)", prices=True),
         f"<p>Craft cost: <b>{calc.fmt_money(r.cost)}</b> <i>(vendor prices are standard prices; reputation discounts are not applied)</i></p>",
         ("<p><b>Crafted item</b></p>" + rows([r.crafted], "Market value of one crafted piece", prices=True)
          if r.crafted else ""),
-        "<p><b>Step 2 - Disenchant (Enchanting)</b></p>" + rows(r.yields, "Average yield per disenchant"),
-        f"<p>Disenchant gross: {calc.fmt_money(r.gross)}</p>",
+        ("<p><b>Step 2 - Disenchant (Enchanting)</b></p>" + rows(r.yields, "Average yield per disenchant")
+         + f"<p>Disenchant gross: {calc.fmt_money(r.gross)}</p>" if r.yields else ""),
         "<p><b>Best way to cash out</b></p>" + exits_table(),
         f"<h3>Profit per craft: {calc.fmt_money(r.profit)} via {html.escape(r.exit)} (ROI {roi})</h3>",
     ]
@@ -158,6 +159,7 @@ class MainWindow(QMainWindow):
         self.mode = QComboBox()
         self.mode.addItem("Average of lowest 5", "avg_low")
         self.mode.addItem("Lowest price", "min")
+        self.profession = QComboBox()
         self.known_only = QCheckBox("Known recipes only")
         self.known_only.setChecked(True)
         self.sort = QComboBox()
@@ -202,6 +204,8 @@ class MainWindow(QMainWindow):
         for label, w in (("Character", self.character),):
             controls.addWidget(QLabel(label))
             controls.addWidget(w)
+        controls.addWidget(QLabel("Profession"))
+        controls.addWidget(self.profession)
         controls.addWidget(self.known_only)
         controls.addWidget(self.cog)
         self.send_btn = QToolButton()
@@ -263,7 +267,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         self.statusBar().showMessage("Open the addon's SavedVariables file to begin.")
 
-        for sig in [b.toggled for b in self.exit_boxes.values()] + [self.cut.valueChanged, self.craft_time.valueChanged, self.de_time.valueChanged, self.mode.currentIndexChanged, self.known_only.toggled, self.sort.currentIndexChanged]:
+        for sig in [b.toggled for b in self.exit_boxes.values()] + [self.cut.valueChanged, self.craft_time.valueChanged, self.de_time.valueChanged, self.mode.currentIndexChanged, self.known_only.toggled, self.sort.currentIndexChanged, self.profession.currentIndexChanged]:
             sig.connect(self.refresh)
         self.realm.currentIndexChanged.connect(self.refresh)
         self.character.currentIndexChanged.connect(self.refresh)
@@ -419,7 +423,7 @@ class MainWindow(QMainWindow):
             return not dlg.wasCanceled()
 
         try:
-            path, n = wowhead.update(progress=progress)
+            path, n = wowhead.update(progress=progress)  # all professions
         except KeyboardInterrupt:
             return
         except Exception as e:
@@ -437,8 +441,21 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Reference data", str(e))
             return
+        self.populate_professions()
         if self.path:
             self.load(self.path)
+
+    def populate_professions(self):
+        wanted = self.profession.currentData() or self.settings.value("profession", "", type=str) or None
+        names = sorted({calc.recipe_profession(r) for r in self.ref.recipes})
+        self.profession.blockSignals(True)
+        self.profession.clear()
+        self.profession.addItem("All professions", None)
+        for n in names:
+            self.profession.addItem(n, n)
+        idx = self.profession.findData(wanted)
+        self.profession.setCurrentIndex(max(idx, 0))
+        self.profession.blockSignals(False)
 
     def load(self, path, silent=False):
         try:
@@ -480,12 +497,15 @@ class MainWindow(QMainWindow):
         keep = self.shown[rows[0].row()].name if rows and rows[0].row() < len(self.shown) else None
         settings = calc.Settings(ah_cut=self.cut.value() / 100, price_mode=self.mode.currentData(), exits=exits,
                                  craft_seconds=self.craft_time.value(), disenchant_seconds=self.de_time.value())
-        self.results = calc.rank(self.scan, self.ref, settings, self.realm.currentText(), self.character.currentData())
+        chosen = self.profession.currentData()
+        self.settings.setValue("profession", chosen or "")
+        self.results = calc.rank(self.scan, self.ref, settings, self.realm.currentText(), self.character.currentData(),
+                                 professions=[chosen] if chosen else None)
         has_known = any(r.status == "known" for r in self.results)
         self.known_only.setText("Known recipes only" if has_known else "Known recipes only (none recorded)")
         self.known_only.setToolTip(
-            "" if has_known else "No known Tailoring recipes are recorded for this selection, so all recipes are shown. "
-            "In game, open the Tailoring window on the character, then /reload.")
+            "" if has_known else "No known recipes are recorded for this selection, so all recipes are shown. "
+            "In game, open the profession window on the character, then /reload.")
         shown = [r for r in self.results if r.status == "known"] if self.known_only.isChecked() and has_known else self.results
         if self.sort.currentData() == "roi":
             shown = sorted(shown, key=lambda r: (r.roi is None, -(r.roi or 0)))
@@ -497,13 +517,13 @@ class MainWindow(QMainWindow):
         self.table.setRowCount(len(shown))
         for row, r in enumerate(shown):
             roi = f"{r.roi * 100:.0f}%" if r.roi is not None else "-"
-            vals = [r.name, STATUS_TEXT[r.status], calc.fmt_money(r.cost),             calc.fmt_money(r.net), calc.fmt_money(r.profit), roi, r.exit,
+            vals = [r.name, r.profession, STATUS_TEXT[r.status], calc.fmt_money(r.cost), calc.fmt_money(r.net), calc.fmt_money(r.profit), roi, r.exit,
                     calc.fmt_duration(r.seconds), calc.fmt_money(r.profit_per_hour)]
             for col, v in enumerate(vals):
                 item = QTableWidgetItem(v)
-                if 2 <= col <= 5 or col >= 7:
+                if 3 <= col <= 6 or col >= 8:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                if col == 4 and r.profit is not None:
+                if col == 5 and r.profit is not None:
                     item.setForeground(QColor("#2e9e44" if r.profit > 0 else "#d04040"))
                 self.table.setItem(row, col, item)
         for col in range(1, len(COLUMNS)):
@@ -523,7 +543,7 @@ class MainWindow(QMainWindow):
         scanned = self.scan.scans[self.realm.currentText()]
         note = " - Auctionator data (min prices only, no depth)" if scanned["shallow"] else ""
         if self.known_only.isChecked() and not has_known:
-            note += " - no known recipes recorded: open your Tailoring window in game, then /reload"
+            note += " - no known recipes recorded: open the profession window in game, then /reload"
         self.statusBar().showMessage(f"{self.path} - {len(scanned['items'])} items, {scanned['listings']} listings{note}")
         if shown:
             self.table.selectRow(next((i for i, r in enumerate(shown) if r.name == keep), 0))

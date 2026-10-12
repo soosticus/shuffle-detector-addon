@@ -18,9 +18,11 @@ def build_parser():
                    help="comma list of exit strategies to consider: disenchant, ah, vendor")
     p.add_argument("--craft-seconds", type=float, default=30.0, help="seconds to craft one piece (default 30)")
     p.add_argument("--disenchant-seconds", type=float, default=3.0, help="seconds to disenchant one piece (default 3)")
+    p.add_argument("--profession", help="only show this profession (e.g. Tailoring, Alchemy, First Aid)")
     p.add_argument("--top", type=int, default=10)
     p.add_argument("--update-wowhead", action="store_true", help="download recipes/yields/vendor prices from Wowhead (Forever)")
     p.add_argument("--refresh", action="store_true", help="with --update-wowhead: ignore the page cache")
+    p.add_argument("--update-profession", metavar="SLUG", help="with --update-wowhead: only this profession (default: all)")
     p.add_argument("--send-plan", metavar="RECIPE", help="write this recipe's shuffle to the addon's Plan.lua (then /reload in game)")
     p.add_argument("--wow", help="WoW folder, flavor folder or AddOns folder to send the plan to (default: auto-detect)")
     p.add_argument("--detail", action="store_true", help="show step-by-step breakdown")
@@ -73,7 +75,8 @@ def main(argv=None):
         from . import wowhead
         def show(done, total, msg):
             print(f"\r[{done}/{total}] {msg:<40}", end="", flush=True)
-        out, n = wowhead.update(progress=show, use_cache=not args.refresh)
+        out, n = wowhead.update(professions=[args.update_profession] if args.update_profession else None,
+                                progress=show, use_cache=not args.refresh)
         print(f"\nWrote {n} recipes to {out}")
         return 0
     path = args.savedvars
@@ -89,17 +92,18 @@ def main(argv=None):
     exits = tuple(exit_names[x] for x in args.exits.lower().replace(" ", "").split(",") if x in exit_names)
     settings = calc.Settings(ah_cut=args.ah_cut, price_mode=args.price_mode, exits=exits,
                              craft_seconds=args.craft_seconds, disenchant_seconds=args.disenchant_seconds)
-    results = calc.rank(scan, ref, settings, args.realm, args.character)
+    results = calc.rank(scan, ref, settings, args.realm, args.character,
+                        professions=[args.profession] if args.profession else None)
     if args.send_plan:
         return send_plan(args, results)
     if args.calc:
         return calc_batch(args, results, scan, ref, settings)
     for r in results[: args.top]:
-        print(f"{r.name:<28} profit {calc.fmt_money(r.profit):>12}  cost {calc.fmt_money(r.cost):>12}  via {r.exit:<11} [{r.status}]")
+        print(f"{r.name:<28} {r.profession:<14} profit {calc.fmt_money(r.profit):>12}  cost {calc.fmt_money(r.cost):>12}  via {r.exit:<11} [{r.status}]")
         if args.detail:
             for l in r.reagents:
                 print(f"    buy   {l.qty:g} x {l.name} ({l.source}) = {calc.fmt_money(l.total)}  [AH {calc.fmt_money(l.ah_unit)}, vendor {calc.fmt_money(l.vendor_unit)}"
-                      + (f", raw cloth {calc.fmt_money(l.raw_unit)}" if l.raw_item else "") + "]")
+                      + (f", raw {calc.fmt_money(l.raw_unit)}" if l.raw_item else "") + "]")
             per_hour = f", {calc.fmt_money(r.profit_per_hour)} profit/hour" if r.profit_per_hour is not None else ""
             print(f"    time  {calc.fmt_duration(r.seconds)} per craft{per_hour}")
             for e in r.exits:
