@@ -39,6 +39,8 @@ Copy `addon/ShuffleDetector` into `Interface/AddOns`. Open each profession windo
 
 ## Shuffle calculator
 
+Recipes the character has not seen can also come straight from the game's own data files: `shuffledetector --local-recipes` (optionally `--wow "C:\Program Files (x86)\World of Warcraft"`) reads reagents, products, trivial levels and craft times for every profession from your installed client, takes a few seconds, downloads nothing and stores nothing. Recipe skill requirements are not in the client, so those recipes show status "unknown" until a character has seen them.
+
 The GUI's Calculator tab plans a batch of the selected shuffle either by number of crafts or by budget. CLI: `shuffledetector --calc "Recipe Name" --crafts 20` or `--budget 250g`. It lists how many of each material to buy (from the AH, walking the cheapest listings, or from a vendor if that is cheaper), the total cost, the expected output, and the net profit after the AH cut. For disenchants it adds a 90% range from yield variance (yields are modelled as independent Poisson counts, so the range is rough for small batches). It honors the exit and price settings, buys no more than is listed, and values output at current prices, so large batches will move the market.
 
 ## In-game shuffle

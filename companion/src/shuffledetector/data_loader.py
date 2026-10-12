@@ -30,6 +30,20 @@ class Reference:
     def name(self, item_id):
         return self.items.get(item_id, f"Item {item_id}")
 
+    def with_local(self, recipes):
+        """Copy with recipes read from the local game install layered over the bundled ones.
+
+        The client's reagents, product and trivial levels replace the bundled recipe of the same name,
+        which keeps its yields, source and skill; recipes the bundle lacks are added.
+        """
+        out = Reference(items=dict(self.items), vendor=dict(self.vendor), vendor_sell=dict(self.vendor_sell),
+                        recipes=[], refined=dict(self.refined))
+        by_name = {r["name"].lower(): r for r in self.recipes}
+        for r in recipes:
+            by_name[r["name"].lower()] = {**(by_name.get(r["name"].lower()) or {"yields": [], "source": "Game client"}), **r}
+        out.recipes = list(by_name.values())
+        return out
+
     def with_observed(self, scan):
         """Copy of this reference with what the addon recorded in game layered on top.
 

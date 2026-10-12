@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from . import addon_manager, calc, calculator, data_loader, plan
+from . import addon_manager, calc, calculator, data_loader, localdata, plan
 
 
 def build_parser():
@@ -22,6 +22,8 @@ def build_parser():
     p.add_argument("--top", type=int, default=10)
     p.add_argument("--send-plan", metavar="RECIPE", help="write this recipe's shuffle to the addon's Plan.lua (then /reload in game)")
     p.add_argument("--wow", help="WoW folder, flavor folder or AddOns folder to send the plan to (default: auto-detect)")
+    p.add_argument("--local-recipes", action="store_true",
+                   help="read recipes (reagents, trivial levels, craft times) from the game install's own data files (slow: a few seconds)")
     p.add_argument("--detail", action="store_true", help="show step-by-step breakdown")
     p.add_argument("--calc", metavar="RECIPE", help="plan a batch of this shuffle: what to buy, expected output and profit (needs --crafts or --budget)")
     p.add_argument("--crafts", type=int, help="with --calc: number of crafts")
@@ -76,7 +78,14 @@ def main(argv=None):
             return 2
         path = str(found[0])
     scan = data_loader.load_scan_data(path)
-    ref = data_loader.load_reference(extra=args.data).with_observed(scan)
+    ref = data_loader.load_reference(extra=args.data)
+    if args.local_recipes:
+        local = localdata.load_local_recipes(localdata.find_install([args.wow] if args.wow else []) or "")
+        if local is None:
+            print("Could not read the game's data files; pass --wow with the WoW folder.", file=sys.stderr)
+            return 2
+        ref = ref.with_local(local["recipes"])
+    ref = ref.with_observed(scan)
     exit_names = {"disenchant": "Disenchant", "ah": "Sell on AH", "vendor": "Vendor"}
     exits = tuple(exit_names[x] for x in args.exits.lower().replace(" ", "").split(",") if x in exit_names)
     settings = calc.Settings(ah_cut=args.ah_cut, price_mode=args.price_mode, exits=exits,
