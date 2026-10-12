@@ -2,9 +2,10 @@
 
 Find the most profitable crafting shuffle (any profession, with Disenchanting, AH resale or vendor exits) from auction house scans.
 
-- `addon/ShuffleDetector/` - WoW addon. Scans the auction house (`/shuffledetector scan`, `/ahsnap` also works) and records profession skill and known recipes to SavedVariables.
+- `addon/ShuffleDetector/` - WoW addon. Scans the auction house (`/shuffledetector scan`, `/ahsnap` also works) and records profession skill, recipes (known and not yet learned, with reagents), item names and vendor prices to SavedVariables.
 - `companion/` - cross-platform Python app (CLI + PySide6 GUI) that reads those SavedVariables and ranks shuffles for every profession (`--profession`, or the GUI profession box), with a per-step cost/yield breakdown and suggestions for recipes to acquire.
-- `common/` - shared data format doc and reference data (`data/reference.json`: items, vendor prices, recipes, disenchant yields). The bundled values are unverified seed data. More recipes for other professions need a permitted data source (see [ROADMAP.md](ROADMAP.md)).
+- `common/` - shared data format doc and reference data (`data/reference.json`: items, vendor prices, recipes, disenchant yields). The bundled values are unverified seed data; recipes, item names and vendor prices recorded by the addon in game are layered over them (see [ROADMAP.md](ROADMAP.md)).
+- `CLAUDE.md` - working notes and handoff for AI assistants (environment quirks, rules, status).
 
 ## Run from the source tree
 
@@ -34,7 +35,7 @@ The GUI finds your WoW install(s) (or use Addon > Choose WoW folder..., or set `
 
 To bundle the addon into a built package, run `python companion/scripts/bundle_addon.py` before building; from a repo checkout the app uses `addon/` directly.
 
-Copy `addon/ShuffleDetector` into `Interface/AddOns`.
+Copy `addon/ShuffleDetector` into `Interface/AddOns`. Open each profession window (and a vendor) once so the addon can record recipes and prices, then `/reload` or log out so the game writes them.
 
 ## Shuffle calculator
 

@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: ShuffleDetector
-## Notes: Scans the auction house and records profession skill/recipes to SavedVariables for external tools.
+## Notes: Scans the auction house, records professions, recipes, item and vendor data to SavedVariables, and runs shuffle plans.
 ## Author: Soost
 ## X-License: MIT
 ## Version: 0.6.5
