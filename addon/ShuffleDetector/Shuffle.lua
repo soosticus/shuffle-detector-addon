@@ -95,8 +95,12 @@ local function craftableCount(plan)
     return n or 0
 end
 
+local function merchantOpen()
+    return MerchantFrame ~= nil and MerchantFrame:IsShown()
+end
+
 -- Decides what the next press should do.
--- Returns { kind = "craft" | "disenchant" | "idle", label, stage = 1 (craft) | 2 (disenchant/sell) | nil,
+-- Returns { kind = "craft" | "disenchant" | "sell" | "idle", label, stage = 1 (craft) | 2 (disenchant/sell) | nil,
 --           crafted = pieces in bags, craftable = crafts the reagents allow, bag, slot }.
 function ns.NextShuffleStep()
     local plan = currentPlan()
@@ -114,11 +118,21 @@ function ns.NextShuffleStep()
         step.bag, step.slot = bag, slot
         return step
     end
+    if plan.exit == "Vendor" and bag and merchantOpen() then
+        step.kind, step.label, step.stage = "sell", "Sell " .. plan.recipe .. " to the vendor", 2
+        step.bag, step.slot = bag, slot
+        return step
+    end
     local missing = missingReagent(plan)
     if missing then
-        step.kind, step.stage = "idle", 2
-        step.label = "Out of " .. itemName(missing.item)
-        if plan.exit ~= "Disenchant" then step.label = step.label .. " - sell: " .. tostring(plan.exit or "?") end
+        step.stage = 2
+        if bag and plan.exit == "Vendor" then
+            step.kind, step.label = "idle", ("Open a vendor window to sell %d x %s"):format(crafted, plan.recipe)
+        elseif bag and plan.exit ~= "Disenchant" and plan.exit and plan.exit ~= "" then
+            step.kind, step.label = "idle", ("Post %d x %s yourself: %s"):format(crafted, plan.recipe, plan.exit)
+        else
+            step.kind, step.label = "idle", "Out of " .. itemName(missing.item)
+        end
         return step
     end
     step.kind, step.label, step.stage = "craft", "Craft " .. plan.recipe, 1
@@ -179,6 +193,7 @@ local function clearAction()
     btn:SetAttribute("macrotext", nil)
     btn:SetAttribute("target-item", nil)
     btn.craftRecipe = nil
+    btn.sellSlot = nil
 end
 
 -- Attributes of a secure button can only change out of combat; the tracker can always update.
@@ -207,6 +222,8 @@ local function apply()
                 btn:SetAttribute("type", "spell")
                 btn:SetAttribute("spell", plan.recipe)
             end
+        elseif step.kind == "sell" then
+            btn.sellSlot = { step.bag, step.slot }
         elseif step.kind == "disenchant" then
             btn:SetAttribute("type", "spell")
             btn:SetAttribute("spell", spellName(DISENCHANT_ID, "Disenchant"))
@@ -276,10 +293,18 @@ local function create()
             debugSay("click ignored: still casting")
             return
         end
-        local acted = (self.craftRecipe or self:GetAttribute("type")) and not InCombatLockdown()
-        debugSay(("click: %s (%s) down=%s"):format(self.craftRecipe and "tradeskill craft" or tostring(self:GetAttribute("type")),
+        local sellSlot = self.sellSlot
+        local acted = (self.craftRecipe or sellSlot or self:GetAttribute("type")) and not InCombatLockdown()
+        debugSay(("click: %s (%s) down=%s"):format(self.craftRecipe and "tradeskill craft" or sellSlot and "vendor sale" or tostring(self:GetAttribute("type")),
             tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe), tostring(self.lastDown)))
-        if self.craftRecipe then
+        if sellSlot then
+            local use = (C_Container and C_Container.UseContainerItem) or UseContainerItem
+            local ok, err = pcall(use, sellSlot[1], sellSlot[2])
+            if not ok then
+                say("sale failed: " .. tostring(err))
+                acted = false
+            end
+        elseif self.craftRecipe then
             local T = C_TradeSkillUI
             if T.GetRecipeInfo and not T.GetRecipeInfo(self.craftRecipe) then
                 say("the profession window has not loaded this recipe yet - open your profession window once, then try again.")
@@ -295,7 +320,15 @@ local function create()
             if SpellStopTargeting then SpellStopTargeting() end
             acted = false
         end
-        if acted then startBusy() end
+        if acted then
+            startBusy()
+            if sellSlot then
+                -- No cast to wait for: the bags update when the sale goes through (BAG_UPDATE_DELAYED).
+                busy.started, busy.done = true, true
+                local token = busy
+                C_Timer.After(2, function() if busy == token then release() end end)
+            end
+        end
     end)
 
     tracker = CreateFrame("Frame", "ShuffleDetectorTracker", UIParent)
@@ -392,6 +425,8 @@ ev:RegisterEvent("BAG_UPDATE_DELAYED")
 ev:RegisterEvent("PLAYER_REGEN_ENABLED")
 ev:RegisterEvent("PLAYER_REGEN_DISABLED")
 ev:RegisterEvent("SPELLS_CHANGED")
+ev:RegisterEvent("MERCHANT_SHOW")
+ev:RegisterEvent("MERCHANT_CLOSED")
 ev:RegisterEvent("UI_ERROR_MESSAGE")
 pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_START", "player")
 pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_FAILED", "player")

@@ -55,7 +55,7 @@ To run the shuffle, make a macro (`/shuffledetector macro` prints it) and press 
 /click ShuffleDetectorShuffleButton
 ```
 
-Each press does one step: disenchant a crafted piece in your bags, otherwise craft the next one, until the reagents run out. WoW doesn't let chat commands cast spells, so the macro presses an invisible secure button that picks and does the action. Presses while a cast or bag update is in progress do nothing. You can also bind a key under Key Bindings > AddOns > ShuffleDetector. The step only changes out of combat. `/shuffledetector plan` prints the loaded shuffle and the next step.
+Each press does one step: disenchant a crafted piece in your bags, otherwise craft the next one, until the reagents run out. For a Vendor exit, open a merchant window and each press sells one stack of the crafted item (the tracker says "Open a vendor window to sell N" when you are out of reagents); an AH exit only prompts you to post the items yourself. WoW doesn't let chat commands cast spells, so the macro presses an invisible secure button that picks and does the action. Presses while a cast or bag update is in progress do nothing. You can also bind a key under Key Bindings > AddOns > ShuffleDetector. The step only changes out of combat. `/shuffledetector plan` prints the loaded shuffle and the next step.
 
 ## License
 
