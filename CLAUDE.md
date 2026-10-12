@@ -37,11 +37,11 @@ What the addon records (details in FORMAT.md): AH scans; per character and profe
 - The integrated browser tool was unreliable here (AbortError); use curl, and only for sources whose terms allow it.
 - WoW API behavior cannot be verified from here; only the user can test in game. Write nil-safe code (`pcall`, existence checks) with retries, and use `/shuffledetector recipes` (prints the window's recipe counts and what is saved) as the diagnostic.
 
-## Status (addon 0.7.0)
+## Status (addon 0.7.1)
 
 - Confirmed in game: AH scanning, Auctionator import, the shuffle tracker and macro, recipe capture with reagents for Tailoring, Enchanting and Cooking, item names and sell prices, and (2026-10-11) `available` unlearned recipes and `vendor` buy prices. `GetRecipeSourceText` never returned a value on this client across ~430 unlearned recipes, so the `source` field is effectively unused; not worth chasing.
 - Built but not yet confirmed in game: step 3 of the data plan, observed disenchant logging (`Disenchant.lua`: hooks `SpellTargetItem` for the targeted item, `UNIT_SPELLCAST_SUCCEEDED`/`LOOT_OPENED` for the result, writes `AHSnapshotDB.disenchants`). The companion averages observed loot per disenchant (`data_loader.observed_yields`) and uses it in place of a recipe's seed `yields` once there are samples, showing the sample count in the CLI and GUI. Ask the user to disenchant a few items in game, `/reload`, and check `AHSnapshotDB.disenchants`.
-- Built but not yet confirmed in game (0.7.0): the addon requests item names and sell prices for every id in `ItemList.lua` (companion `--send-items`), and the merchant recorder keeps only unlimited-stock listings. To test: `python run.py --cli --local-recipes --send-items`, `/reload`, watch for "received N of M requested items", check `AHSnapshotDB.items`.
+- Confirmed in game (2026-10-12, 0.7.0/0.7.1): the addon requests item names and sell prices for every id in `ItemList.lua` (companion `--send-items`); 2351 of 2611 ids were answered on the first `/reload`, the other 260 (mostly ids 210000-230000, not items in this client) are remembered in `AHSnapshotDB.unanswered`. The merchant recorder keeping only unlimited-stock listings is built but not yet confirmed.
 - Other open items are in ROADMAP.md (vendor faction restrictions, fast-press gating check, calculator price impact, more professions, faster builds, CurseForge release, checking that the `v0.2.4a` tag push did not start a release run). Local main is ahead of origin; none of this work is pushed. The backup bundle `C:\Users\soost\ShuffleDetector-backup.bundle` can be deleted.
 
 ## Suggested next steps

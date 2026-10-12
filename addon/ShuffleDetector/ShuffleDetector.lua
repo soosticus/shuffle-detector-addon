@@ -50,6 +50,8 @@ ns.RecordItem = recordItem
 -- yet. Requests go out in small batches; answers arrive on GET_ITEM_INFO_RECEIVED and are recorded by recordItem.
 local BATCH, BATCH_DELAY = 40, 1
 function ns.LoadWantedItems(quiet)
+    -- Ids the game never answered for on an earlier run are skipped at login; /shuffledetector items retries them.
+    local unanswered = AHSnapshotDB.unanswered or {}
     local list = ns.wantedItems
     if type(list) ~= "table" or #list == 0 then
         if not quiet then say("no item list; send items from the companion app, then /reload") end
@@ -58,7 +60,7 @@ function ns.LoadWantedItems(quiet)
     local known = AHSnapshotDB.items or {}
     local todo = {}
     for _, id in ipairs(list) do
-        if not known[id] then
+        if not known[id] and (not quiet or not unanswered[id]) then
             todo[#todo + 1] = id
             awaiting[id] = nil
         end
@@ -80,10 +82,17 @@ function ns.LoadWantedItems(quiet)
         else
             C_Timer.After(10, function()
                 local got = 0
+                local miss = AHSnapshotDB.unanswered or {}
                 for _, id in ipairs(todo) do
-                    if AHSnapshotDB.items and AHSnapshotDB.items[id] then got = got + 1 end
+                    if AHSnapshotDB.items and AHSnapshotDB.items[id] then
+                        got = got + 1
+                        miss[id] = nil
+                    else
+                        miss[id] = true
+                    end
                 end
-                say(("received %d of %d requested items"):format(got, #todo))
+                AHSnapshotDB.unanswered = miss
+                say(("received %d of %d requested items (the rest are not items in this client)"):format(got, #todo))
             end)
         end
     end

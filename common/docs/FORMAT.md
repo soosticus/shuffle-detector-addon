@@ -71,8 +71,10 @@ them for items it has never seen. The companion writes
 product, disenchant yield and refined raw of the recipes it knows, including ones read from the
 game's files with `--local-recipes`) with `shuffledetector --send-items`. After `/reload` the addon
 asks the game for the ids not yet in `items`, in batches of 40 per second, starting 5 seconds after
-login (or run `/shuffledetector items`), and records the answers in `items`. Addon updates keep an
-existing `ItemList.lua`.
+login (or run `/shuffledetector items`), and records the answers in `items`. Ids the game never
+answers for (about 10% of a list built from the game's files, mostly ids that are not items in this
+client) are stored in `unanswered = { [itemID] = true }` and skipped at login; the slash command retries
+them. Addon updates keep an existing `ItemList.lua`.
 
 # Shuffle plan (companion -> addon)
 
