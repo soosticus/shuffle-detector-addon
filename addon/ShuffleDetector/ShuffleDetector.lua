@@ -149,9 +149,13 @@ local function snapshotRecipes(quiet)
     if not (ok and name) then
         ok, name, rank, maxRank, recipes = pcall(readClassic)
     end
-    if not (ok and name and name ~= "" and recipes) then return end
+    if not (ok and name and name ~= "" and recipes) then return false end
     local c = snapshotSkills()
-    -- Guard against the API reporting a stale profession name for another profession's recipe list.
+    local old = c.professions[name]
+    -- A window that has not finished loading reports no learned recipes; keep what was saved before.
+    if #recipes == 0 and old and old.recipes and #old.recipes > 0 then return false end
+    -- The API can briefly report one profession's name with another's recipe list. A list identical to
+    -- another profession's is such a stale read: skip it (a retry picks up the real list).
     local sig = {}
     for _, r in ipairs(recipes) do sig[#sig + 1] = r.name end
     sig = table.concat(sig, "|")
@@ -159,10 +163,7 @@ local function snapshotRecipes(quiet)
         if pname ~= name and p.recipes and #p.recipes > 0 then
             local other = {}
             for _, r in ipairs(p.recipes) do other[#other + 1] = r.name end
-            if table.concat(other, "|") == sig then
-                p.recipes = {}
-                return
-            end
+            if table.concat(other, "|") == sig then return false end
         end
     end
     c.professions[name] = { skill = rank, max = maxRank, recipes = recipes }
@@ -173,6 +174,21 @@ local function snapshotRecipes(quiet)
     if not quiet then
         say(("saved %d %s recipes (skill %s/%s)"):format(#recipes, name, tostring(rank), tostring(maxRank)))
     end
+    return true
+end
+
+-- Opening a profession window does not always deliver a final list event, so retry for a few seconds.
+local RETRY_DELAYS = { 0, 0.5, 1.5, 3, 6 }
+local attempt = 0
+local function snapshotWithRetry()
+    attempt = attempt + 1
+    local mine = attempt
+    local function try(i)
+        if mine ~= attempt then return end
+        if snapshotRecipes() or not RETRY_DELAYS[i + 1] then return end
+        C_Timer.After(RETRY_DELAYS[i + 1] - RETRY_DELAYS[i], function() try(i + 1) end)
+    end
+    try(1)
 end
 
 local pending
@@ -194,7 +210,7 @@ frame:SetScript("OnEvent", function(_, event, itemId)
     if event == "GET_ITEM_INFO_RECEIVED" then
         if awaiting[itemId] then recordItem(itemId) end
     elseif event == "TRADE_SKILL_SHOW" then
-        snapshotRecipes()
+        snapshotWithRetry()
     elseif event == "TRADE_SKILL_LIST_UPDATE" then
         scheduleSnapshot()
     else
