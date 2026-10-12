@@ -56,7 +56,7 @@ local function snapshotSkills()
     if GetProfessions and GetProfessionInfo then
         for _, idx in ipairs({ GetProfessions() }) do
             local name, _, rank, maxRank = GetProfessionInfo(idx)
-            if name then profs[name] = { skill = rank, max = maxRank } end
+            if name and name ~= "" then profs[name] = { skill = rank, max = maxRank } end
         end
     end
     if next(profs) == nil and GetNumSkillLines then
@@ -149,7 +149,7 @@ local function snapshotRecipes(quiet)
     if not (ok and name) then
         ok, name, rank, maxRank, recipes = pcall(readClassic)
     end
-    if not (ok and name and recipes) then return end
+    if not (ok and name and name ~= "" and recipes) then return end
     local c = snapshotSkills()
     -- Guard against the API reporting a stale profession name for another profession's recipe list.
     local sig = {}
