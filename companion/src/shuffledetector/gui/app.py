@@ -26,6 +26,14 @@ ADDON_STATUS_TEXT = {
 COLUMNS = ["Recipe", "Profession", "Status", "Cost", "Net revenue", "Profit", "ROI", "Best exit", "Time/craft", "Profit/hour"]
 
 
+class CoinBox(QSpinBox):
+    """Spin box that selects its whole value when it gets focus, so typing replaces it."""
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        QTimer.singleShot(0, self.selectAll)
+
+
 def _breakdown_html(r):
     def rows(lines, label, prices=False):
         out = []
@@ -546,15 +554,16 @@ class MainWindow(QMainWindow):
         self.cost_rows = {}
         for item, name, _ in materials:
             boxes, line = [], QHBoxLayout()
-            for suffix, top, width in (("g", 9_999_999, 95), ("s", 99, 55), ("c", 99, 55)):
-                box = QSpinBox(minimum=0, maximum=top, suffix=suffix)
-                box.setMaximumWidth(width)
+            for suffix, top, width in (("g", 9_999_999, 75), ("s", 99, 45), ("c", 99, 45)):
+                box = CoinBox(minimum=0, maximum=top)
+                box.setFixedWidth(width)
                 box.setButtonSymbols(QSpinBox.NoButtons)
                 box.setAlignment(Qt.AlignRight)
                 box.setToolTip("Your average cost per unit. Grey is the market average.")
                 box.valueChanged.connect(lambda _v, i=item: self._cost_edited(i))
                 boxes.append(box)
                 line.addWidget(box)
+                line.addWidget(QLabel(suffix))
             reset = QToolButton()
             reset.setText("Use market")
             reset.setToolTip("Go back to the market average")
@@ -571,11 +580,14 @@ class MainWindow(QMainWindow):
             boxes, reset = self.cost_rows[item]
             own = item in self.cost_overrides
             copper = self.cost_overrides[item] if own else (round(market) if market is not None else 0)
+            style = "" if own else "color: gray;"
             for box, value in zip(boxes, (copper // 10000, copper // 100 % 100, copper % 100)):
-                box.blockSignals(True)
-                box.setValue(value)
-                box.blockSignals(False)
-                box.setStyleSheet("" if own else "color: gray;")
+                if box.value() != value:
+                    box.blockSignals(True)
+                    box.setValue(value)
+                    box.blockSignals(False)
+                if box.styleSheet() != style:
+                    box.setStyleSheet(style)
             reset.setEnabled(own)
 
     def _cost_edited(self, item):
