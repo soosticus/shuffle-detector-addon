@@ -256,3 +256,49 @@ def test_rank_uses_each_recipes_own_profession_skill_and_filter():
     assert by_name["Test Potion"].status == "known" and by_name["Test Vest"].status == "needs_skill"
     only = calc.rank(scan, ref, settings, "R", professions=["alchemy"])
     assert [r.name for r in only] == ["Test Potion"]
+
+
+def test_parse_costs_names_ids_and_problems():
+    ref, *_ = make()
+    costs, problems = calculator.parse_costs(["Cloth = 1g 20s", " thread=50 ", "5 = 2s", "# note", "", "Nope = 1g", "Cloth", "Dust = x"], ref)
+    assert costs == {2: 12000, 3: 50, 5: 200}
+    assert len(problems) == 3 and "Nope" in problems[0]
+
+
+def test_custom_cost_replaces_market_price_for_any_quantity():
+    ref, items, settings, res = make()
+    b = calculator.calculate(res, items, ref, settings, crafts=1000, costs={2: 90})
+    cloth, thread = b.purchases
+    assert b.limited_by == ""  # the AH only lists 10 cloth, but a custom cost has no stock limit
+    assert cloth.custom_qty == 3000 and cloth.custom_cost == 270000 and cloth.ah_qty == 0 and cloth.short == 0
+    assert cloth.total == 270000 and cloth.unit == 90
+    assert thread.vendor_qty == 1000  # untouched materials keep their market prices
+    assert any("Your own average cost" in n for n in b.notes)
+    assert "3000 at your cost" in calculator.format_batch(b)
+
+
+def test_custom_cost_works_with_budget_and_flags_unused_items():
+    ref, items, settings, res = make()
+    b = calculator.calculate(res, items, ref, settings, budget=10_000, costs={2: 100, 3: 100, 4: 5})
+    assert b.limited_by == "budget" and b.crafts == 10_000 // 400 and b.cost <= 10_000
+    assert any("ignored" in n and "Dust" in n for n in b.notes)
+
+
+def test_custom_cost_for_bolt_or_its_cloth():
+    ref = Reference(items={1: "Robe", 6: "Bolt", 7: "Silk"}, vendor={}, refined={6: (7, 4)},
+                    recipes=[{"name": "Robe", "item": 1, "reagents": [{"item": 6, "qty": 2}], "yields": []}])
+    items = {6: {"min": 5000, "qty": 100, "prices": [(5000, 100)]}, 7: {"min": 100, "qty": 100, "prices": [(100, 100)]}}
+    settings = calc.Settings(price_mode="min", exits=("Vendor",))
+    recipe = ref.recipes[0]
+    # silk at 300 each makes a bolt for 1200, cheaper than the 5000 bolt on the AH
+    plan = calculator.shopping_list(recipe, items, ref, 1, {7: 300})
+    silk = next(p for p in plan if p.item == 7)
+    assert silk.custom_qty == 8 and silk.custom_cost == 2400
+    # a custom bolt cost beats the market bolt and the market silk
+    plan = calculator.shopping_list(recipe, items, ref, 1, {6: 50})
+    assert [(p.item, p.custom_qty, p.custom_cost) for p in plan] == [(6, 2, 100)]
+    # a custom bolt cost above the cost of making it is passed over, and the batch says so
+    res = calc.evaluate(recipe, items, ref, settings)
+    b = calculator.calculate(res, items, ref, settings, crafts=1, costs={6: 9000})
+    assert not any(p.custom_qty for p in b.purchases)
+    assert any("not used" in note and "Bolt" in note for note in b.notes)

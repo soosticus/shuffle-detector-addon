@@ -20,14 +20,16 @@ class Purchase:
     vendor_cost: float = 0
     short: int = 0    # units that can be bought from neither the AH nor a vendor
     note: str = ""    # e.g. "makes 8 x Bolt of Silk Cloth"
+    custom_qty: int = 0     # units priced at the user's own average cost
+    custom_cost: float = 0
 
     @property
     def total(self):
-        return self.ah_cost + self.vendor_cost
+        return self.ah_cost + self.vendor_cost + self.custom_cost
 
     @property
     def unit(self):
-        bought = self.ah_qty + self.vendor_qty
+        bought = self.ah_qty + self.vendor_qty + self.custom_qty
         return self.total / bought if bought else None
 
 
@@ -84,6 +86,33 @@ def parse_money(text):
     return int(round(total))
 
 
+def parse_costs(specs, ref):
+    """'Silk Cloth = 1g 20s' (or 'item id = 8000') lines -> ({item id: copper per unit}, [problems]).
+    Bad lines are reported, not raised, so a half-typed line does not hide the rest."""
+    by_name = {}
+    for item_id, name in ref.items.items():
+        by_name.setdefault(name.lower(), item_id)
+    costs, problems = {}, []
+    for spec in specs:
+        spec = spec.strip()
+        if not spec or spec.startswith("#"):
+            continue
+        name, sep, price = spec.rpartition("=")
+        if not sep or not name.strip():
+            problems.append(f"{spec!r}: write it as Item name = price, for example Silk Cloth = 1g 20s")
+            continue
+        name = name.strip()
+        item_id = int(name) if name.isdigit() else by_name.get(name.lower())
+        if item_id is None:
+            problems.append(f"{name!r}: no item with that name")
+            continue
+        try:
+            costs[item_id] = parse_money(price)
+        except ValueError as e:
+            problems.append(f"{name}: {e}")
+    return costs, problems
+
+
 def realm_items(scan, realm=None):
     """Scanned prices for `realm` (default: the first realm, as calc.rank picks it)."""
     realm = realm or next(iter(sorted(scan.scans)), None)
@@ -117,30 +146,43 @@ def buy_mix(entry, vendor_unit, qty):
     return ah_qty, ah_cost, 0, 0.0, max(need, 0)
 
 
-def _refined_sources(bolt, qty, items, ref):
+def _purchase(item, qty, items, ref, costs):
+    """Purchase of `qty` units: at the user's own average cost if given (any quantity), else the AH and vendor mix."""
+    if item in costs:
+        return Purchase(item, ref.name(item), qty, custom_qty=qty, custom_cost=costs[item] * qty)
+    return Purchase(item, ref.name(item), qty, *buy_mix(items.get(item), ref.vendor.get(item), qty))
+
+
+def _refined_sources(bolt, qty, items, ref, costs):
     """Ways to get bolts as (cost per bolt, count, "bolt" | "cloth"), cheapest first: buy them, or buy raw cloth."""
     cloth, per = ref.refined[bolt]
     sources = []
-    if items.get(bolt):
-        sources += [(u, c, "bolt") for u, c in _segments(items[bolt])]
-    if ref.vendor.get(bolt) is not None:
-        sources.append((ref.vendor[bolt], qty, "bolt"))
-    if items.get(cloth):
-        carry = 0
-        for unit, count in _segments(items[cloth]):
-            made, carry = divmod(carry + count, per)
-            if made:
-                sources.append((unit * per, made, "cloth"))
-    if ref.vendor.get(cloth) is not None:
-        sources.append((ref.vendor[cloth] * per, qty, "cloth"))
+    if bolt in costs:
+        sources.append((costs[bolt], qty, "bolt"))
+    else:
+        if items.get(bolt):
+            sources += [(u, c, "bolt") for u, c in _segments(items[bolt])]
+        if ref.vendor.get(bolt) is not None:
+            sources.append((ref.vendor[bolt], qty, "bolt"))
+    if cloth in costs:
+        sources.append((costs[cloth] * per, qty, "cloth"))
+    else:
+        if items.get(cloth):
+            carry = 0
+            for unit, count in _segments(items[cloth]):
+                made, carry = divmod(carry + count, per)
+                if made:
+                    sources.append((unit * per, made, "cloth"))
+        if ref.vendor.get(cloth) is not None:
+            sources.append((ref.vendor[cloth] * per, qty, "cloth"))
     return sorted(sources, key=lambda s: (s[0], s[2]))
 
 
-def _refined_purchases(bolt, qty, items, ref):
+def _refined_purchases(bolt, qty, items, ref, costs):
     """Cheapest mix of bought bolts and bolts made from raw cloth, as purchases of the bolt and of the cloth."""
     cloth, per = ref.refined[bolt]
     taken, need = {"bolt": 0, "cloth": 0}, qty
-    for _, count, kind in _refined_sources(bolt, qty, items, ref):
+    for _, count, kind in _refined_sources(bolt, qty, items, ref, costs):
         if need <= 0:
             break
         take = min(count, need)
@@ -148,28 +190,38 @@ def _refined_purchases(bolt, qty, items, ref):
         need -= take
     out = []
     if taken["bolt"] or need or not taken["cloth"]:
-        p = Purchase(bolt, ref.name(bolt), taken["bolt"] + need,
-                     *buy_mix(items.get(bolt), ref.vendor.get(bolt), taken["bolt"]))
+        p = _purchase(bolt, taken["bolt"], items, ref, costs)
+        p.qty += need
         p.short += need
         out.append(p)
     if taken["cloth"]:
-        units = taken["cloth"] * per
-        p = Purchase(cloth, ref.name(cloth), units, *buy_mix(items.get(cloth), ref.vendor.get(cloth), units))
+        p = _purchase(cloth, taken["cloth"] * per, items, ref, costs)
         p.note = f"makes {taken['cloth']} x {ref.name(bolt)}"
         out.append(p)
     return out
 
 
-def shopping_list(recipe, items, ref, crafts):
+def shopping_list(recipe, items, ref, crafts, costs=None):
+    """What to buy for `crafts` crafts. `costs` maps item id -> the user's average copper cost per unit."""
+    costs = costs or {}
     out = []
     for r in recipe["reagents"]:
         qty = r["qty"] * crafts
         if r["item"] in ref.refined:
-            out += _refined_purchases(r["item"], qty, items, ref)
+            out += _refined_purchases(r["item"], qty, items, ref, costs)
             continue
-        mix = buy_mix(items.get(r["item"]), ref.vendor.get(r["item"]), qty)
-        out.append(Purchase(r["item"], ref.name(r["item"]), qty, *mix))
+        out.append(_purchase(r["item"], qty, items, ref, costs))
     return out
+
+
+def unused_costs(recipe, ref, costs):
+    """Item ids in `costs` that this recipe does not buy (neither a reagent nor the raw cloth of a reagent bolt)."""
+    used = set()
+    for r in recipe["reagents"]:
+        used.add(r["item"])
+        if r["item"] in ref.refined:
+            used.add(ref.refined[r["item"]][0])
+    return [i for i in costs if i not in used]
 
 
 def max_crafts(ok, cap=MAX_CRAFTS):
@@ -207,17 +259,20 @@ def _outputs(result, crafts, cut):
     return outs, math.sqrt(var)
 
 
-def calculate(result, items, ref, settings, crafts=None, budget=None):
-    """Plan a batch of `crafts` crafts, or as many as `budget` copper buys. `items` is the realm's scanned prices."""
+def calculate(result, items, ref, settings, crafts=None, budget=None, costs=None):
+    """Plan a batch of `crafts` crafts, or as many as `budget` copper buys. `items` is the realm's scanned prices.
+    `costs` (item id -> copper per unit) replaces the market price of those materials with your own average cost,
+    for any quantity."""
+    costs = costs or {}
     if (crafts is None) == (budget is None):
         raise ValueError("give exactly one of crafts or budget")
     recipe = result.recipe
 
     def feasible(n):
-        return all(p.short == 0 for p in shopping_list(recipe, items, ref, n))
+        return all(p.short == 0 for p in shopping_list(recipe, items, ref, n, costs))
 
     def affordable(n):
-        plan = shopping_list(recipe, items, ref, n)
+        plan = shopping_list(recipe, items, ref, n, costs)
         return all(p.short == 0 for p in plan) and sum(p.total for p in plan) <= budget
 
     batch = Batch(result, 0, requested=crafts, budget=budget, exit=result.exit)
@@ -231,7 +286,7 @@ def calculate(result, items, ref, settings, crafts=None, budget=None):
         n = crafts if feasible(crafts) else max_crafts(feasible)
         batch.limited_by = "" if n == crafts else "availability"
     batch.crafts = n
-    batch.purchases = shopping_list(recipe, items, ref, n)
+    batch.purchases = shopping_list(recipe, items, ref, n, costs)
     batch.cost = sum(p.total for p in batch.purchases)
 
     if n and result.net is not None:
@@ -248,6 +303,19 @@ def calculate(result, items, ref, settings, crafts=None, budget=None):
         batch.profit_per_hour = batch.profit / batch.seconds * 3600
     if n == 0:
         batch.notes.append("Nothing can be bought with these limits.")
+    custom = [p.name for p in batch.purchases if p.custom_qty]
+    if custom:
+        batch.notes.append("Your own average cost is used for " + ", ".join(custom)
+                           + ", in any quantity, instead of the AH and vendor prices.")
+    ignored = unused_costs(recipe, ref, costs)
+    if ignored:
+        batch.notes.append("Custom cost ignored (not bought for this shuffle): " + ", ".join(ref.name(i) for i in ignored) + ".")
+    if n:
+        skipped = [ref.name(i) for i in costs if i not in ignored
+                   and not any(p.item == i and p.custom_qty for p in batch.purchases)]
+        if skipped:
+            batch.notes.append("Custom cost not used because another way of getting it is cheaper (bolts and bars "
+                               "can be bought or made from raw materials): " + ", ".join(skipped) + ".")
     if batch.limited_by == "availability" and crafts is not None:
         batch.notes.append(f"Only {n} of the {crafts} requested crafts can be bought: reagents are not listed in enough quantity.")
     if batch.limited_by == "cap":
@@ -274,6 +342,7 @@ def format_batch(b):
     for p in b.purchases:
         where = ", ".join(x for x in (f"{p.ah_qty} AH = {m(p.ah_cost)}" if p.ah_qty else "",
                                        f"{p.vendor_qty} vendor = {m(p.vendor_cost)}" if p.vendor_qty else "",
+                                       f"{p.custom_qty} at your cost = {m(p.custom_cost)}" if p.custom_qty else "",
                                        f"{p.short} unavailable" if p.short else "") if x)
         lines.append(f"  {p.qty} x {p.name}: {where or '-'}  (total {m(p.total)})" + (f" [{p.note}]" if p.note else ""))
     lines.append(f"Total cost: {m(b.cost)}")

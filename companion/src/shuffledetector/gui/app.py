@@ -8,7 +8,7 @@ from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QMainWindow, QMessageBox, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
+    QMainWindow, QMessageBox, QPlainTextEdit, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
     QTextBrowser, QVBoxLayout, QWidget, QAbstractItemView, QHeaderView,
 )
 
@@ -86,6 +86,7 @@ def _batch_html(b):
     for p in b.purchases:
         where = ", ".join(x for x in (f"{p.ah_qty} from the AH ({m(p.ah_cost)})" if p.ah_qty else "",
                                        f"{p.vendor_qty} from a vendor ({m(p.vendor_cost)})" if p.vendor_qty else "",
+                                       f"{p.custom_qty} at your cost ({m(p.custom_cost)})" if p.custom_qty else "",
                                        f"<span style='color:#c60'>{p.short} unavailable</span>" if p.short else "") if x)
         made = f" <span style='color:gray'>({html.escape(p.note)})</span>" if p.note else ""
         buy.append(f"<tr><td><b>{p.qty:,} &times; {html.escape(p.name)}</b>{made}</td><td>{where or '-'}</td>"
@@ -237,6 +238,11 @@ class MainWindow(QMainWindow):
         self.calc_budget = QLineEdit("100g")
         self.calc_budget.setToolTip("For example 250g, 12g 30s or a number of copper")
         self.calc_budget.setMaximumWidth(120)
+        self.calc_costs = QPlainTextEdit(self.settings.value("material_costs", "", type=str))
+        self.calc_costs.setPlaceholderText("Your own average cost per material, one per line, e.g.\nSilk Cloth = 1g 20s\n"
+                                           "Used instead of the market price, for any quantity.")
+        self.calc_costs.setToolTip("Item name (or item id) = price. Leave empty to use market prices.")
+        self.calc_costs.setMaximumHeight(80)
         self.calc_out = QTextBrowser()
         calc_page = QWidget()
         calc_lay = QVBoxLayout(calc_page)
@@ -245,10 +251,13 @@ class MainWindow(QMainWindow):
             calc_row.addWidget(w)
         calc_row.addStretch()
         calc_lay.addLayout(calc_row)
+        calc_lay.addWidget(QLabel("Material costs (optional)"))
+        calc_lay.addWidget(self.calc_costs)
         calc_lay.addWidget(self.calc_out, 1)
         self.calc_mode.currentIndexChanged.connect(self.update_calc)
         self.calc_crafts.valueChanged.connect(self.update_calc)
         self.calc_budget.textChanged.connect(self.update_calc)
+        self.calc_costs.textChanged.connect(self.save_costs)
         tabs = QTabWidget()
         tabs.addTab(self.detail, "Breakdown")
         tabs.addTab(calc_page, "Calculator")
@@ -523,6 +532,10 @@ class MainWindow(QMainWindow):
             self.detail.setHtml(_breakdown_html(self.shown[rows[0].row()]))
         self.update_calc()
 
+    def save_costs(self):
+        self.settings.setValue("material_costs", self.calc_costs.toPlainText())
+        self.update_calc()
+
     def update_calc(self):
         rows = self.table.selectionModel().selectedRows()
         by_budget = self.calc_mode.currentData() == "budget"
@@ -542,9 +555,11 @@ class MainWindow(QMainWindow):
         settings = calc.Settings(ah_cut=self.cut.value() / 100, price_mode=self.mode.currentData(), exits=exits,
                                  craft_seconds=self.craft_time.value(), disenchant_seconds=self.de_time.value())
         items = calculator.realm_items(self.scan, self.realm.currentText())
+        costs, problems = calculator.parse_costs(self.calc_costs.toPlainText().splitlines(), self.ref)
         batch = calculator.calculate(self.shown[rows[0].row()], items, self.ref, settings,
-                                     crafts=None if by_budget else self.calc_crafts.value(), budget=budget)
-        self.calc_out.setHtml(_batch_html(batch))
+                                     crafts=None if by_budget else self.calc_crafts.value(), budget=budget, costs=costs)
+        warn = "".join(f"<p style='color:#c60'>Material cost ignored - {html.escape(x)}</p>" for x in problems)
+        self.calc_out.setHtml(warn + _batch_html(batch))
 
 
 def main(argv=None):

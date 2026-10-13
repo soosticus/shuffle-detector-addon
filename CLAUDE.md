@@ -27,7 +27,7 @@ What the addon records (details in FORMAT.md): AH scans; per character and profe
 
 ## Environment quirks (Windows, Git Bash)
 
-- Tests: `cd companion && PYTHONPATH=src ../.venv-$(hostname)/Scripts/python.exe -m pytest -q -p no:cacheprovider tests` (53 pass). `python run.py --test` also works.
+- Tests: `cd companion && PYTHONPATH=src ../.venv-$(hostname)/Scripts/python.exe -m pytest -q -p no:cacheprovider tests` (57 pass). `python run.py --test` also works.
 - The checkout (including `.git`) lives in OneDrive and is used from two machines, each with its own `.venv-<hostname>` (made by `run.py`). OneDrive once restored an older `.git/refs/heads/main` after a commit; if `git log` is missing a commit you made, check `git reflog` and fast-forward with `git update-ref`. Prefer finishing a commit and letting sync settle before switching machines.
 - Source files are CRLF. The Edit tool can trip on that, so for multi-line edits use a Python script that reads with `newline=''`, normalises to `\n`, edits, and writes back with `\r\n`. Chaining several heredocs in one Bash call failed once; keep them in separate calls.
 - Bash `/tmp` is not the same as the Windows Python `/tmp`: pipe data into python rather than saving to `/tmp` and reading it from Windows Python.
@@ -38,6 +38,8 @@ What the addon records (details in FORMAT.md): AH scans; per character and profe
 - WoW API behavior cannot be verified from here; only the user can test in game. Write nil-safe code (`pcall`, existence checks) with retries, and use `/shuffledetector recipes` (prints the window's recipe counts and what is saved) as the diagnostic.
 
 ## Status (addon 0.7.2)
+
+- Calculator custom material costs (`--cost`, GUI "Material costs" box, `calculator.parse_costs`): built and covered by tests, offscreen GUI smoke checked; not tried against real shopping yet.
 
 - Confirmed in game: AH scanning, Auctionator import, the shuffle tracker and macro, recipe capture with reagents for Tailoring, Enchanting and Cooking, item names and sell prices, and (2026-10-11) `available` unlearned recipes and `vendor` buy prices. `GetRecipeSourceText` never returned a value on this client across ~430 unlearned recipes, so the `source` field is effectively unused; not worth chasing.
 - Built but not yet confirmed in game: step 3 of the data plan, observed disenchant logging (`Disenchant.lua`: hooks `SpellTargetItem` for the targeted item, `UNIT_SPELLCAST_SUCCEEDED`/`LOOT_OPENED` for the result, writes `AHSnapshotDB.disenchants`). The companion averages observed loot per disenchant (`data_loader.observed_yields`) and uses it in place of a recipe's seed `yields` once there are samples, showing the sample count in the CLI and GUI. Ask the user to disenchant a few items in game, `/reload`, and check `AHSnapshotDB.disenchants`.

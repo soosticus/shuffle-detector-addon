@@ -30,6 +30,8 @@ def build_parser():
     p.add_argument("--calc", metavar="RECIPE", help="plan a batch of this shuffle: what to buy, expected output and profit (needs --crafts or --budget)")
     p.add_argument("--crafts", type=int, help="with --calc: number of crafts")
     p.add_argument("--budget", help="with --calc: spend up to this much, e.g. 250g, 12g 30s or copper")
+    p.add_argument("--cost", action="append", default=[], metavar="ITEM=PRICE",
+                   help='with --calc: your own average cost for a material instead of the market price, e.g. --cost "Silk Cloth=1g 20s" (repeatable; any quantity)')
     return p
 
 
@@ -49,8 +51,12 @@ def calc_batch(args, results, scan, ref, settings):
     if args.crafts is not None and args.crafts < 1:
         print("--crafts must be at least 1.", file=sys.stderr)
         return 2
+    costs, problems = calculator.parse_costs(args.cost, ref)
+    if problems:
+        print("\n".join(f"--cost {p}" for p in problems), file=sys.stderr)
+        return 2
     batch = calculator.calculate(match, calculator.realm_items(scan, args.realm), ref, settings,
-                                 crafts=args.crafts, budget=budget)
+                                 crafts=args.crafts, budget=budget, costs=costs)
     print(calculator.format_batch(batch))
     return 0
 
