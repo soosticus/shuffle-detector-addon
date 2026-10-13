@@ -39,7 +39,7 @@ What the addon records (details in FORMAT.md): AH scans; per character and profe
 
 ## Status (addon 0.7.2)
 
-- Calculator custom material costs (`--cost`, GUI "Material costs" box, `calculator.parse_costs`): built and covered by tests, offscreen GUI smoke checked; not tried against real shopping yet.
+- Calculator custom material costs (`--cost`; GUI: one pre-filled box per material in the Calculator tab, overrides saved by item id in QSettings `material_costs_by_item`; `calculator.parse_costs`, `market_costs`): built and covered by tests, offscreen GUI smoke checked; not tried against real shopping yet.
 
 - Confirmed in game: AH scanning, Auctionator import, the shuffle tracker and macro, recipe capture with reagents for Tailoring, Enchanting and Cooking, item names and sell prices, and (2026-10-11) `available` unlearned recipes and `vendor` buy prices. `GetRecipeSourceText` never returned a value on this client across ~430 unlearned recipes, so the `source` field is effectively unused; not worth chasing.
 - Built but not yet confirmed in game: step 3 of the data plan, observed disenchant logging (`Disenchant.lua`: hooks `SpellTargetItem` for the targeted item, `UNIT_SPELLCAST_SUCCEEDED`/`LOOT_OPENED` for the result, writes `AHSnapshotDB.disenchants`). The companion averages observed loot per disenchant (`data_loader.observed_yields`) and uses it in place of a recipe's seed `yields` once there are samples, showing the sample count in the CLI and GUI. Ask the user to disenchant a few items in game, `/reload`, and check `AHSnapshotDB.disenchants`.

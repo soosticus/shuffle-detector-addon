@@ -1,6 +1,7 @@
 """PySide6 desktop GUI."""
 
 import html
+import json
 import os
 import sys
 
@@ -8,7 +9,7 @@ from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QMainWindow, QMessageBox, QPlainTextEdit, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
+    QMainWindow, QMessageBox, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
     QTextBrowser, QVBoxLayout, QWidget, QAbstractItemView, QHeaderView,
 )
 
@@ -238,11 +239,16 @@ class MainWindow(QMainWindow):
         self.calc_budget = QLineEdit("100g")
         self.calc_budget.setToolTip("For example 250g, 12g 30s or a number of copper")
         self.calc_budget.setMaximumWidth(120)
-        self.calc_costs = QPlainTextEdit(self.settings.value("material_costs", "", type=str))
-        self.calc_costs.setPlaceholderText("Your own average cost per material, one per line, e.g.\nSilk Cloth = 1g 20s\n"
-                                           "Used instead of the market price, for any quantity.")
-        self.calc_costs.setToolTip("Item name (or item id) = price. Leave empty to use market prices.")
-        self.calc_costs.setMaximumHeight(80)
+        self.cost_overrides = {}
+        try:
+            self.cost_overrides = {int(k): int(v) for k, v in
+                                   json.loads(self.settings.value("material_costs_by_item", "{}", type=str)).items()}
+        except (ValueError, TypeError, AttributeError):
+            pass
+        self.cost_rows = {}
+        self.cost_form = QFormLayout()
+        self.cost_box = QWidget()
+        self.cost_box.setLayout(self.cost_form)
         self.calc_out = QTextBrowser()
         calc_page = QWidget()
         calc_lay = QVBoxLayout(calc_page)
@@ -251,13 +257,13 @@ class MainWindow(QMainWindow):
             calc_row.addWidget(w)
         calc_row.addStretch()
         calc_lay.addLayout(calc_row)
-        calc_lay.addWidget(QLabel("Material costs (optional)"))
-        calc_lay.addWidget(self.calc_costs)
+        self.cost_title = QLabel("Cost per material: the market average for this batch; type your own average to replace it")
+        calc_lay.addWidget(self.cost_title)
+        calc_lay.addWidget(self.cost_box)
         calc_lay.addWidget(self.calc_out, 1)
         self.calc_mode.currentIndexChanged.connect(self.update_calc)
         self.calc_crafts.valueChanged.connect(self.update_calc)
         self.calc_budget.textChanged.connect(self.update_calc)
-        self.calc_costs.textChanged.connect(self.save_costs)
         tabs = QTabWidget()
         tabs.addTab(self.detail, "Breakdown")
         tabs.addTab(calc_page, "Calculator")
@@ -532,17 +538,59 @@ class MainWindow(QMainWindow):
             self.detail.setHtml(_breakdown_html(self.shown[rows[0].row()]))
         self.update_calc()
 
-    def save_costs(self):
-        self.settings.setValue("material_costs", self.calc_costs.toPlainText())
+    def _rebuild_cost_rows(self, materials):
+        while self.cost_form.rowCount():
+            self.cost_form.removeRow(0)
+        self.cost_rows = {}
+        for item, name, _ in materials:
+            edit = QLineEdit()
+            edit.setMaximumWidth(140)
+            edit.setToolTip("Your average cost per unit, e.g. 1g 20s. Clear it to use the market average again.")
+            edit.textEdited.connect(lambda text, i=item: self._cost_edited(i, text))
+            self.cost_rows[item] = edit
+            self.cost_form.addRow(name, edit)
+        self.cost_box.setVisible(bool(materials))
+        self.cost_title.setVisible(bool(materials))
+
+    def _fill_cost_rows(self, materials):
+        for item, _, market in materials:
+            edit = self.cost_rows[item]
+            if item in self.cost_overrides:
+                text, style = calc.fmt_money(self.cost_overrides[item]), ""
+            else:
+                text, style = (calc.fmt_money(round(market)) if market is not None else ""), "color: gray;"
+            if edit.hasFocus() and not edit.text() and item not in self.cost_overrides:
+                continue
+            edit.blockSignals(True)
+            edit.setText(text)
+            edit.blockSignals(False)
+            edit.setStyleSheet(style)
+            edit.setPlaceholderText("no market price" if market is None else "")
+
+    def _cost_edited(self, item, text):
+        edit = self.cost_rows[item]
+        text = text.strip()
+        if not text:
+            self.cost_overrides.pop(item, None)
+        else:
+            try:
+                self.cost_overrides[item] = calculator.parse_money(text)
+                edit.setStyleSheet("")
+            except ValueError:
+                self.cost_overrides.pop(item, None)
+                edit.setStyleSheet("border: 1px solid #c60;")
+                return self.update_calc(refill=False)
+        self.settings.setValue("material_costs_by_item", json.dumps({str(k): v for k, v in self.cost_overrides.items()}))
         self.update_calc()
 
-    def update_calc(self):
+    def update_calc(self, refill=True):
         rows = self.table.selectionModel().selectedRows()
         by_budget = self.calc_mode.currentData() == "budget"
         self.calc_crafts.setVisible(not by_budget)
         self.calc_budget.setVisible(by_budget)
         if not rows or rows[0].row() >= len(self.shown) or not self.scan or not self.scan.scans:
             self.calc_out.setHtml("<p>Select a shuffle to plan a batch.</p>")
+            self._rebuild_cost_rows([])
             return
         budget = None
         if by_budget:
@@ -555,11 +603,17 @@ class MainWindow(QMainWindow):
         settings = calc.Settings(ah_cut=self.cut.value() / 100, price_mode=self.mode.currentData(), exits=exits,
                                  craft_seconds=self.craft_time.value(), disenchant_seconds=self.de_time.value())
         items = calculator.realm_items(self.scan, self.realm.currentText())
-        costs, problems = calculator.parse_costs(self.calc_costs.toPlainText().splitlines(), self.ref)
-        batch = calculator.calculate(self.shown[rows[0].row()], items, self.ref, settings,
-                                     crafts=None if by_budget else self.calc_crafts.value(), budget=budget, costs=costs)
-        warn = "".join(f"<p style='color:#c60'>Material cost ignored - {html.escape(x)}</p>" for x in problems)
-        self.calc_out.setHtml(warn + _batch_html(batch))
+        result = self.shown[rows[0].row()]
+        crafts = None if by_budget else self.calc_crafts.value()
+        market = calculator.calculate(result, items, self.ref, settings, crafts=crafts, budget=budget)
+        materials = calculator.market_costs(result.recipe, items, self.ref, market.crafts)
+        if list(self.cost_rows) != [m[0] for m in materials]:
+            self._rebuild_cost_rows(materials)
+        if refill:
+            self._fill_cost_rows(materials)
+        costs = {i: c for i, c in self.cost_overrides.items() if i in self.cost_rows}
+        batch = calculator.calculate(result, items, self.ref, settings, crafts=crafts, budget=budget, costs=costs)
+        self.calc_out.setHtml(_batch_html(batch))
 
 
 def main(argv=None):

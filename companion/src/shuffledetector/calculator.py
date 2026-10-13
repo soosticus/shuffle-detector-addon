@@ -224,6 +224,23 @@ def unused_costs(recipe, ref, costs):
     return [i for i in costs if i not in used]
 
 
+def market_costs(recipe, items, ref, crafts):
+    """Materials a batch of `crafts` crafts can be priced by, as [(item id, name, market copper per unit or None)]:
+    each reagent, plus the raw cloth or ore of a refined reagent (bolts and bars)."""
+    crafts = max(crafts, 1)
+    out, seen = [], set()
+    for r in recipe["reagents"]:
+        wanted = [(r["item"], r["qty"] * crafts)]
+        if r["item"] in ref.refined:
+            cloth, per = ref.refined[r["item"]]
+            wanted.append((cloth, r["qty"] * crafts * per))
+        for item, qty in wanted:
+            if item not in seen:
+                seen.add(item)
+                out.append((item, ref.name(item), _purchase(item, qty, items, ref, {}).unit))
+    return out
+
+
 def max_crafts(ok, cap=MAX_CRAFTS):
     """Largest n in [0, cap] with ok(n), assuming ok is true up to some point and false after."""
     lo, hi = 0, 1

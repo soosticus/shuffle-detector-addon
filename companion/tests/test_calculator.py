@@ -302,3 +302,13 @@ def test_custom_cost_for_bolt_or_its_cloth():
     b = calculator.calculate(res, items, ref, settings, crafts=1, costs={6: 9000})
     assert not any(p.custom_qty for p in b.purchases)
     assert any("not used" in note and "Bolt" in note for note in b.notes)
+
+
+def test_market_costs_lists_reagents_and_raw_cloth_with_market_units():
+    ref = Reference(items={1: "Robe", 6: "Bolt", 7: "Silk", 8: "Thread"}, vendor={8: 40}, refined={6: (7, 4)},
+                    recipes=[{"name": "Robe", "item": 1, "reagents": [{"item": 6, "qty": 2}, {"item": 8, "qty": 1}], "yields": []}])
+    items = {6: {"min": 5000, "qty": 100, "prices": [(5000, 100)]}, 7: {"min": 100, "qty": 100, "prices": [(100, 100)]}}
+    rows = calculator.market_costs(ref.recipes[0], items, ref, 3)
+    assert [(i, n) for i, n, _ in rows] == [(6, "Bolt"), (7, "Silk"), (8, "Thread")]
+    assert [u for _, _, u in rows] == [5000, 100, 40]
+    assert calculator.market_costs(ref.recipes[0], {}, ref, 0)[0][2] is None
