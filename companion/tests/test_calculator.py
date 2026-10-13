@@ -312,3 +312,14 @@ def test_market_costs_lists_reagents_and_raw_cloth_with_market_units():
     assert [(i, n) for i, n, _ in rows] == [(6, "Bolt"), (7, "Silk"), (8, "Thread")]
     assert [u for _, _, u in rows] == [5000, 100, 40]
     assert calculator.market_costs(ref.recipes[0], {}, ref, 0)[0][2] is None
+
+
+def test_disabled_exit_is_never_chosen_even_when_more_profitable():
+    ref = Reference(items={1: "Bag", 8: "Thread"}, vendor={8: 10}, vendor_sell={1: 200},
+                    recipes=[{"name": "Bag", "item": 1, "reagents": [{"item": 8, "qty": 1}], "yields": []}])
+    items = {1: {"min": 5000, "qty": 10, "prices": [(5000, 10)]}}
+    allowed = lambda *e: calc.evaluate(ref.recipes[0], items, ref, calc.Settings(price_mode="min", ah_cut=0.0, exits=e))
+    assert allowed("Sell on AH", "Vendor").exit == "Sell on AH"
+    r = allowed("Vendor")
+    assert r.exit == "Vendor" and r.net == 200 and r.profit == 190
+    assert [e.label for e in r.exits] == ["Sell on AH", "Vendor"]  # still listed, but not chosen

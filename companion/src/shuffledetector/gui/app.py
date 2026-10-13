@@ -111,7 +111,8 @@ def _batch_html(b):
     if b.profit is not None:
         color = "#2e9e44" if b.profit > 0 else "#d04040"
         roi = f", ROI {b.roi * 100:.0f}%" if b.roi is not None else ""
-        parts += [f"<p>Net revenue after the AH cut: <b>{m(b.revenue)}</b>{rng(b.revenue_low, b.revenue_high)}</p>",
+        cut = "" if b.exit == "Vendor" else " after the AH cut"
+        parts += [f"<p>Net revenue{cut}: <b>{m(b.revenue)}</b>{rng(b.revenue_low, b.revenue_high)}</p>",
                   f"<h3>Profit: <span style='color:{color}'>{m(b.profit)}</span>{roi}</h3>"
                   + (f"<p style='color:gray'>Likely range: {m(b.profit_low)} to {m(b.profit_high)}</p>" if spread else "")
                   + (f"<p>Profit per hour: <b>{m(b.profit_per_hour)}</b></p>" if b.profit_per_hour is not None else "")]
@@ -177,7 +178,8 @@ class MainWindow(QMainWindow):
                            ("Vendor", "Sell the crafted piece to a vendor")):
             box = QCheckBox(label)
             box.setToolTip(tip)
-            box.setChecked(True)
+            box.setChecked(self.settings.value(f"exit/{label}", True, type=bool))
+            box.toggled.connect(lambda v, k=label: self.settings.setValue(f"exit/{k}", v))
             self.exit_boxes[label] = box
         self.cog = QToolButton()
         self.cog.setText("\u2699")
@@ -543,47 +545,54 @@ class MainWindow(QMainWindow):
             self.cost_form.removeRow(0)
         self.cost_rows = {}
         for item, name, _ in materials:
-            edit = QLineEdit()
-            edit.setMaximumWidth(140)
-            edit.setToolTip("Your average cost per unit, e.g. 1g 20s. Clear it to use the market average again.")
-            edit.textEdited.connect(lambda text, i=item: self._cost_edited(i, text))
-            self.cost_rows[item] = edit
-            self.cost_form.addRow(name, edit)
+            boxes, line = [], QHBoxLayout()
+            for suffix, top, width in (("g", 9_999_999, 95), ("s", 99, 55), ("c", 99, 55)):
+                box = QSpinBox(minimum=0, maximum=top, suffix=suffix)
+                box.setMaximumWidth(width)
+                box.setButtonSymbols(QSpinBox.NoButtons)
+                box.setAlignment(Qt.AlignRight)
+                box.setToolTip("Your average cost per unit. Grey is the market average.")
+                box.valueChanged.connect(lambda _v, i=item: self._cost_edited(i))
+                boxes.append(box)
+                line.addWidget(box)
+            reset = QToolButton()
+            reset.setText("Use market")
+            reset.setToolTip("Go back to the market average")
+            reset.clicked.connect(lambda _checked=False, i=item: self._cost_reset(i))
+            line.addWidget(reset)
+            line.addStretch()
+            self.cost_rows[item] = (boxes, reset)
+            self.cost_form.addRow(name, line)
         self.cost_box.setVisible(bool(materials))
         self.cost_title.setVisible(bool(materials))
 
     def _fill_cost_rows(self, materials):
         for item, _, market in materials:
-            edit = self.cost_rows[item]
-            if item in self.cost_overrides:
-                text, style = calc.fmt_money(self.cost_overrides[item]), ""
-            else:
-                text, style = (calc.fmt_money(round(market)) if market is not None else ""), "color: gray;"
-            if edit.hasFocus() and not edit.text() and item not in self.cost_overrides:
-                continue
-            edit.blockSignals(True)
-            edit.setText(text)
-            edit.blockSignals(False)
-            edit.setStyleSheet(style)
-            edit.setPlaceholderText("no market price" if market is None else "")
+            boxes, reset = self.cost_rows[item]
+            own = item in self.cost_overrides
+            copper = self.cost_overrides[item] if own else (round(market) if market is not None else 0)
+            for box, value in zip(boxes, (copper // 10000, copper // 100 % 100, copper % 100)):
+                box.blockSignals(True)
+                box.setValue(value)
+                box.blockSignals(False)
+                box.setStyleSheet("" if own else "color: gray;")
+            reset.setEnabled(own)
 
-    def _cost_edited(self, item, text):
-        edit = self.cost_rows[item]
-        text = text.strip()
-        if not text:
-            self.cost_overrides.pop(item, None)
-        else:
-            try:
-                self.cost_overrides[item] = calculator.parse_money(text)
-                edit.setStyleSheet("")
-            except ValueError:
-                self.cost_overrides.pop(item, None)
-                edit.setStyleSheet("border: 1px solid #c60;")
-                return self.update_calc(refill=False)
-        self.settings.setValue("material_costs_by_item", json.dumps({str(k): v for k, v in self.cost_overrides.items()}))
+    def _cost_edited(self, item):
+        g, s, c = (box.value() for box in self.cost_rows[item][0])
+        self.cost_overrides[item] = g * 10000 + s * 100 + c
+        self._save_costs()
         self.update_calc()
 
-    def update_calc(self, refill=True):
+    def _cost_reset(self, item):
+        self.cost_overrides.pop(item, None)
+        self._save_costs()
+        self.update_calc()
+
+    def _save_costs(self):
+        self.settings.setValue("material_costs_by_item", json.dumps({str(k): v for k, v in self.cost_overrides.items()}))
+
+    def update_calc(self):
         rows = self.table.selectionModel().selectedRows()
         by_budget = self.calc_mode.currentData() == "budget"
         self.calc_crafts.setVisible(not by_budget)
@@ -609,8 +618,7 @@ class MainWindow(QMainWindow):
         materials = calculator.market_costs(result.recipe, items, self.ref, market.crafts)
         if list(self.cost_rows) != [m[0] for m in materials]:
             self._rebuild_cost_rows(materials)
-        if refill:
-            self._fill_cost_rows(materials)
+        self._fill_cost_rows(materials)
         costs = {i: c for i, c in self.cost_overrides.items() if i in self.cost_rows}
         batch = calculator.calculate(result, items, self.ref, settings, crafts=crafts, budget=budget, costs=costs)
         self.calc_out.setHtml(_batch_html(batch))
