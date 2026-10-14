@@ -10,7 +10,7 @@ def build_parser():
     p = argparse.ArgumentParser(prog="shuffledetector", description=__doc__)
     p.add_argument("savedvars", nargs="?", help="path to ShuffleDetector.lua (SavedVariables)")
     p.add_argument("--data", help="extra reference JSON overriding the bundled seed data")
-    p.add_argument("--realm", help="realm-faction key (default: first scanned)")
+    p.add_argument("--realm", help="Auctionator realm key (default: the realm with the freshest prices)")
     p.add_argument("--character", help="character key to use for known recipes/skill")
     p.add_argument("--ah-cut", type=float, default=0.05)
     p.add_argument("--price-mode", choices=calc.PRICE_MODES, default="avg_low")
@@ -98,6 +98,8 @@ def main(argv=None):
             return 2
         path = str(found[0])
     scan = data_loader.load_scan_data(path)
+    if not scan.scans:
+        print(scan.price_note or "No Auctionator prices found.", file=sys.stderr)
     ref = data_loader.load_reference(extra=args.data)
     if args.local_recipes:
         local = localdata.load_local_recipes(localdata.find_install([args.wow] if args.wow else []) or "")

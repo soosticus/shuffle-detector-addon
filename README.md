@@ -1,9 +1,9 @@
 # ShuffleDetector
 
-Find the most profitable crafting shuffle (any profession, with Disenchanting, AH resale or vendor exits) from auction house scans.
+Find the most profitable crafting shuffle (any profession, with Disenchanting, AH resale or vendor exits) from your Auctionator auction house prices.
 
-- `addon/ShuffleDetector/` - WoW addon. Scans the auction house (`/shuffledetector scan`, `/ahsnap` also works) and records profession skill, recipes (known and not yet learned, with reagents), item names and vendor prices to SavedVariables.
-- `companion/` - cross-platform Python app (CLI + PySide6 GUI) that reads those SavedVariables and ranks shuffles for every profession (`--profession`, or the GUI profession box), with a per-step cost/yield breakdown and suggestions for recipes to acquire.
+- `addon/ShuffleDetector/` - WoW addon (requires [Auctionator](https://www.curseforge.com/wow/addons/auctionator)). Records profession skill, recipes (known and not yet learned, with reagents), item names and vendor prices to SavedVariables, and runs the shuffle tracker. It does no scanning of its own.
+- `companion/` - cross-platform Python app (CLI + PySide6 GUI) that reads those SavedVariables plus Auctionator's own price database (`Auctionator.lua`, in the same SavedVariables folder) and ranks shuffles for every profession (`--profession`, or the GUI profession box), with a per-step cost/yield breakdown and suggestions for recipes to acquire.
 - `common/` - shared data format doc and reference data (`data/reference.json`: items, vendor prices, recipes, disenchant yields). The bundled values are unverified seed data; recipes, item names and vendor prices recorded by the addon in game are layered over them (see [ROADMAP.md](ROADMAP.md)).
 - `CLAUDE.md` - working notes and handoff for AI assistants (environment quirks, rules, status).
 
@@ -56,6 +56,8 @@ To run the shuffle, make a macro (`/shuffledetector macro` prints it) and press 
 ```
 
 Each press does one step: disenchant a crafted piece in your bags, otherwise craft the next one, until the reagents run out. For a Vendor exit, open a merchant window and each press sells one stack of the crafted item (the tracker says "Open a vendor window to sell N" when you are out of reagents); an AH exit only prompts you to post the items yourself. WoW doesn't let chat commands cast spells, so the macro presses an invisible secure button that picks and does the action. Presses while a cast or bag update is in progress do nothing. You can also bind a key under Key Bindings > AddOns > ShuffleDetector. The step only changes out of combat. `/shuffledetector plan` prints the loaded shuffle and the next step.
+
+Prices: scan the auction house with Auctionator as usual, then `/reload` (or log out) so the game writes its price database to disk, and refresh the companion. Auctionator keeps minimum prices only, so the companion assumes any quantity can be bought at that price, and the realm box lists Auctionator's realm keys (the one with the freshest prices is selected first).
 
 Disenchant yields: with Auctionator installed, the companion reads the disenchant table that ships in Auctionator's folder (next to your SavedVariables; the addon only records each item's class and level, `/shuffledetector yields` refreshes older entries) and uses those expected yields for the Disenchant step; yields observed from your own disenchants take over once there are samples, and the bundled seed estimates are only the fallback. The Calculator and details view say which source was used.
 

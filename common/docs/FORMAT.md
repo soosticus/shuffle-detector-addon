@@ -3,17 +3,17 @@
 The addon writes `AHSnapshotDB` to `WTF/Account/<acct>/SavedVariables/ShuffleDetector.lua`.
 The companion app only reads this file. Prices are in copper.
 
+Prices are not in this file. They come from Auctionator's own SavedVariables file, `Auctionator.lua` in the
+same folder: `AUCTIONATOR_PRICE_DATABASE` holds one CBOR blob per realm key (for example `ClassicBetaPvE2`) plus a
+`__dbversion`; `auctionator.py` decodes it. Each item key is `"<itemID>"` or, for gear, `"g:<itemID>:<ilvl>"`, and
+maps to `{ m = <last seen minimum price>, h = {day = highest low}, l = {day = lowest low}, a = {day = quantity} }`
+with days counted from 2020-01-01 local midnight. The companion keeps the cheapest `m` per item id, treats it as
+buyable in any quantity ("shallow"), and dates the realm by the newest day in `h`. Older versions of this addon
+saved a copy in a `scans` table; the addon deletes it on load and the companion ignores it.
+
 ```lua
 AHSnapshotDB = {
   version = 1,
-  scans = {
-    ["Realm-Faction"] = {
-      time = <unix>, listings = <n>,
-      source = "scan" | "auctionator",   -- optional, default "scan"
-      shallow = true,                    -- optional; min prices only (no depth)
-      items = { [itemID] = { min = <copper>, qty = <total>, prices = { {unitPrice, qty}, ... } } },
-    },
-  },
   characters = {
     ["Name-Realm-Faction"] = {
       professions = { Tailoring = { skill = n, max = n, recipes = {
@@ -70,9 +70,7 @@ the bundled `yields` and marks the recipe `yield_source = "Auctionator"`. Preced
 then Auctionator, then the bundled seed. Entries recorded by older versions get these fields after
 `/shuffledetector yields` (or the next login) and a `/reload`.
 
-`prices` holds the cheapest 40 listings sorted ascending, used to cost bulk purchases.
-Shallow scans (imported from Auctionator) carry one `{min, 1}` entry per item; the companion
-treats them as unlimited quantity at the minimum price. The addon also stores UI state
+The addon also stores UI state
 (`shuffleTracker`, `shuffleTrackerShown`, `logEcho`) and a diagnostic ring buffer `log` (up to 300
 `"HH:MM:SS message"` strings about button clicks, casts and game errors) in the same table; the companion
 ignores them. `/shuffledetector log` prints the buffer.

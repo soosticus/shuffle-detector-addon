@@ -196,7 +196,7 @@ def evaluate(recipe, items, ref, settings, skill=None, known=frozenset()):
 def rank(scan, ref, settings=None, realm=None, character=None, professions=None):
     """Evaluate all recipes for a realm; best profit first (incomplete data last)."""
     settings = settings or Settings()
-    realm = realm or next(iter(sorted(scan.scans)), None)
+    realm = realm or next(iter(scan.realms), None)
     if realm is None:
         return []
     items = scan.scans[realm]["items"]

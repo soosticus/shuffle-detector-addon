@@ -1,5 +1,5 @@
 -- ShuffleDetector core: shared namespace, profession/recipe snapshot, slash commands.
--- Scanning lives in Scan.lua, the auction house tab in UI.lua.
+-- Prices are not collected here: the companion reads Auctionator's saved price database directly.
 -- Data is written by the game to WTF/Account/<acct>/SavedVariables/ShuffleDetector.lua
 
 local ADDON, ns = ...
@@ -17,6 +17,7 @@ local say = ns.say
 -- the chat window. Read it with /shuffledetector log; /shuffledetector log echo also prints new lines live.
 local LOG_MAX = 300
 AHSnapshotDB.shuffleDebug = nil -- replaced by log and logEcho
+AHSnapshotDB.scans, AHSnapshotDB.timing = nil, nil -- the built-in AH scan was removed; prices come from Auctionator
 
 function ns.log(msg)
     local log = AHSnapshotDB.log
@@ -423,14 +424,8 @@ SLASH_SHUFFLEDETECTOR1 = "/shuffledetector"
 SLASH_SHUFFLEDETECTOR2 = "/ahsnap"
 SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
     msg = (msg or ""):lower()
-    if msg == "scan" or msg == "" then
-        ns.StartScan()
-    elseif msg == "debug" then
-        ns.DebugUI()
-    elseif msg == "recipes" then
+    if msg == "recipes" then
         ns.DebugRecipes()
-    elseif msg == "import" then
-        ns.ImportAuctionator()
     elseif msg == "shuffle" then
         ns.ToggleShuffleTracker()
     elseif msg == "step" then
@@ -448,7 +443,7 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
     elseif msg == "yields" then
         ns.RefreshItemDetails()
     else
-        say("usage: /shuffledetector scan | import | items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | shuffle (show/hide the step tracker) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
+        say("usage: /shuffledetector items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | shuffle (show/hide the step tracker) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
     end
 end
 

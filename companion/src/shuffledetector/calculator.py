@@ -115,7 +115,7 @@ def parse_costs(specs, ref):
 
 def realm_items(scan, realm=None):
     """Scanned prices for `realm` (default: the first realm, as calc.rank picks it)."""
-    realm = realm or next(iter(sorted(scan.scans)), None)
+    realm = realm or next(iter(scan.realms), None)
     return scan.scans[realm]["items"] if realm in scan.scans else {}
 
 

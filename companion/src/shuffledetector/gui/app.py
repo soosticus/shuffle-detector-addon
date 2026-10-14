@@ -6,6 +6,7 @@ import os
 import shutil
 import sys
 import threading
+from datetime import datetime
 
 from PySide6.QtCore import QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor
@@ -593,7 +594,7 @@ class MainWindow(QMainWindow):
 
     def refresh(self):
         if not self.scan or not self.scan.scans:
-            self.statusBar().showMessage("No auction scans in file. Run /shuffledetector scan at the auction house.")
+            self.statusBar().showMessage(self.scan.price_note if self.scan and self.scan.price_note else "No Auctionator prices found.")
             return
         exits = tuple(n for n, b in self.exit_boxes.items() if b.isChecked())
         rows = self.table.selectionModel().selectedRows()
@@ -644,10 +645,10 @@ class MainWindow(QMainWindow):
             )
         )
         scanned = self.scan.scans[self.realm.currentText()]
-        note = " - Auctionator data (min prices only, no depth)" if scanned["shallow"] else ""
+        note = f" - Auctionator minimum prices from {datetime.fromtimestamp(scanned['time']):%Y-%m-%d}" if scanned.get("time") else ""
         if self.known_only.isChecked() and not has_known:
             note += " - no known recipes recorded: open the profession window in game, then /reload"
-        self.statusBar().showMessage(f"{self.path} - {len(scanned['items'])} items, {scanned['listings']} listings{note}")
+        self.statusBar().showMessage(f"{self.path} - {len(scanned['items'])} items{note}")
         if shown:
             self.table.selectRow(next((i for i, r in enumerate(shown) if r.name == keep), 0))
             self.show_detail()

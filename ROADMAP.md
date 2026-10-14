@@ -5,6 +5,7 @@ Open items only; finished work is removed. Release notes are generated from comm
 ## Open items
 
 - Handle vendor faction/location restrictions.
+- Confirm in game that the addon loads with its Auctionator dependency and that the companion shows prices after an Auctionator scan and `/reload` (prices are read from `Auctionator.lua`, see `auctionator.py`). Open question: the realm key (`PvE`, `ClassicBetaPvE2`) with the freshest data is picked by default; check it is the right realm.
 - Confirm in game that the fast-press gating no longer repeats a craft or disenchant step.
 - Confirm in game that the Vendor sell step (addon 0.7.2) works. AH listing is out of scope (Auctionator and similar addons do it); AH exits only prompt.
 - Shuffle follow-up: take the craft count or budget from the calculator.

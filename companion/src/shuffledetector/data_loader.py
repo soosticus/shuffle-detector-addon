@@ -1,14 +1,13 @@
-"""Load addon scan data and reference data (items, vendor prices, recipes)."""
+"""Load the addon's recorded data, Auctionator's prices and the reference data (items, vendor prices, recipes)."""
 
 import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import addon_manager, deyields, luaparse
+from . import addon_manager, auctionator, deyields, luaparse
 
 SAVED_VARIABLES_NAME = "AHSnapshotDB"
-UNLIMITED_QTY = 10**9
 ADDON_FILE = "ShuffleDetector.lua"
 # Shared reference data lives in <repo>/common/data (companion/src/shuffledetector/ is 4 levels down).
 _PACKAGED_DATA = Path(__file__).resolve().parent / "_data"
@@ -92,10 +91,12 @@ class ScanData:
     vendor: dict = field(default_factory=dict)       # item id -> copper to buy one from a vendor, as seen in game
     disenchants: list = field(default_factory=list)  # [{"item", "quality", "ilvl", "loot": [{"item","qty"}], "time"}, ...]
     auctionator_yields: dict = field(default_factory=dict)  # item id -> [{"item", "avg"}, ...] from Auctionator's table
+    price_note: str = ""                                    # why `scans` is empty, when it is
 
     @property
     def realms(self):
-        return sorted(self.scans)
+        """Realm keys, the one with the freshest Auctionator prices first (that is the default)."""
+        return sorted(self.scans, key=lambda r: (-(self.scans[r].get("time") or 0), r))
 
 
 def load_reference(path=None, extra=None):
@@ -126,25 +127,7 @@ def load_scan_data(path):
     db = raw.get(SAVED_VARIABLES_NAME)
     if not isinstance(db, dict):
         raise ValueError(f"{SAVED_VARIABLES_NAME} not found in {path}")
-    scans = {}
-    for realm, scan in (db.get("scans") or {}).items():
-        items = {}
-        shallow = bool(scan.get("shallow"))
-        for item_id, e in (scan.get("items") or {}).items():
-            prices = [(int(p[0]), int(p[1])) for p in e.get("prices", [])]
-            qty = int(e["qty"])
-            if shallow:
-                # min price only (e.g. Auctionator): assume any quantity is buyable at that price
-                qty = UNLIMITED_QTY
-                prices = [(int(e["min"]), UNLIMITED_QTY)]
-            items[int(item_id)] = {"min": int(e["min"]), "qty": qty, "prices": prices}
-        scans[realm] = {
-            "time": scan.get("time"),
-            "listings": scan.get("listings", 0),
-            "items": items,
-            "source": scan.get("source") or "scan",
-            "shallow": shallow,
-        }
+    scans, price_note = auctionator.load_prices(auctionator.find_saved_variables(path))
     items = {}
     for item_id, e in (db.get("items") or {}).items():
         if isinstance(e, dict):
@@ -166,7 +149,7 @@ def load_scan_data(path):
             if loot:
                 auctionator_yields[int(item_id)] = loot
     return ScanData(scans=scans, characters=db.get("characters") or {}, items=items, vendor=vendor,
-                    disenchants=disenchants, auctionator_yields=auctionator_yields)
+                    disenchants=disenchants, auctionator_yields=auctionator_yields, price_note=price_note)
 
 
 def _as_list(value):

@@ -1,18 +1,16 @@
 ## Interface: 16001
 ## Title: ShuffleDetector
-## Notes: Scans the auction house, records professions, recipes, item and vendor data to SavedVariables, and runs shuffle plans.
+## Notes: Records professions, recipes, item and vendor data to SavedVariables, and runs shuffle plans.
 ## Author: soosticus
 ## X-License: MIT
 ## Version: @project-version@
-## OptionalDeps: Auctionator, LibAHTab
+## Dependencies: Auctionator
 ## SavedVariables: AHSnapshotDB
 
 ShuffleDetector.lua
 Disenchant.lua
 Plan.lua
 ItemList.lua
-Scan.lua
-UI.lua
 Shuffle.lua
 
 

@@ -1,30 +1,12 @@
 """Tests for the SavedVariables parser, pricing and ranking."""
 
+from auctionator_fixture import entry, write
+
 from shuffledetector import calc, data_loader, luaparse
 
 SAMPLE = '''
 AHSnapshotDB = {
 	["version"] = 1,
-	["scans"] = {
-		["Realm-Alliance"] = {
-			["time"] = 1700000000,
-			["listings"] = 9,
-			["items"] = {
-				[2997] = {
-					["min"] = 100,
-					["qty"] = 10,
-					["prices"] = {
-						{ 100, 2 }, -- [1]
-						{ 150, 8 }, -- [2]
-					},
-				},
-				[2321] = { ["min"] = 50, ["qty"] = 100, ["prices"] = { { 50, 100 } } },
-				[10940] = { ["min"] = 400, ["qty"] = 5, ["prices"] = { { 400, 5 } } },
-				[10938] = { ["min"] = 800, ["qty"] = 5, ["prices"] = { { 800, 5 } } },
-				[10978] = { ["min"] = 1000, ["qty"] = 1, ["prices"] = { { 1000, 1 } } },
-			},
-		},
-	},
 	["characters"] = {
 		["Bob-Realm-Alliance"] = {
 			["professions"] = {
@@ -61,27 +43,17 @@ def test_sell_price_modes():
     assert calc.sell_price(entry, calc.Settings(price_mode="avg_low")) == (200 + 450) / 5
 
 
-def test_shallow_scan_is_unlimited_at_min_price(tmp_path):
-    p = tmp_path / "ShuffleDetector.lua"
-    p.write_text(
-        'AHSnapshotDB = { scans = { ["R-A"] = { time = 1, listings = 1, source = "auctionator", shallow = true,'
-        ' items = { [1234] = { min = 50, qty = 0, prices = { { 50, 1 } } } } } } }'
-    )
-    scan = data_loader.load_scan_data(p)
-    s = scan.scans["R-A"]
-    assert s["shallow"] and s["source"] == "auctionator"
-    assert calc.buy_cost(s["items"][1234], 200) == 200 * 50
-
-
 def test_rank_end_to_end(tmp_path):
     path = tmp_path / "ShuffleDetector.lua"
     path.write_text(SAMPLE, encoding="utf-8")
+    write(tmp_path, {"Realm": {str(i): entry(p, 2474) for i, p in
+                               {2997: 100, 2321: 50, 10940: 400, 10938: 800, 10978: 1000}.items()}})
     scan = data_loader.load_scan_data(path)
     ref = data_loader.load_reference()
     results = calc.rank(scan, ref, calc.Settings(price_mode="min"))
     vest = next(r for r in results if r.name == "Green Woolen Vest")
-    # 4 bolts: 2@100 + 2@150 = 500; 2 fine thread: vendor 100*2 = 200 vs AH 100 -> AH
-    assert vest.cost == 600
+    # 4 bolts at the 100 minimum = 400; 2 fine thread: vendor 100*2 = 200 vs AH 50*2 = 100 -> AH
+    assert vest.cost == 500
     gross = 0.9 * 400 + 0.4 * 800 + 0.1 * 1000
     assert round(vest.net, 6) == round(gross * 0.95, 6)
     assert vest.status == "known"
