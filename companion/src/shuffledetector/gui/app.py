@@ -538,9 +538,10 @@ class MainWindow(QMainWindow):
             dlg.setValue(done)
 
     def close_update_dialog(self):
-        if self.update_dialog is not None:
-            self.update_dialog.close()
-            self.update_dialog = None
+        dlg, self.update_dialog = self.update_dialog, None
+        if dlg is not None:
+            dlg.canceled.disconnect()  # closing a QProgressDialog emits canceled(), which would look like a user cancel
+            dlg.close()
 
     def on_update_failed(self, message):
         self.close_update_dialog()

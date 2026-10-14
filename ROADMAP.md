@@ -10,7 +10,7 @@ Open items only; finished work is removed. Release notes are hand-written in `re
 - Confirm in game that the Vendor sell step (addon 0.7.2) works. AH listing is out of scope (Auctionator and similar addons do it); AH exits only prompt.
 - Shuffle follow-up: take the craft count or budget from the calculator.
 - Calculator follow-ups: model price impact when buying or selling large quantities (walk the sell side of the order book), and offer a "number of disenchants" target. Use the observed disenchant results (data plan step 3) for the range instead of Poisson once there are enough samples.
-- Try the companion self-update (`selfupdate.py`) against a real release: the Windows swap script is verified locally, macOS (`ditto`, `open`) and Linux are untested, and it needs a published release newer than the installed build.
+- Confirm the companion self-update (`selfupdate.py`) end to end on Windows with a release newer than a build that includes the progress-dialog fix (0.8.0 and 0.8.1 silently discarded the staged build; builds with the fix must be installed by hand once). macOS (`ditto`, `open`) and Linux are untested.
 - Check that pushing the re-pointed `v0.2.4a` tag after the history rewrite did not start an unwanted release run (`release.yml` triggers on `v*` tags).
 
 ## Data plan: a permitted source for recipe, price and yield data
