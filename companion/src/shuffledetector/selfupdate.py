@@ -218,7 +218,7 @@ def build_helper_script(root, new_root, pid, platform=None):
             f'move "{root}" "{old}" >nul 2>&1',
             "if not errorlevel 1 goto swapped",
             "set /a n+=1",
-            "if %n% geq 120 goto fail",
+            "if %n% geq 30 goto fail",  # about 30 s: enough for antivirus to let go, short enough not to look like a stray launch
             "ping -n 2 127.0.0.1 >nul",
             "goto retry",
             ":swapped",
