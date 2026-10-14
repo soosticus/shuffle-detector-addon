@@ -338,7 +338,8 @@ class MainWindow(QMainWindow):
             self.addon_label.setText("Addon: no WoW install found")
             return
         have = inst.installed_version
-        text = f"Addon: {'v' + have if have else 'not installed'} - {ADDON_STATUS_TEXT[addon_manager.status(inst)]}"
+        label = "not installed" if not have else ("v" + have if addon_manager.parse_version(have) else have)
+        text = f"Addon: {label} - {ADDON_STATUS_TEXT[addon_manager.status(inst)]}"
         self.addon_label.setText(text)
 
     def install_selected(self, announce=False):
@@ -351,7 +352,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Addon install failed", f"{e}\n\nClose WoW and try again.")
             return
         self.update_addon_label()
-        msg = f"Installed addon v{version} to {inst.addons_dir}. Reload the UI (/reload) or restart WoW."
+        msg = f"Installed addon {'v' if addon_manager.parse_version(version) else ''}{version} to {inst.addons_dir}. Reload the UI (/reload) or restart WoW."
         self.statusBar().showMessage(msg)
         if announce:
             QMessageBox.information(self, "Addon installed", msg)

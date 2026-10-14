@@ -1,9 +1,11 @@
 """Locate WoW installs and install/update the bundled addon."""
 
+import functools
 import os
 import re
 import shutil
 import stat
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +13,7 @@ from pathlib import Path
 ADDON_NAME = "ShuffleDetector"
 PLAN_FILE = "Plan.lua"  # written by the companion; kept across addon updates
 ITEM_LIST_FILE = "ItemList.lua"  # likewise
+VERSION_PLACEHOLDER = "@project-version@"  # in the repo .toc; the release workflow swaps in the tag
 _REPO_ADDON = Path(__file__).resolve().parents[3] / "addon" / ADDON_NAME
 _BUNDLED_ADDON = Path(__file__).resolve().parent / "_addon" / ADDON_NAME
 
@@ -25,11 +28,28 @@ def bundled_addon_dir():
 
 
 def parse_version(text):
-    """'0.1.0' -> (0, 1, 0); None if unparseable."""
-    if not text:
-        return None
-    parts = re.findall(r"\d+", text)
-    return tuple(int(p) for p in parts) if parts else None
+    """'0.1.0' -> (0, 1, 0); None if it is not a release number (e.g. 'dev-1a2b3c4')."""
+    m = re.match(r"v?(\d+(?:\.\d+)*)", (text or "").strip())
+    return tuple(int(p) for p in m.group(1).split(".")) if m else None
+
+
+@functools.lru_cache(maxsize=1)
+def dev_version():
+    """'dev-<sha>' of the source checkout, or 'dev' when git is unavailable."""
+    sha = ""
+    try:
+        r = subprocess.run(["git", "rev-parse", "--short=7", "HEAD"], cwd=_REPO_ADDON, capture_output=True,
+                           text=True, timeout=5, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if r.returncode == 0:
+            sha = r.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return f"dev-{sha}" if sha else "dev"
+
+
+def resolve_version(version):
+    """Replace the unstamped placeholder with the dev version."""
+    return dev_version() if version == VERSION_PLACEHOLDER else version
 
 
 def toc_version(addon_dir):
@@ -120,18 +140,26 @@ def discover_installs(extra_roots=()):
 
 
 def status(install):
-    """'not_installed' | 'up_to_date' | 'outdated' | 'newer' | 'no_bundle'."""
+    """'not_installed' | 'up_to_date' | 'outdated' | 'newer' | 'no_bundle'.
+
+    Dev builds ('dev-<sha>') cannot be ordered: a dev bundle replaces any different install, and a
+    dev install is never replaced by a release bundle.
+    """
     src = bundled_addon_dir()
     if src is None:
         return "no_bundle"
-    if install.installed_version is None:
+    have_s = install.installed_version
+    if have_s is None:
         return "not_installed"
-    have, want = parse_version(install.installed_version), parse_version(toc_version(src))
-    if have == want:
+    want_s = resolve_version(toc_version(src))
+    if have_s == want_s:
         return "up_to_date"
-    if have is None or want is None or have < want:
+    have, want = parse_version(have_s), parse_version(want_s)
+    if want is None:
         return "outdated"
-    return "newer"
+    if have is None:
+        return "newer" if have_s.startswith("dev") else "outdated"
+    return "outdated" if have < want else "newer"
 
 
 def install_addon(install):
@@ -146,6 +174,9 @@ def install_addon(install):
     for p in (tmp, old):
         _remove_tree(p)
     shutil.copytree(src, tmp, copy_function=shutil.copyfile)
+    toc = tmp / f"{ADDON_NAME}.toc"
+    stamped = toc.read_bytes().replace(VERSION_PLACEHOLDER.encode(), dev_version().encode())
+    toc.write_bytes(stamped)
     for kept, name in ((install.plan_file, PLAN_FILE), (install.item_list_file, ITEM_LIST_FILE)):
         try:
             if kept.is_file():

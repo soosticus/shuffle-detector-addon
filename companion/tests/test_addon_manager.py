@@ -13,6 +13,10 @@ def make_addon(root, version):
     return d
 
 
+def set_installed_version(inst, version):
+    (inst.addon_dir / f"{am.ADDON_NAME}.toc").write_text(f"## Version: {version}\n")
+
+
 @pytest.fixture
 def wow(tmp_path, monkeypatch):
     bundle = tmp_path / "bundle"
@@ -31,6 +35,8 @@ def test_parse_version():
     assert am.parse_version("v1.2") == (1, 2)
     assert am.parse_version(None) is None
     assert am.parse_version("abc") is None
+    assert am.parse_version("dev-5ec3dc9") is None
+    assert am.parse_version(am.VERSION_PLACEHOLDER) is None
 
 
 def test_discovery_root_flavor_and_addons_dir(wow):
@@ -70,3 +76,31 @@ def test_no_bundle(wow, monkeypatch):
     assert am.status(inst) == "no_bundle"
     with pytest.raises(FileNotFoundError):
         am.install_addon(inst)
+
+
+def test_unstamped_bundle_installs_as_dev_version(wow, monkeypatch):
+    monkeypatch.setattr(am, "dev_version", lambda: "dev-abc1234")
+    bundle = wow.parent / "src_bundle"
+    monkeypatch.setenv("SHUFFLEDETECTOR_ADDON", str(make_addon(bundle, am.VERSION_PLACEHOLDER)))
+    inst = am.installs_in(wow / "_classic_")[0]
+    assert am.install_addon(inst) == "dev-abc1234"
+    assert am.status(inst) == "up_to_date"
+    set_installed_version(inst, "dev-0000000")
+    assert am.status(inst) == "outdated"  # dev bundle replaces any different install
+    set_installed_version(inst, "0.2.0")
+    assert am.status(inst) == "outdated"
+
+
+def test_dev_install_is_not_replaced_by_release_bundle(wow):
+    inst = am.installs_in(wow / "_classic_")[0]
+    make_addon(inst.addons_dir, "dev-abc1234")
+    assert am.status(inst) == "newer"
+    set_installed_version(inst, am.VERSION_PLACEHOLDER)
+    assert am.status(inst) == "outdated"  # a hand-copied, unstamped toc is replaced
+
+
+def test_dev_version_falls_back_without_git(monkeypatch):
+    am.dev_version.cache_clear()
+    monkeypatch.setattr(am.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError()))
+    assert am.dev_version() == "dev"
+    am.dev_version.cache_clear()

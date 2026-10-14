@@ -33,12 +33,12 @@ What the addon records (details in FORMAT.md): AH scans; per character and profe
 - Source files are CRLF. The Edit tool can trip on that, so for multi-line edits use a Python script that reads with `newline=''`, normalises to `\n`, edits, and writes back with `\r\n`. Chaining several heredocs in one Bash call failed once; keep them in separate calls.
 - Bash `/tmp` is not the same as the Windows Python `/tmp`: pipe data into python rather than saving to `/tmp` and reading it from Windows Python.
 - Lua syntax check: needs the `lupa` package (it lived in `/tmp/sdvenv`, which may need recreating with `python -m venv /tmp/sdvenv` then `pip install lupa`). Run `python -c "import lupa; l=lupa.LuaRuntime(); f=l.eval('function(p) local f,e=loadfile(p) return e end'); print(f('addon/ShuffleDetector/ShuffleDetector.lua'))"`; `None` means it parses. A lupa smoke harness that stubs the WoW API was kept in `/tmp` (not in the repo); rebuild a small one if needed.
-- Deploy the addon for testing: copy the changed addon files (usually `ShuffleDetector.lua` and `ShuffleDetector.toc`) to `C:/Games/World of Warcraft/_classic_beta_/Interface/AddOns/ShuffleDetector/`, bump `## Version` in the `.toc` each time so the user can see what loaded, then ask the user to `/reload`.
+- Deploy the addon for testing: prefer the companion's Addon > Install (or `addon_manager.install_addon`), which stamps the `.toc` placeholder as `dev-<sha>`. If you copy files by hand (`ShuffleDetector.lua`, `ShuffleDetector.toc`) to `C:/Games/World of Warcraft/_classic_beta_/Interface/AddOns/ShuffleDetector/`, replace `@project-version@` in the copied `.toc` with `dev-<git rev-parse --short=7 HEAD>` so the user can see what loaded, then ask the user to `/reload`. The version is never bumped in the repo: releases take it from the tag.
 - SavedVariables: `C:/Games/World of Warcraft/_classic_beta_/WTF/Account/50021243#1/SavedVariables/ShuffleDetector.lua`. Test characters: Arand (Herbalism, Cooking, Alchemy 0, Fishing) and Suest (Tailoring 45, Enchanting 29, Cooking 0).
 - The integrated browser tool was unreliable here (AbortError); use curl, and only for sources whose terms allow it.
 - WoW API behavior cannot be verified from here; only the user can test in game. Write nil-safe code (`pcall`, existence checks) with retries, and use `/shuffledetector recipes` (prints the window's recipe counts and what is saved) as the diagnostic.
 
-## Status (addon 0.7.2)
+## Status (last numbered addon 0.7.2)
 
 - Calculator custom material costs (`--cost`; GUI: per material g/s/c spin boxes pre-filled with the market average in the Calculator tab, overrides saved by item id in QSettings `material_costs_by_item`; `calculator.parse_costs`, `market_costs`): built and covered by tests, offscreen GUI smoke checked; not tried against real shopping yet.
 

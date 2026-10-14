@@ -14,12 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Stamp addon version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Determine version
+        id: version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          sed -i "s/^## Version:.*/## Version: $VERSION/" addon/ShuffleDetector/ShuffleDetector.toc
-          grep '^## Version:' addon/ShuffleDetector/ShuffleDetector.toc
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Stamp addon version
+        run: |
+          sed -i "s/@project-version@/${{ steps.version.outputs.value }}/" addon/ShuffleDetector/ShuffleDetector.toc
+          grep -qE '^## Version: ${{ steps.version.outputs.value }}[[:space:]]*$' addon/ShuffleDetector/ShuffleDetector.toc
       - name: Zip addon
         run: |
           VERSION=$(grep -m1 '^## Version:' addon/ShuffleDetector/ShuffleDetector.toc | sed 's/.*: *//' | tr -d '\r')
@@ -52,15 +58,27 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Stamp bundled addon version
+        shell: bash
+        run: |
+          sed -i.bak "s/@project-version@/${{ steps.version.outputs.value }}/" addon/ShuffleDetector/ShuffleDetector.toc
+          rm addon/ShuffleDetector/ShuffleDetector.toc.bak
+          grep -qE '^## Version: ${{ steps.version.outputs.value }}[[:space:]]*$' addon/ShuffleDetector/ShuffleDetector.toc
       - name: Stamp app version from tag
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          sed -i.bak "s/^__version__ = .*/__version__ = \"$VERSION\"/" companion/src/shuffledetector/__init__.py
+          sed -i.bak "s/^__version__ = .*/__version__ = \"${{ steps.version.outputs.value }}\"/" companion/src/shuffledetector/__init__.py
           rm companion/src/shuffledetector/__init__.py.bak
-          sed -i.bak "s/^## Version:.*/## Version: $VERSION/" addon/ShuffleDetector/ShuffleDetector.toc
-          rm addon/ShuffleDetector/ShuffleDetector.toc.bak
       - name: Install
         run: python -m pip install -e "companion[gui,dev]" pyinstaller
       - name: Run tests

@@ -81,7 +81,7 @@ Prepare the addon for CurseForge. Check CurseForge's current requirements before
 - `.toc` updates: add `## X-Curse-Project-ID`, refresh `## Notes` (it still describes only scanning), and consider `## Category` and `## IconTexture`. Keep `## Interface` in step with the supported client.
 - Ship a placeholder `Plan.lua` in the package so the `.toc` loads cleanly, and make sure a CurseForge update does not overwrite a user's generated plan, or tell users to resend it after an update.
 - Content rules: no bundled executables or the companion app inside the addon zip (link to the GitHub release instead), and credit any libraries. Add a changelog (the packager can generate one from commits).
-- Decide on a version scheme and release process (tag `v*`, then upload) and document it in the README.
+- Decide on a release process (tag `v*`, then upload) and document it in the README. The `.toc` already uses the packager's `@project-version@` placeholder.
 
 ## Planned: more professions
 

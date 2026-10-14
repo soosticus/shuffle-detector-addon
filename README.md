@@ -31,7 +31,7 @@ See [ROADMAP.md](ROADMAP.md) for future considerations.
 
 ## Addon install and updates
 
-The GUI finds your WoW install(s) (or use Addon > Choose WoW folder..., or set `WOW_PATH`), shows the installed addon version, and installs or updates the bundled addon from the Addon menu. "Update addon automatically" (on by default) updates an outdated installed copy at startup. SavedVariables are never touched. Close WoW first if an update fails.
+The GUI finds your WoW install(s) (or use Addon > Choose WoW folder..., or set `WOW_PATH`), shows the installed addon version, and installs or updates the bundled addon from the Addon menu. "Update addon automatically" (on by default) updates an outdated installed copy at startup. The `.toc` in the repo carries a `@project-version@` placeholder; installing from a source checkout stamps it as `dev-<commit sha>`. Dev builds can't be ordered against releases, so a source install always replaces a different install, and a release bundle never replaces a dev install. SavedVariables are never touched. Close WoW first if an update fails.
 
 To bundle the addon into a built package, run `python companion/scripts/bundle_addon.py` before building; from a repo checkout the app uses `addon/` directly.
 
@@ -63,6 +63,6 @@ Each press does one step: disenchant a crafted piece in your bags, otherwise cra
 
 ## Releases
 
-Pushing a tag like `v0.3.0` runs `.github/workflows/release.yml`, which stamps the tag (without the leading `v`) into the addon `.toc` `## Version` and the app version, then publishes a GitHub Release containing `ShuffleDetector-<version>.zip` (the addon) and `ShuffleDetector-Companion-<tag>-<os>` (PyInstaller builds of the GUI) for Windows, Linux and macOS. `ci.yml` runs the tests on every push and PR.
+Pushing a tag like `v0.3.0` runs `.github/workflows/release.yml`, which replaces the `@project-version@` placeholder in the addon `.toc` with the tag (without the leading `v`), stamps the same version into the app, then publishes a GitHub Release containing `ShuffleDetector-<version>.zip` (the addon) and `ShuffleDetector-Companion-<tag>-<os>` (PyInstaller builds of the GUI) for Windows, Linux and macOS. A manual run of the workflow stamps `dev-<sha>` instead. `ci.yml` runs the tests on every push and PR.
 
 When not run from the source tree, the GUI's Addon > "Check for updates..." looks at the latest release: it offers a download link for a newer app and installs a newer addon automatically. Set `SHUFFLEDETECTOR_REPO=owner/repo` if the repository is not `soosticus/ShuffleDetector`.
