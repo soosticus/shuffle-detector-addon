@@ -66,3 +66,7 @@ Each press does one step: disenchant a crafted piece in your bags, otherwise cra
 Pushing a tag like `v0.3.0` runs `.github/workflows/release.yml`, which replaces the `@project-version@` placeholder in the addon `.toc` with the tag (without the leading `v`), stamps the same version into the app, then publishes a GitHub Release containing `ShuffleDetector-<version>.zip` (the addon) and `ShuffleDetector-Companion-<tag>-<os>` (PyInstaller builds of the GUI) for Windows, Linux and macOS. A manual run of the workflow stamps `dev-<sha>` instead. `ci.yml` runs the tests on every push and PR.
 
 When not run from the source tree, the GUI's Addon > "Check for updates..." looks at the latest release: it offers a download link for a newer app and installs a newer addon automatically. Set `SHUFFLEDETECTOR_REPO=owner/repo` if the repository is not `soosticus/ShuffleDetector`.
+
+### Windows SmartScreen warning
+
+The companion builds are not code signed, so Windows SmartScreen shows "Windows protected your PC" the first time you run a downloaded copy. Click **More info**, then **Run anyway**. To avoid the prompt, right-click the downloaded zip, choose Properties, tick **Unblock**, and only then extract it. The addon zip is plain Lua and is not affected. You can also skip the executable and [run from the source tree](#run-from-the-source-tree).
