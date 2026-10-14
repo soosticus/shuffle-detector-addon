@@ -29,7 +29,7 @@ What the addon records (details in FORMAT.md; prices are not recorded, see below
 
 ## Environment quirks (Windows, Git Bash)
 
-- Tests: `cd companion && PYTHONPATH=src ../.venv-$(hostname)/Scripts/python.exe -m pytest -q -p no:cacheprovider tests` (91 pass). `python run.py --test` also works.
+- Tests: `cd companion && PYTHONPATH=src ../.venv-$(hostname)/Scripts/python.exe -m pytest -q -p no:cacheprovider tests` (94 pass). `python run.py --test` also works.
 - The checkout (including `.git`) lives in OneDrive and is used from two machines, each with its own `.venv-<hostname>` (made by `run.py`). OneDrive once restored an older `.git/refs/heads/main` after a commit; if `git log` is missing a commit you made, check `git reflog` and fast-forward with `git update-ref`. Prefer finishing a commit and letting sync settle before switching machines.
 - Source files are CRLF. The Edit tool can trip on that, so for multi-line edits use a Python script that reads with `newline=''`, normalises to `\n`, edits, and writes back with `\r\n`. Chaining several heredocs in one Bash call failed once; keep them in separate calls.
 - Bash `/tmp` is not the same as the Windows Python `/tmp`: pipe data into python rather than saving to `/tmp` and reading it from Windows Python.
