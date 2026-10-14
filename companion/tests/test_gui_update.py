@@ -2,7 +2,7 @@
 
 import pytest
 
-pytest.importorskip("PySide6")
+pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)  # a missing system library (libEGL) is also an ImportError
 
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication, QProgressDialog
