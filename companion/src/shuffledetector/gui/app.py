@@ -11,12 +11,12 @@ from datetime import datetime
 from PySide6.QtCore import QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
+    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
     QMainWindow, QMessageBox, QProgressDialog, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
     QTextBrowser, QVBoxLayout, QWidget, QAbstractItemView, QHeaderView,
 )
 
-from .. import __version__, addon_manager, calc, calculator, data_loader, plan, selfupdate, updater
+from .. import __version__, addon_manager, calc, calculator, data_loader, plan, releasenotes, selfupdate, updater
 
 STATUS_TEXT = {"known": "Known", "learnable": "Learnable", "needs_skill": "Needs skill", "unknown": "?"}
 ADDON_STATUS_TEXT = {
@@ -174,6 +174,8 @@ class MainWindow(QMainWindow):
         self.auto_check_app.toggled.connect(lambda v: self.settings.setValue("auto_check_app", v))
         if not updater.from_source_tree():
             addon_menu.addAction(self.auto_check_app)
+        help_menu = self.menuBar().addMenu("&Help")
+        help_menu.addAction(QAction("Release notes...", self, triggered=self.show_release_notes))
         self.declined_tag = None
         self.update_cancel = threading.Event()
         self.update_dialog = None
@@ -331,11 +333,45 @@ class MainWindow(QMainWindow):
         self.auto_update_addon()
         if not updater.from_source_tree() and self.auto_check_app.isChecked():
             self.check_release_async()
+        if not updater.from_source_tree():
+            QTimer.singleShot(500, self.show_whats_new)
         path = path or next(iter(data_loader.candidate_saved_variables(self.wow_roots())), None)
         if path:
             self.load(str(path))
         self.watch_timer = QTimer(self, interval=2000, timeout=self.check_for_changes)
         self.watch_timer.start()
+
+    def show_release_notes(self):
+        notes = releasenotes.all_notes()
+        if not notes:
+            QMessageBox.information(self, "Release notes", "No release notes are bundled with this build.")
+            return
+        self._notes_dialog("Release notes", notes)
+
+    def show_whats_new(self):
+        """After an update (or the first run of a version), show the notes the user has not seen yet."""
+        last = self.settings.value("last_notes_version", "", type=str)
+        if last == __version__:
+            return
+        self.settings.setValue("last_notes_version", __version__)
+        unseen = releasenotes.unseen_notes(last, __version__)
+        if unseen:
+            self._notes_dialog(f"What's new in ShuffleDetector {__version__}", unseen)
+
+    def _notes_dialog(self, title, notes):
+        dlg = QDialog(self)
+        dlg.setWindowTitle(title)
+        dlg.resize(560, 520)
+        view = QTextBrowser()
+        view.setOpenExternalLinks(True)
+        sections = [f"# Version {version}\n\n{text.strip()}" for _, version, text in notes]
+        view.setMarkdown("\n\n---\n\n".join(sections))
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(dlg.reject)
+        lay = QVBoxLayout(dlg)
+        lay.addWidget(view)
+        lay.addWidget(buttons)
+        dlg.exec()
 
     def check_for_changes(self):
         """Reload when the game rewrites the SavedVariables file (or one appears)."""

@@ -89,7 +89,8 @@ jobs:
           pyinstaller companion/packaging/gui_entry.py --name ShuffleDetector-Companion --windowed --noconfirm \
             --paths companion/src \
             --add-data "addon/ShuffleDetector${{ matrix.sep }}shuffledetector/_addon/ShuffleDetector" \
-            --add-data "common/data${{ matrix.sep }}shuffledetector/_data"
+            --add-data "common/data${{ matrix.sep }}shuffledetector/_data" \
+            --add-data "release-notes${{ matrix.sep }}shuffledetector/_release_notes"
       - name: Package
         shell: bash
         run: |

@@ -25,11 +25,11 @@ What the addon records (details in FORMAT.md; prices are not recorded, see below
 - Work autonomously; ask only when genuinely blocked.
 - Never use the user's real name in anything for WoW addon development (toc Author, LICENSE, commits, docs); use only the alias "soosticus".
 - Keep docs and ROADMAP.md current. Finished items are removed from the roadmap.
-- Releases: before tagging, write brief, user-facing patch notes in `release-notes/vX.Y.Z.md` (what changed for someone using the addon and companion, what they must do, caveats; no commit log, no internals), commit it, then push `main` and the tag. `release.yml` publishes that file as the release body and only falls back to GitHub's generated commit list if it is missing. Never push or tag without being asked.
+- Releases: before tagging, write brief, user-facing patch notes in `release-notes/vX.Y.Z.md` (what changed for someone using the addon and companion, what they must do, caveats; no commit log, no internals), commit it, then push `main` and the tag. `release.yml` publishes that file as the release body (falling back to GitHub's generated commit list only if it is missing) and PyInstaller bundles the whole folder into the companion (`releasenotes.py`); the GUI pops up the unseen notes after an update (QSettings `last_notes_version`; never from a source checkout) and Help > Release notes shows them all. Never push or tag without being asked.
 
 ## Environment quirks (Windows, Git Bash)
 
-- Tests: `cd companion && PYTHONPATH=src ../.venv-$(hostname)/Scripts/python.exe -m pytest -q -p no:cacheprovider tests` (86 pass). `python run.py --test` also works.
+- Tests: `cd companion && PYTHONPATH=src ../.venv-$(hostname)/Scripts/python.exe -m pytest -q -p no:cacheprovider tests` (91 pass). `python run.py --test` also works.
 - The checkout (including `.git`) lives in OneDrive and is used from two machines, each with its own `.venv-<hostname>` (made by `run.py`). OneDrive once restored an older `.git/refs/heads/main` after a commit; if `git log` is missing a commit you made, check `git reflog` and fast-forward with `git update-ref`. Prefer finishing a commit and letting sync settle before switching machines.
 - Source files are CRLF. The Edit tool can trip on that, so for multi-line edits use a Python script that reads with `newline=''`, normalises to `\n`, edits, and writes back with `\r\n`. Chaining several heredocs in one Bash call failed once; keep them in separate calls.
 - Bash `/tmp` is not the same as the Windows Python `/tmp`: pipe data into python rather than saving to `/tmp` and reading it from Windows Python.
