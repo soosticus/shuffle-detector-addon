@@ -61,7 +61,9 @@ of a recipe's bundled `yields` for its crafted item.
 `prices` holds the cheapest 40 listings sorted ascending, used to cost bulk purchases.
 Shallow scans (imported from Auctionator) carry one `{min, 1}` entry per item; the companion
 treats them as unlimited quantity at the minimum price. The addon also stores UI state
-(`shuffleTracker`, `shuffleTrackerShown`) in the same table; the companion ignores it.
+(`shuffleTracker`, `shuffleTrackerShown`, `logEcho`) and a diagnostic ring buffer `log` (up to 300
+`"HH:MM:SS message"` strings about button clicks, casts and game errors) in the same table; the companion
+ignores them. `/shuffledetector log` prints the buffer.
 
 # Item list (companion -> addon)
 

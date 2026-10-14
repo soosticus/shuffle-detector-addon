@@ -36,7 +36,7 @@ What the addon records (details in FORMAT.md): AH scans; per character and profe
 - Deploy the addon for testing: prefer the companion's Addon > Install (or `addon_manager.install_addon`), which stamps the `.toc` placeholder as `dev-<sha>`. If you copy files by hand (`ShuffleDetector.lua`, `ShuffleDetector.toc`) to `C:/Games/World of Warcraft/_classic_beta_/Interface/AddOns/ShuffleDetector/`, replace `@project-version@` in the copied `.toc` with `dev-<git rev-parse --short=7 HEAD>` so the user can see what loaded, then ask the user to `/reload`. The version is never bumped in the repo: releases take it from the tag.
 - SavedVariables: `C:/Games/World of Warcraft/_classic_beta_/WTF/Account/50021243#1/SavedVariables/ShuffleDetector.lua`. Test characters: Arand (Herbalism, Cooking, Alchemy 0, Fishing) and Suest (Tailoring 45, Enchanting 29, Cooking 0).
 - The integrated browser tool was unreliable here (AbortError); use curl, and only for sources whose terms allow it.
-- WoW API behavior cannot be verified from here; only the user can test in game. Write nil-safe code (`pcall`, existence checks) with retries, and use `/shuffledetector recipes` (prints the window's recipe counts and what is saved) as the diagnostic.
+- WoW API behavior cannot be verified from here; only the user can test in game. Write nil-safe code (`pcall`, existence checks) with retries, and use `/shuffledetector recipes` (prints the window's recipe counts and what is saved) as the diagnostic, and `/shuffledetector log` (hidden ring buffer in `AHSnapshotDB.log` with button clicks, casts and game errors; add new diagnostics with `ns.log`, not `say`).
 
 ## Status (last numbered addon 0.7.2)
 

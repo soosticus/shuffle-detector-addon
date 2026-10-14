@@ -13,6 +13,37 @@ function ns.say(msg)
 end
 local say = ns.say
 
+-- Quiet diagnostics (button clicks, casts, game errors) go to a ring buffer in AHSnapshotDB.log instead of
+-- the chat window. Read it with /shuffledetector log; /shuffledetector log echo also prints new lines live.
+local LOG_MAX = 300
+AHSnapshotDB.shuffleDebug = nil -- replaced by log and logEcho
+
+function ns.log(msg)
+    local log = AHSnapshotDB.log
+    if not log then
+        log = {}
+        AHSnapshotDB.log = log
+    end
+    log[#log + 1] = date("%H:%M:%S") .. " " .. tostring(msg)
+    if #log > LOG_MAX then table.remove(log, 1) end
+    if AHSnapshotDB.logEcho then print("|cff888888" .. ADDON .. " log|r: " .. tostring(msg)) end
+end
+
+function ns.ShowLog(arg)
+    local log = AHSnapshotDB.log or {}
+    if arg == "clear" then
+        AHSnapshotDB.log = {}
+        say("log cleared")
+    elseif arg == "echo" then
+        AHSnapshotDB.logEcho = not AHSnapshotDB.logEcho
+        say("live log output " .. (AHSnapshotDB.logEcho and "on" or "off"))
+    else
+        local n = math.min(tonumber(arg) or 20, #log)
+        say(("log: last %d of %d lines (/shuffledetector log <n> | clear | echo)"):format(n, #log))
+        for i = #log - n + 1, #log do print("  " .. log[i]) end
+    end
+end
+
 function ns.realmKey()
     local faction = UnitFactionGroup and UnitFactionGroup("player") or "Neutral"
     return (GetRealmName() or "?") .. "-" .. (faction or "Neutral")
@@ -394,14 +425,14 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
         ns.PrintShuffleMacro()
     elseif msg == "plan" then
         ns.PrintPlan()
-    elseif msg == "shuffledebug" then
-        ns.ToggleShuffleDebug()
+    elseif msg == "log" or msg:find("^log ") then
+        ns.ShowLog(msg:match("^log%s*(.-)%s*$"))
     elseif msg == "disenchant" then
         ns.DebugDisenchant()
     elseif msg == "items" then
         ns.LoadWantedItems()
     else
-        say("usage: /shuffledetector scan | import | items (request recipe item names and prices) | shuffle (show/hide the step tracker) | step | macro | plan | shuffledebug. Open a profession window to record its recipes.")
+        say("usage: /shuffledetector scan | import | items (request recipe item names and prices) | shuffle (show/hide the step tracker) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
     end
 end
 
