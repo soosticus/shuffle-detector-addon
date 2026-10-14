@@ -21,8 +21,9 @@ What the addon records (details in FORMAT.md): AH scans; per character and profe
 ## Rules (from the user)
 
 - Never scrape any site against its terms or robots.txt. All Wowhead data and code was removed for this reason. wago.tools' robots.txt disallows everything but the home page, so it is paused: do not fetch it. Ask the user before using any new external data source.
-- Commit after finishing work: `git add` specific files, message passed through a HEREDOC and ending with `Co-Authored-By: Claude Code <noreply@anthropic.com>`. Never push, amend or force-push unless asked. Run `git status` before anything that could discard work.
+- Commit after finishing work: `git add` specific files, message passed through a HEREDOC, committed with `--signoff` and no Co-Authored-By or other attribution trailers (the global instructions forbid them). Never push, amend or force-push unless asked. Run `git status` before anything that could discard work.
 - Work autonomously; ask only when genuinely blocked.
+- Never use the user's real name in anything for WoW addon development (toc Author, LICENSE, commits, docs); use only the alias "soosticus".
 - Keep docs and ROADMAP.md current. Finished items are removed from the roadmap; release notes come from commit history.
 
 ## Environment quirks (Windows, Git Bash)
