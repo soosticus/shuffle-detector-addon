@@ -152,3 +152,31 @@ def test_with_observed_keeps_seed_yields_when_no_disenchants_recorded(tmp_path):
     robe = next(r for r in ref.recipes if r["name"].lower() == "test robe")
     assert "yield_samples" not in robe
     assert robe["yields"] == [{"item": 1, "avg": 1.0}]
+
+
+AUCTIONATOR_LUA = """
+AHSnapshotDB = {
+  deyields = {
+    [7054] = { quality = 2, ilvl = 18, yields = { { item = 10938, avg = 0.8 }, { item = 10940, avg = 0.4 } } },
+    [7055] = { quality = 2, ilvl = 18, yields = {} },
+  },
+  disenchants = {
+    { item = 7056, quality = 2, ilvl = 20, loot = { { item = 10938, qty = 2 } }, time = 1 },
+  },
+}
+"""
+
+
+def test_auctionator_yields_replace_seed_but_observed_samples_win(tmp_path):
+    p = tmp_path / "ShuffleDetector.lua"
+    p.write_text(AUCTIONATOR_LUA)
+    scan = data_loader.load_scan_data(str(p))
+    assert scan.auctionator_yields == {7054: [{"item": 10938, "avg": 0.8}, {"item": 10940, "avg": 0.4}]}
+    seeds = [{"name": f"robe {i}", "item": i, "skill": 40, "yields": [{"item": 1, "avg": 1.0}],
+              "reagents": [{"item": 9, "qty": 9}]} for i in (7054, 7055, 7056)]
+    ref = Reference(recipes=seeds).with_observed(scan)
+    by_item = {r["item"]: r for r in ref.recipes}
+    assert by_item[7054]["yields"] == [{"item": 10938, "avg": 0.8}, {"item": 10940, "avg": 0.4}]
+    assert by_item[7054]["yield_source"] == "Auctionator" and "yield_samples" not in by_item[7054]
+    assert by_item[7055]["yields"] == [{"item": 1, "avg": 1.0}] and "yield_source" not in by_item[7055]
+    assert by_item[7056]["yield_samples"] == 1 and "yield_source" not in by_item[7056]

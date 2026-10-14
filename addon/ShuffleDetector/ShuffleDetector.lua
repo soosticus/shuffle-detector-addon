@@ -363,6 +363,7 @@ frame:SetScript("OnEvent", function(_, event, itemId)
         snapshotSkills()
         if event == "PLAYER_LOGIN" then
             C_Timer.After(5, function() ns.LoadWantedItems(true) end)
+            C_Timer.After(25, function() if ns.RecordYields then pcall(ns.RecordYields, true) end end)
         end
     end
 end)
@@ -431,8 +432,10 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
         ns.DebugDisenchant()
     elseif msg == "items" then
         ns.LoadWantedItems()
+    elseif msg == "yields" then
+        ns.RecordYields()
     else
-        say("usage: /shuffledetector scan | import | items (request recipe item names and prices) | shuffle (show/hide the step tracker) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
+        say("usage: /shuffledetector scan | import | items (request recipe item names and prices) | yields (read disenchant yields from Auctionator) | shuffle (show/hide the step tracker) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
     end
 end
 

@@ -78,6 +78,7 @@ def _breakdown_html(r):
         ("<p><b>Step 2 - Disenchant (Enchanting)</b></p>" + rows(r.yields, "Average yield per disenchant")
          + f"<p>Disenchant gross: {calc.fmt_money(r.gross)}</p>"
          + (f"<p><i>{r.recipe['yield_samples']} observed disenchants</i></p>" if r.recipe.get("yield_samples")
+            else f"<p><i>{html.escape(r.recipe['yield_source'])} disenchant table</i></p>" if r.recipe.get("yield_source")
             else "<p><i>Seed yield estimate, unverified</i></p>") if r.yields else ""),
         "<p><b>Best way to cash out</b></p>" + exits_table(),
         f"<h3>Profit per craft: {calc.fmt_money(r.profit)} via {html.escape(r.exit)} (ROI {roi})</h3>",

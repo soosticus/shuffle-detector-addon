@@ -132,7 +132,9 @@ def main(argv=None):
                 print(f"    yield {l.qty:g} x {l.name} @ {calc.fmt_money(l.unit)} = {calc.fmt_money(l.total)}")
             if r.yields:
                 samples = r.recipe.get("yield_samples")
+                source = r.recipe.get("yield_source")
                 print(f"    yield source: {samples} observed disenchant(s)" if samples
+                      else f"    yield source: {source} disenchant table" if source
                       else "    yield source: seed estimate, unverified")
     return 0
 

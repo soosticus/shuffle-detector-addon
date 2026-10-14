@@ -9,6 +9,7 @@
 
 ShuffleDetector.lua
 Disenchant.lua
+Yields.lua
 Plan.lua
 ItemList.lua
 Scan.lua

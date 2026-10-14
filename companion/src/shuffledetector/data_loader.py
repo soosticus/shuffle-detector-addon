@@ -68,10 +68,15 @@ class Reference:
         final = {}
         for name, recipe in by_name.items():
             obs = yields_by_item.get(recipe.get("item"))
+            auctionator = scan.auctionator_yields.get(recipe.get("item"))
             if obs:
                 recipe = dict(recipe)
                 recipe["yields"] = obs["yields"]
                 recipe["yield_samples"] = obs["samples"]
+            elif auctionator:
+                recipe = dict(recipe)
+                recipe["yields"] = auctionator
+                recipe["yield_source"] = "Auctionator"
             final[name] = recipe
         out.recipes = list(final.values())
         for item_id, entry in derive_refined(out.recipes).items():
@@ -86,6 +91,7 @@ class ScanData:
     items: dict = field(default_factory=dict)        # item id -> {"name", "sell"} as recorded in game
     vendor: dict = field(default_factory=dict)       # item id -> copper to buy one from a vendor, as seen in game
     disenchants: list = field(default_factory=list)  # [{"item", "quality", "ilvl", "loot": [{"item","qty"}], "time"}, ...]
+    auctionator_yields: dict = field(default_factory=dict)  # item id -> [{"item", "avg"}, ...] from Auctionator's table
 
     @property
     def realms(self):
@@ -152,8 +158,15 @@ def load_scan_data(path):
                 for x in _as_list(d.get("loot")) if isinstance(x, dict) and x.get("item")]
         disenchants.append({"item": int(d["item"]), "quality": d.get("quality"), "ilvl": d.get("ilvl"),
                             "loot": loot, "time": d.get("time")})
+    auctionator_yields = {}
+    for item_id, e in (db.get("deyields") or {}).items():
+        loot = [{"item": int(x["item"]), "avg": float(x["avg"])}
+                for x in _as_list(e.get("yields") if isinstance(e, dict) else None)
+                if isinstance(x, dict) and x.get("item") and isinstance(x.get("avg"), (int, float))]
+        if loot:
+            auctionator_yields[int(item_id)] = loot
     return ScanData(scans=scans, characters=db.get("characters") or {}, items=items, vendor=vendor,
-                    disenchants=disenchants)
+                    disenchants=disenchants, auctionator_yields=auctionator_yields)
 
 
 def _as_list(value):

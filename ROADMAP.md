@@ -28,11 +28,11 @@ Done and confirmed in game: step 1 (the addon records known recipes with reagent
 - Local-install route (`--local-recipes`, `casc.py`, `db2.py`, `localdata.py`; reads reagents, products, trivial levels and craft times for about 2300 recipes from the user's own client, nothing downloaded or bundled). Next: a GUI toggle, a JSON cache of the result, Enchanting recipes (no product item), mapping recipes to the characters' professions, and checking its `makes` (always 1) against the addon's recorded value (addon data wins). Limits: the WDC5 reader skips encrypted sections and sparse tables, so `ItemSparse` (base `BuyPrice`) would need sparse support, and recipe skill requirements are not in the client.
 - wago.tools (client tables, would give skill requirements) is **paused**: its `robots.txt` disallows everything except the home page and it has no terms page, so do not fetch it. Only its author (Discord or GitHub `QartemisT`) can grant permission. Rechecked 2026-10-12, still disallowed.
 
-### Step 3: disenchant yields from observation (built, addon 0.6.6; not yet confirmed in game)
+### Step 3: disenchant yields (built; not yet confirmed in game)
 
-`Disenchant.lua` logs each disenchant (item, quality, item level, loot) to `AHSnapshotDB.disenchants`; the companion averages it per item (`data_loader.observed_yields`) and uses it in place of the seed `yields` once there are samples, showing the sample count. The client's `ItemDisenchantLoot` only maps items to loot ids, so observation is the only permitted source of rates.
+Two sources, no site involved. `Yields.lua` reads Auctionator's in-game disenchant table into `AHSnapshotDB.deyields` (expected count per result); `Disenchant.lua` logs each real disenchant to `AHSnapshotDB.disenchants`, and once an item has samples the companion's average of those wins (`data_loader.observed_yields`). Precedence: observed, then Auctionator, then the seed `yields`.
 
-To confirm: disenchant a few items in game (also check that `SpellTargetItem` fires for a disenchant driven by the shuffle button's `target-item` attribute), `/reload`, check `AHSnapshotDB.disenchants`, then rerun the companion against that file.
+To confirm: with Auctionator installed, `/shuffledetector yields` should report a count (if it says the table is unavailable, check `/shuffledetector log`: this client may not load Auctionator's Classic data, and the table layout is assumed from its source), `/reload`, check `AHSnapshotDB.deyields`, and see "Auctionator disenchant table" in the companion. Also disenchant a few items (check that `SpellTargetItem` fires for a disenchant driven by the shuffle button's `target-item` attribute) and check `AHSnapshotDB.disenchants`.
 
 ## Planned: faster and automatic reference data builds
 
