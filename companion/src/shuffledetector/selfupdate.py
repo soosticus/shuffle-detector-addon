@@ -255,10 +255,13 @@ def apply_update(new_root, root=None, platform=None):
     root = Path(root) if root else app_root(platform=platform)
     script = Path(tempfile.mkdtemp(prefix="sd-update-")) / ("update.cmd" if key == "windows" else "update.sh")
     script.write_text(build_helper_script(root, new_root, os.getpid(), platform), newline="")
+    # The helper must not run inside the app folder: a working directory there blocks renaming it (Explorer
+    # starts the app with its own folder as the working directory).
+    cwd = tempfile.gettempdir()
     if key == "windows":
-        subprocess.Popen(["cmd", "/c", str(script)], env=clean_environment(platform=platform), close_fds=True,
+        subprocess.Popen(["cmd", "/c", str(script)], cwd=cwd, env=clean_environment(platform=platform), close_fds=True,
                          creationflags=0x08000000 | 0x00000200)  # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
     else:
         script.chmod(script.stat().st_mode | stat.S_IXUSR)
-        subprocess.Popen(["/bin/sh", str(script)], env=clean_environment(platform=platform), close_fds=True,
+        subprocess.Popen(["/bin/sh", str(script)], cwd=cwd, env=clean_environment(platform=platform), close_fds=True,
                          start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

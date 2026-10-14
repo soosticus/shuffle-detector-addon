@@ -174,3 +174,14 @@ def test_posix_helper_swaps_and_relaunches(tmp_path):
         time.sleep(0.1)
     assert marker.exists() and exe.is_file() and not (root / "old.txt").exists()
     assert not (tmp_path / "ShuffleDetector-Companion.old").exists() and not script.exists()
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux"])
+def test_helper_does_not_start_inside_the_app_folder(tmp_path, monkeypatch, platform):
+    root = installed(tmp_path)
+    calls = []
+    monkeypatch.setattr(su.subprocess, "Popen", lambda *a, **k: calls.append(k))
+    monkeypatch.chdir(root)  # how Explorer launches the app
+    su.apply_update(tmp_path / "ShuffleDetector-Companion.new", root=root, platform=platform)
+    cwd = Path(calls[0]["cwd"]).resolve()
+    assert root.resolve() not in (cwd, *cwd.parents)
