@@ -115,6 +115,7 @@ def default_roots():
         home = Path.home()
         roots += [
             home / "Games" / "world-of-warcraft",
+            home / "Games" / "battlenet" / "drive_c" / "Program Files (x86)" / "World of Warcraft",
             home / ".wine" / "drive_c" / "Program Files (x86)" / "World of Warcraft",
         ]
     return roots

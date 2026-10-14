@@ -69,9 +69,13 @@ Click, cast and game-error diagnostics are not printed to chat; they go to a hid
 
 ## Releases
 
-Pushing a tag like `v0.3.0` runs `.github/workflows/release.yml`, which replaces the `@project-version@` placeholder in the addon `.toc` with the tag (without the leading `v`), stamps the same version into the app, then publishes a GitHub Release containing `ShuffleDetector-<version>.zip` (the addon) and `ShuffleDetector-Companion-<tag>-<os>` (PyInstaller builds of the GUI) for Windows, Linux and macOS. A manual run of the workflow stamps `dev-<sha>` instead. `ci.yml` runs the tests on every push and PR.
+Pushing a tag like `v0.3.0` runs `.github/workflows/release.yml`, which replaces the `@project-version@` placeholder in the addon `.toc` with the tag (without the leading `v`), stamps the same version into the app, then publishes a GitHub Release containing `ShuffleDetector-<version>.zip` (the addon) and `ShuffleDetector-Companion-<tag>-<os>` (PyInstaller builds of the GUI) for Windows and macOS, and `ShuffleDetector-Companion-<tag>-linux.flatpak` for Linux. A manual run of the workflow stamps `dev-<sha>` instead. `ci.yml` runs the tests on every push and PR.
 
 When not run from the source tree, the GUI's Addon > "Check for updates..." looks at the latest release: it installs a newer addon automatically and offers to update the companion. The packaged app also checks in the background at startup (Addon > "Check for companion updates at startup", on by default) and, when a newer release exists, asks whether to download it. If you say yes it downloads the build for your OS from the release (checking GitHub's SHA-256 digest when one is published), unpacks it next to the installed copy, closes, swaps the folders and starts the new version; the old copy is deleted afterwards. If the app folder is not writable (for example under Program Files) or the release has no build for your OS, it shows the release link instead. Saying no asks again on the next start. Release notes are bundled with the app: after an update it shows what is new, and Help > Release notes brings them up again. Set `SHUFFLEDETECTOR_REPO=owner/repo` if the repository is not `soosticus/ShuffleDetector`.
+
+### Linux (Flatpak)
+
+Install the bundle with `flatpak install --user ShuffleDetector-Companion-<tag>-linux.flatpak` (the KDE runtime is fetched from Flathub) and start "ShuffleDetector Companion" from your menu or with `flatpak run io.github.soosticus.ShuffleDetector`. The sandbox can see your home folder, `/mnt` and `/media`; if WoW lives elsewhere, grant it with `flatpak override --user --filesystem=/path io.github.soosticus.ShuffleDetector`. A Flatpak cannot replace itself, so the app only tells you when a new release exists: download the new `.flatpak` and install it the same way. The addon update from Addon > "Check for updates..." still works.
 
 ### Windows SmartScreen warning
 

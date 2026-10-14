@@ -94,24 +94,35 @@ jobs:
             --add-data "addon/ShuffleDetector${{ matrix.sep }}shuffledetector/_addon/ShuffleDetector" \
             --add-data "common/data${{ matrix.sep }}shuffledetector/_data" \
             --add-data "release-notes${{ matrix.sep }}shuffledetector/_release_notes"
+      - name: Build Flatpak
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME:-dev}"
+          APP_ID=io.github.soosticus.ShuffleDetector
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --user --force-clean --disable-rofiles-fuse --install-deps-from=flathub \
+            --repo=flatpak-repo flatpak-build companion/packaging/flatpak/$APP_ID.yml
+          flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            flatpak-repo "dist/ShuffleDetector-Companion-${TAG}-linux.flatpak" $APP_ID
       - name: Package
+        if: matrix.platform != 'linux'
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME:-dev}"
           cd dist
           if [ "${{ matrix.platform }}" = "windows" ]; then
             7z a "ShuffleDetector-Companion-${TAG}-windows.zip" ShuffleDetector-Companion
-          elif [ "${{ matrix.platform }}" = "macos" ]; then
-            zip -r "ShuffleDetector-Companion-${TAG}-macos.zip" ShuffleDetector-Companion.app
           else
-            tar czf "ShuffleDetector-Companion-${TAG}-linux.tar.gz" ShuffleDetector-Companion
+            zip -r "ShuffleDetector-Companion-${TAG}-macos.zip" ShuffleDetector-Companion.app
           fi
       - uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.platform }}
           path: |
             dist/*.zip
-            dist/*.tar.gz
+            dist/*.flatpak
 
   release:
     needs: [addon, app]

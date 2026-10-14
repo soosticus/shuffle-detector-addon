@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=ShuffleDetector Companion
+Comment=Rank WoW Classic crafting shuffles from Auctionator prices
+Exec=ShuffleDetector-Companion
+Categories=Game;Utility;
+Terminal=false
