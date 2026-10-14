@@ -184,6 +184,14 @@ class MainWindow(QMainWindow):
 
         self.client = QComboBox()
         self.addon_label = QLabel()
+        self.auctionator_warning = QLabel(
+            f'<b>Auctionator is required.</b> ShuffleDetector reads its prices from Auctionator, which is not installed '
+            f'for this client. Get it from <a href="{addon_manager.AUCTIONATOR_URL}">CurseForge</a> '
+            f'(or your addon manager), then scan the auction house and /reload.')
+        self.auctionator_warning.setOpenExternalLinks(True)
+        self.auctionator_warning.setWordWrap(True)
+        self.auctionator_warning.setStyleSheet("background: #fff3cd; color: #664d03; padding: 6px; border: 1px solid #e0c36a;")
+        self.auctionator_warning.hide()
         self.client.currentIndexChanged.connect(self.update_addon_label)
         self.realm = QComboBox()
         self.character = QComboBox()
@@ -309,6 +317,7 @@ class MainWindow(QMainWindow):
         central = QWidget()
         lay = QVBoxLayout(central)
         lay.addLayout(controls, 0)
+        lay.addWidget(self.auctionator_warning)
         lay.addWidget(split, 1)
         self.setCentralWidget(central)
         self.statusBar().showMessage("Open the addon's SavedVariables file to begin.")
@@ -357,6 +366,7 @@ class MainWindow(QMainWindow):
     def update_addon_label(self):
         inst = self.client.currentData()
         self.install_act.setEnabled(inst is not None)
+        self.auctionator_warning.setVisible(inst is not None and not inst.auctionator_installed)
         if inst is None:
             self.addon_label.setText("Addon: no WoW install found")
             return

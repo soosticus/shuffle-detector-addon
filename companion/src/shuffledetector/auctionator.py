@@ -125,7 +125,7 @@ def load_prices(path):
     """
     path = Path(path)
     if not path.is_file():
-        return {}, f"Auctionator's saved data was not found next to ShuffleDetector's ({path.name}). Is Auctionator installed?"
+        return {}, f"Auctionator's saved data was not found next to ShuffleDetector's ({path.name}). Is Auctionator installed? Get it from https://www.curseforge.com/wow/addons/auctionator"
     try:
         db = luaparse.parse(path.read_text(encoding="latin-1")).get(VARIABLE)
     except luaparse.LuaParseError as err:

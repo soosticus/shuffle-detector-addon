@@ -47,6 +47,15 @@ def test_discovery_root_flavor_and_addons_dir(wow):
     assert len(am.discover_installs([wow, wow])) == 2  # deduplicated
 
 
+def test_auctionator_installed_detection(wow):
+    inst = am.installs_in(wow / "_classic_")[0]
+    assert not inst.auctionator_installed
+    (inst.addons_dir / am.AUCTIONATOR_NAME).mkdir()
+    assert not inst.auctionator_installed  # a folder without its toc is not an addon
+    (inst.addons_dir / am.AUCTIONATOR_NAME / f"{am.AUCTIONATOR_NAME}.toc").write_text("## Title: Auctionator\n")
+    assert inst.auctionator_installed
+
+
 def test_install_then_update_preserves_nothing_stale(wow):
     inst = am.installs_in(wow / "_classic_")[0]
     assert am.status(inst) == "not_installed"

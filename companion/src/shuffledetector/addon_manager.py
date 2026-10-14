@@ -64,6 +64,10 @@ def toc_version(addon_dir):
     return None
 
 
+AUCTIONATOR_NAME = "Auctionator"
+AUCTIONATOR_URL = "https://www.curseforge.com/wow/addons/auctionator"
+
+
 @dataclass
 class Install:
     """One game client flavor, e.g. <root>/_classic_."""
@@ -85,6 +89,10 @@ class Install:
     @property
     def installed_version(self):
         return toc_version(self.addon_dir) if self.addon_dir.is_dir() else None
+
+    @property
+    def auctionator_installed(self):
+        return (self.addons_dir / AUCTIONATOR_NAME / f"{AUCTIONATOR_NAME}.toc").is_file()
 
     def __str__(self):
         return f"{self.flavor} ({self.addons_dir})"
