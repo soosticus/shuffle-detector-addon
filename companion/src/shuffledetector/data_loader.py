@@ -66,6 +66,9 @@ class Reference:
         yields_by_item = observed_yields(scan.disenchants)
         final = {}
         for name, recipe in by_name.items():
+            if recipe.get("item") and recipe.get("profession") in NO_DISENCHANT_PROFESSIONS:
+                final[name] = dict(recipe, yields=[])
+                continue
             obs = yields_by_item.get(recipe.get("item"))
             auctionator = scan.auctionator_yields.get(recipe.get("item"))
             if obs:
@@ -81,6 +84,11 @@ class Reference:
         for item_id, entry in derive_refined(out.recipes).items():
             out.refined.setdefault(item_id, entry)
         return out
+
+
+# Items an Enchanter crafts (wands, rods) cannot be disenchanted, although Auctionator's table has rows for their
+# class, quality and item level; the recipes of these professions get no Disenchant exit.
+NO_DISENCHANT_PROFESSIONS = {"Enchanting"}
 
 
 @dataclass

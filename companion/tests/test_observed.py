@@ -220,6 +220,24 @@ def test_auctionator_yields_replace_seed_but_observed_samples_win(tmp_path):
     assert by_item[7057]["yield_samples"] == 1 and "yield_source" not in by_item[7057]
 
 
+def test_enchanter_crafted_items_have_no_disenchant_yields(tmp_path):
+    flavor = tmp_path / "_classic_beta_"
+    sv = flavor / "WTF" / "Account" / "1#1" / "SavedVariables" / "ShuffleDetector.lua"
+    table = flavor / deyields.TABLE_FILE
+    sv.parent.mkdir(parents=True)
+    table.parent.mkdir(parents=True)
+    sv.write_text(SD_LUA)
+    table.write_text(AUCTIONATOR_TABLE)
+    seeds = [{"name": "wand", "item": 7054, "profession": "Enchanting", "skill": 40, "yields": [{"item": 1, "avg": 1.0}],
+              "reagents": [{"item": 9, "qty": 9}]},
+             {"name": "robe", "item": 7055, "profession": "Tailoring", "skill": 40, "yields": [],
+              "reagents": [{"item": 9, "qty": 9}]}]
+    ref = Reference(recipes=seeds).with_observed(data_loader.load_scan_data(str(sv)))
+    by_item = {r["item"]: r for r in ref.recipes}
+    assert by_item[7054]["yields"] == [] and "yield_source" not in by_item[7054]
+    assert by_item[7055]["yield_source"] == "Auctionator"
+
+
 def test_no_auctionator_table_means_no_auctionator_yields(tmp_path):
     p = tmp_path / "ShuffleDetector.lua"
     p.write_text(SD_LUA)
