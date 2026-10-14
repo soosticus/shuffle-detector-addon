@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import addon_manager, luaparse
+from . import addon_manager, deyields, luaparse
 
 SAVED_VARIABLES_NAME = "AHSnapshotDB"
 UNLIMITED_QTY = 10**9
@@ -158,13 +158,13 @@ def load_scan_data(path):
                 for x in _as_list(d.get("loot")) if isinstance(x, dict) and x.get("item")]
         disenchants.append({"item": int(d["item"]), "quality": d.get("quality"), "ilvl": d.get("ilvl"),
                             "loot": loot, "time": d.get("time")})
+    table = deyields.load_table(path)
     auctionator_yields = {}
-    for item_id, e in (db.get("deyields") or {}).items():
-        loot = [{"item": int(x["item"]), "avg": float(x["avg"])}
-                for x in _as_list(e.get("yields") if isinstance(e, dict) else None)
-                if isinstance(x, dict) and x.get("item") and isinstance(x.get("avg"), (int, float))]
-        if loot:
-            auctionator_yields[int(item_id)] = loot
+    for item_id, e in (db.get("items") or {}).items():
+        if table and isinstance(e, dict) and all(isinstance(e.get(k), (int, float)) for k in ("class", "quality", "ilvl")):
+            loot = deyields.expected_yields(table, int(e["class"]), int(e["quality"]), e["ilvl"])
+            if loot:
+                auctionator_yields[int(item_id)] = loot
     return ScanData(scans=scans, characters=db.get("characters") or {}, items=items, vendor=vendor,
                     disenchants=disenchants, auctionator_yields=auctionator_yields)
 

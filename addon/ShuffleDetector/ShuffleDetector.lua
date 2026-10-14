@@ -60,22 +60,35 @@ local awaiting = {}
 
 local function recordItem(id)
     if not id then return end
-    local name, sell, _
+    local name, quality, ilvl, sell, class, _
     if C_Item and C_Item.GetItemInfo then
-        name, _, _, _, _, _, _, _, _, _, sell = C_Item.GetItemInfo(id)
+        name, _, quality, ilvl, _, _, _, _, _, _, sell, class = C_Item.GetItemInfo(id)
     elseif GetItemInfo then
-        name, _, _, _, _, _, _, _, _, _, sell = GetItemInfo(id)
+        name, _, quality, ilvl, _, _, _, _, _, _, sell, class = GetItemInfo(id)
     end
     if name then
         awaiting[id] = nil
         AHSnapshotDB.items = AHSnapshotDB.items or {}
-        AHSnapshotDB.items[id] = { name = name, sell = sell or 0 }
+        -- class, quality and ilvl let the companion look up disenchant yields (companion/deyields.py)
+        AHSnapshotDB.items[id] = { name = name, sell = sell or 0, class = class, quality = quality, ilvl = ilvl }
     elseif not awaiting[id] then
         awaiting[id] = true
         if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, id) end
     end
 end
 ns.RecordItem = recordItem
+
+-- Entries recorded by older versions have no class/quality/ilvl; record them again (the game has them cached).
+function ns.RefreshItemDetails(quiet)
+    local n = 0
+    for id, e in pairs(AHSnapshotDB.items or {}) do
+        if type(e) == "table" and e.class == nil then
+            recordItem(id)
+            n = n + 1
+        end
+    end
+    if not quiet then say(("refreshed class and item level for %d recorded items"):format(n)) end
+end
 
 -- Ask the game for every item in ns.wantedItems (ItemList.lua, written by the companion) that is not recorded
 -- yet. Requests go out in small batches; answers arrive on GET_ITEM_INFO_RECEIVED and are recorded by recordItem.
@@ -363,7 +376,7 @@ frame:SetScript("OnEvent", function(_, event, itemId)
         snapshotSkills()
         if event == "PLAYER_LOGIN" then
             C_Timer.After(5, function() ns.LoadWantedItems(true) end)
-            C_Timer.After(25, function() if ns.RecordYields then pcall(ns.RecordYields, true) end end)
+            C_Timer.After(25, function() ns.RefreshItemDetails(true) end)
         end
     end
 end)
@@ -433,9 +446,9 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
     elseif msg == "items" then
         ns.LoadWantedItems()
     elseif msg == "yields" then
-        ns.RecordYields()
+        ns.RefreshItemDetails()
     else
-        say("usage: /shuffledetector scan | import | items (request recipe item names and prices) | yields (read disenchant yields from Auctionator) | shuffle (show/hide the step tracker) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
+        say("usage: /shuffledetector scan | import | items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | shuffle (show/hide the step tracker) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
     end
 end
 

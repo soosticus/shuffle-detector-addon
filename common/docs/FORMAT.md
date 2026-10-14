@@ -27,14 +27,12 @@ AHSnapshotDB = {
       } } },
     },
   },
-  items = { [itemID] = { name = "Linen Cloth", sell = <vendor sell price, copper> } },  -- from GetItemInfo
+  items = { [itemID] = { name = "Linen Cloth", sell = <vendor sell price, copper>,
+                         class = <item class id>, quality = <rarity id>, ilvl = <base item level> } },  -- from GetItemInfo
   vendor = { [itemID] = <copper to buy one from a vendor> },  -- from the merchant window, gold-only items
   disenchants = {   -- one entry per successful Disenchant cast, oldest first, capped at 500
     { item = <id disenchanted>, quality = <item quality>, ilvl = <item level>,
       loot = { { item = <id>, qty = <n> }, ... }, time = <unix> },
-  },
-  deyields = {   -- expected disenchant results from Auctionator's in-game table, by disenchanted item id
-    [itemID] = { quality = <item quality>, ilvl = <item level>, yields = { { item = <id>, avg = <expected count> }, ... } },
   },
 }
 ```
@@ -61,13 +59,16 @@ companion averages the loot per disenchant by the disenchanted item id (`data_lo
 and, once any samples exist, uses that average and the sample count (`recipe["yield_samples"]`) in place
 of a recipe's bundled `yields` for its crafted item.
 
-`deyields` is computed by `Yields.lua` (at login after a delay, and by `/shuffledetector yields`) from
-the Auctionator addon's own disenchant table (`Auctionator.Constants.DisenchantingProbability`, keyed by
-item class and quality, with item level ranges): for every recorded armor or weapon item the expected
-count of each result is the sum of `chance * count`. Nothing is downloaded and no site is involved; it
-needs Auctionator installed and loaded, and is left out (with a line in the hidden log) otherwise. The
-companion (`ScanData.auctionator_yields`) uses it in place of the bundled `yields` and marks the recipe
-`yield_source = "Auctionator"`. Precedence: observed disenchants, then Auctionator, then the bundled seed.
+`class`, `quality` and `ilvl` in `items` let the companion look up disenchant yields without any web data:
+Auctionator ships a table of disenchant results (`Auctionator/Source_Classic/Enchant/DisenchantingProbabilities.lua`,
+entries `{lowIlvl, highIlvl, pct, count, itemID, pct, count, itemID, ...}` per item class and quality) but the
+game only loads it for the "classic" game type, not this client, so `deyields.py` reads that file from the
+AddOns folder next to the SavedVariables (`<flavor>/WTF/Account/<acct>/SavedVariables/..` to
+`<flavor>/Interface/AddOns/Auctionator/..`). The expected count of each result is the sum of `pct/100*count`
+over the entry matching the item's level. The companion uses it (`ScanData.auctionator_yields`) in place of
+the bundled `yields` and marks the recipe `yield_source = "Auctionator"`. Precedence: observed disenchants,
+then Auctionator, then the bundled seed. Entries recorded by older versions get these fields after
+`/shuffledetector yields` (or the next login) and a `/reload`.
 
 `prices` holds the cheapest 40 listings sorted ascending, used to cost bulk purchases.
 Shallow scans (imported from Auctionator) carry one `{min, 1}` entry per item; the companion

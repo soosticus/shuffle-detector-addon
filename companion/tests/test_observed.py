@@ -1,6 +1,8 @@
 """Tests for data the addon records in game (recipes with reagents, item names and sell prices)."""
 
-from shuffledetector import calc, data_loader
+import pytest
+
+from shuffledetector import calc, data_loader, deyields
 from shuffledetector.data_loader import Reference
 
 LUA = """
@@ -154,29 +156,71 @@ def test_with_observed_keeps_seed_yields_when_no_disenchants_recorded(tmp_path):
     assert robe["yields"] == [{"item": 1, "avg": 1.0}]
 
 
-AUCTIONATOR_LUA = """
+AUCTIONATOR_TABLE = """
+Auctionator.Constants.DisenchantingProbability = {
+  [ Enum.ItemClass.Armor ] = {
+    [ Enum.ItemQuality.Good ] = {
+      -- { 5, 15, 80, { 1, 2 }, MATS.STRANGE_DUST },
+      {5,15,80,1,10940,20,2,10940,10,1,10938},
+      {16,20,37.5,2,10940,10,1,10939},
+    },
+  },
+  [ Enum.ItemClass.Weapon ] = {
+    [ Enum.ItemQuality.Rare ] = {
+      {1,99,100,1,10978},
+    },
+  },
+}
+"""
+
+SD_LUA = """
 AHSnapshotDB = {
-  deyields = {
-    [7054] = { quality = 2, ilvl = 18, yields = { { item = 10938, avg = 0.8 }, { item = 10940, avg = 0.4 } } },
-    [7055] = { quality = 2, ilvl = 18, yields = {} },
+  items = {
+    [7054] = { name = "Robe", sell = 0, class = 4, quality = 2, ilvl = 12 },
+    [7055] = { name = "Cloak", sell = 0, class = 4, quality = 2, ilvl = 18 },
+    [7056] = { name = "Old entry", sell = 0 },
   },
   disenchants = {
-    { item = 7056, quality = 2, ilvl = 20, loot = { { item = 10938, qty = 2 } }, time = 1 },
+    { item = 7057, quality = 2, ilvl = 20, loot = { { item = 10938, qty = 2 } }, time = 1 },
   },
 }
 """
 
 
+def avgs(yields):
+    return {y["item"]: pytest.approx(y["avg"]) for y in yields}
+
+
+def test_parse_auctionator_table_and_expected_yields():
+    table = deyields.parse_table(AUCTIONATOR_TABLE)
+    assert sorted(table) == [(2, 3), (4, 2)]
+    assert len(table[(4, 2)]) == 2  # the commented-out line is ignored
+    assert avgs(deyields.expected_yields(table, 4, 2, 12)) == {10938: 0.1, 10940: 1.2}
+    assert avgs(deyields.expected_yields(table, 4, 2, 18)) == {10939: 0.1, 10940: 0.75}
+    assert deyields.expected_yields(table, 4, 2, 50) is None and deyields.expected_yields(table, 4, 3, 12) is None
+
+
 def test_auctionator_yields_replace_seed_but_observed_samples_win(tmp_path):
-    p = tmp_path / "ShuffleDetector.lua"
-    p.write_text(AUCTIONATOR_LUA)
-    scan = data_loader.load_scan_data(str(p))
-    assert scan.auctionator_yields == {7054: [{"item": 10938, "avg": 0.8}, {"item": 10940, "avg": 0.4}]}
+    flavor = tmp_path / "_classic_beta_"
+    sv = flavor / "WTF" / "Account" / "1#1" / "SavedVariables" / "ShuffleDetector.lua"
+    table = flavor / deyields.TABLE_FILE
+    sv.parent.mkdir(parents=True)
+    table.parent.mkdir(parents=True)
+    sv.write_text(SD_LUA)
+    table.write_text(AUCTIONATOR_TABLE)
+    scan = data_loader.load_scan_data(str(sv))
+    assert sorted(scan.auctionator_yields) == [7054, 7055]
     seeds = [{"name": f"robe {i}", "item": i, "skill": 40, "yields": [{"item": 1, "avg": 1.0}],
-              "reagents": [{"item": 9, "qty": 9}]} for i in (7054, 7055, 7056)]
+              "reagents": [{"item": 9, "qty": 9}]} for i in (7054, 7056, 7057)]
     ref = Reference(recipes=seeds).with_observed(scan)
     by_item = {r["item"]: r for r in ref.recipes}
-    assert by_item[7054]["yields"] == [{"item": 10938, "avg": 0.8}, {"item": 10940, "avg": 0.4}]
+    assert avgs(by_item[7054]["yields"]) == {10938: 0.1, 10940: 1.2}
     assert by_item[7054]["yield_source"] == "Auctionator" and "yield_samples" not in by_item[7054]
-    assert by_item[7055]["yields"] == [{"item": 1, "avg": 1.0}] and "yield_source" not in by_item[7055]
-    assert by_item[7056]["yield_samples"] == 1 and "yield_source" not in by_item[7056]
+    assert by_item[7056]["yields"] == [{"item": 1, "avg": 1.0}] and "yield_source" not in by_item[7056]
+    assert by_item[7057]["yield_samples"] == 1 and "yield_source" not in by_item[7057]
+
+
+def test_no_auctionator_table_means_no_auctionator_yields(tmp_path):
+    p = tmp_path / "ShuffleDetector.lua"
+    p.write_text(SD_LUA)
+    assert data_loader.load_scan_data(str(p)).auctionator_yields == {}

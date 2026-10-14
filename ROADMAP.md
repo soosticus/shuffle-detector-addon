@@ -30,9 +30,9 @@ Done and confirmed in game: step 1 (the addon records known recipes with reagent
 
 ### Step 3: disenchant yields (built; not yet confirmed in game)
 
-Two sources, no site involved. `Yields.lua` reads Auctionator's in-game disenchant table into `AHSnapshotDB.deyields` (expected count per result); `Disenchant.lua` logs each real disenchant to `AHSnapshotDB.disenchants`, and once an item has samples the companion's average of those wins (`data_loader.observed_yields`). Precedence: observed, then Auctionator, then the seed `yields`.
+Two sources, no site involved. The companion reads Auctionator's disenchant table from the installed addon's files (`deyields.py`; the game does not load it on this client, so it cannot be read in game) and the addon records each item's class, quality and item level in `AHSnapshotDB.items`. `Disenchant.lua` logs each real disenchant to `AHSnapshotDB.disenchants`, and once an item has samples the companion's average of those wins (`data_loader.observed_yields`). Precedence: observed, then Auctionator, then the seed `yields`.
 
-To confirm: with Auctionator installed, `/shuffledetector yields` should report a count (if it says the table is unavailable, check `/shuffledetector log`: this client may not load Auctionator's Classic data, and the table layout is assumed from its source), `/reload`, check `AHSnapshotDB.deyields`, and see "Auctionator disenchant table" in the companion. Also disenchant a few items (check that `SpellTargetItem` fires for a disenchant driven by the shuffle button's `target-item` attribute) and check `AHSnapshotDB.disenchants`.
+To confirm: `/shuffledetector yields`, `/reload`, check that items in `AHSnapshotDB.items` have `class`/`quality`/`ilvl` and that the companion shows "Auctionator disenchant table" for crafted armor. Also disenchant a few items (check that `SpellTargetItem` fires for a disenchant driven by the shuffle button's `target-item` attribute) and check `AHSnapshotDB.disenchants`.
 
 ## Planned: faster and automatic reference data builds
 
