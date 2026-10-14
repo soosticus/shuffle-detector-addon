@@ -1,6 +1,6 @@
 # Roadmap
 
-Open items only; finished work is removed. Release notes are generated from commit history by the release workflow.
+Open items only; finished work is removed. Release notes are hand-written in `release-notes/<tag>.md` (see CLAUDE.md).
 
 ## Open items
 

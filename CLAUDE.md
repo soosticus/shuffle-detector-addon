@@ -24,7 +24,8 @@ What the addon records (details in FORMAT.md; prices are not recorded, see below
 - Commit after finishing work: `git add` specific files, message passed through a HEREDOC, committed with `--signoff` and no Co-Authored-By or other attribution trailers (the global instructions forbid them). Never push, amend or force-push unless asked. Run `git status` before anything that could discard work.
 - Work autonomously; ask only when genuinely blocked.
 - Never use the user's real name in anything for WoW addon development (toc Author, LICENSE, commits, docs); use only the alias "soosticus".
-- Keep docs and ROADMAP.md current. Finished items are removed from the roadmap; release notes come from commit history.
+- Keep docs and ROADMAP.md current. Finished items are removed from the roadmap.
+- Releases: before tagging, write brief, user-facing patch notes in `release-notes/vX.Y.Z.md` (what changed for someone using the addon and companion, what they must do, caveats; no commit log, no internals), commit it, then push `main` and the tag. `release.yml` publishes that file as the release body and only falls back to GitHub's generated commit list if it is missing. Never push or tag without being asked.
 
 ## Environment quirks (Windows, Git Bash)
 
