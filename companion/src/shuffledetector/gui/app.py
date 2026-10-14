@@ -3,17 +3,19 @@
 import html
 import json
 import os
+import shutil
 import sys
+import threading
 
-from PySide6.QtCore import QSettings, Qt, QTimer
+from PySide6.QtCore import QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QMainWindow, QMessageBox, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
+    QMainWindow, QMessageBox, QProgressDialog, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
     QTextBrowser, QVBoxLayout, QWidget, QAbstractItemView, QHeaderView,
 )
 
-from .. import addon_manager, calc, calculator, data_loader, plan, updater
+from .. import __version__, addon_manager, calc, calculator, data_loader, plan, selfupdate, updater
 
 STATUS_TEXT = {"known": "Known", "learnable": "Learnable", "needs_skill": "Needs skill", "unknown": "?"}
 ADDON_STATUS_TEXT = {
@@ -129,6 +131,11 @@ def _batch_html(b):
 
 
 class MainWindow(QMainWindow):
+    release_found = Signal(object)
+    download_progress = Signal(int, int)
+    update_staged = Signal(object)
+    update_failed = Signal(str)
+
     def __init__(self, path=None, settings=None):
         super().__init__()
         self.setWindowTitle("ShuffleDetector")
@@ -160,6 +167,18 @@ class MainWindow(QMainWindow):
         self.auto_update.setChecked(self.settings.value("auto_update", True, type=bool))
         self.auto_update.toggled.connect(lambda v: self.settings.setValue("auto_update", v))
         addon_menu.addAction(self.auto_update)
+        self.auto_check_app = QAction("Check for companion updates at startup", self, checkable=True)
+        self.auto_check_app.setChecked(self.settings.value("auto_check_app", True, type=bool))
+        self.auto_check_app.toggled.connect(lambda v: self.settings.setValue("auto_check_app", v))
+        if not updater.from_source_tree():
+            addon_menu.addAction(self.auto_check_app)
+        self.declined_tag = None
+        self.update_cancel = threading.Event()
+        self.update_dialog = None
+        self.release_found.connect(self.on_release_found)
+        self.download_progress.connect(self.on_download_progress)
+        self.update_staged.connect(self.on_update_staged)
+        self.update_failed.connect(self.on_update_failed)
 
         self.client = QComboBox()
         self.addon_label = QLabel()
@@ -299,6 +318,8 @@ class MainWindow(QMainWindow):
 
         self.populate_clients()
         self.auto_update_addon()
+        if not updater.from_source_tree() and self.auto_check_app.isChecked():
+            self.check_release_async()
         path = path or next(iter(data_loader.candidate_saved_variables(self.wow_roots())), None)
         if path:
             self.load(str(path))
@@ -390,17 +411,107 @@ class MainWindow(QMainWindow):
         except Exception as e:  # network or GitHub errors
             QMessageBox.warning(self, "Check for updates", f"Could not check for updates:\n{e}")
             return
+        app_new = updater.app_update_available(rel)
         lines = []
-        if updater.app_update_available(rel):
+        if app_new and not selfupdate.can_self_update():
             lines.append(f"A new companion version ({rel['tag']}) is available:\n{rel['url']}")
         if addon_v:
             lines.append(f"Addon {addon_v} downloaded. It will be installed to WoW now.")
-        if not lines:
+        if not lines and not app_new:
             lines.append(f"You are up to date (latest release {rel['tag']}).")
-        QMessageBox.information(self, "Check for updates", "\n\n".join(lines))
+        if lines:
+            QMessageBox.information(self, "Check for updates", "\n\n".join(lines))
         if addon_v:
             self.update_addon_label()
             self.install_selected(True)
+        if app_new and selfupdate.can_self_update():
+            self.offer_app_update(rel)
+
+    def check_release_async(self):
+        def work():
+            try:
+                rel = updater.latest_release()
+            except Exception:  # offline or rate limited: stay quiet at startup
+                return
+            self.release_found.emit(rel)
+        threading.Thread(target=work, daemon=True).start()
+
+    def on_release_found(self, rel):
+        if updater.app_update_available(rel) and rel["tag"] != self.declined_tag:
+            self.offer_app_update(rel)
+
+    def offer_app_update(self, rel):
+        name, _ = selfupdate.companion_asset(rel)
+        if not selfupdate.can_self_update() or not name:
+            QMessageBox.information(self, "Companion update", f"A new companion version ({rel['tag']}) is available:\n{rel['url']}")
+            return
+        answer = QMessageBox.question(
+            self, "Companion update",
+            f"Companion {rel['tag']} is available (you have {__version__}).\n\n"
+            "Download it and replace this copy now? The app will close and start again on the new version.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if answer != QMessageBox.Yes:
+            self.declined_tag = rel["tag"]
+            return
+        self.update_cancel.clear()
+        dlg = QProgressDialog(f"Downloading {name}...", "Cancel", 0, 0, self)
+        dlg.setWindowTitle("Companion update")
+        dlg.setWindowModality(Qt.WindowModal)
+        dlg.setAutoClose(False)
+        dlg.setAutoReset(False)
+        dlg.setMinimumDuration(0)
+        dlg.canceled.connect(self.update_cancel.set)
+        dlg.show()
+        self.update_dialog = dlg
+
+        def progress(done, total):
+            if self.update_cancel.is_set():
+                raise selfupdate.UpdateError("Cancelled.")
+            self.download_progress.emit(done, total)
+
+        def work():
+            try:
+                new_root = selfupdate.stage_update(rel, progress)
+            except Exception as e:
+                self.update_failed.emit(str(e))
+                return
+            self.update_staged.emit(new_root)
+        threading.Thread(target=work, daemon=True).start()
+
+    def on_download_progress(self, done, total):
+        dlg = self.update_dialog
+        if dlg is None:
+            return
+        if total and done >= total:
+            dlg.setLabelText("Unpacking...")
+            dlg.setMaximum(0)
+        elif total:
+            dlg.setMaximum(total)
+            dlg.setValue(done)
+
+    def close_update_dialog(self):
+        if self.update_dialog is not None:
+            self.update_dialog.close()
+            self.update_dialog = None
+
+    def on_update_failed(self, message):
+        self.close_update_dialog()
+        if not self.update_cancel.is_set():
+            QMessageBox.warning(self, "Companion update failed", f"{message}\n\nThe current version is unchanged.")
+
+    def on_update_staged(self, new_root):
+        self.close_update_dialog()
+        if self.update_cancel.is_set():
+            shutil.rmtree(new_root, ignore_errors=True)
+            return
+        try:
+            selfupdate.apply_update(new_root)
+        except Exception as e:
+            shutil.rmtree(new_root, ignore_errors=True)
+            QMessageBox.warning(self, "Companion update failed", f"{e}\n\nThe current version is unchanged.")
+            return
+        self.close()
+        QApplication.quit()
 
     def choose_wow_folder(self):
         d = QFileDialog.getExistingDirectory(self, "Select the World of Warcraft folder")

@@ -48,6 +48,8 @@ What the addon records (details in FORMAT.md): AH scans; per character and profe
 - Built but not yet confirmed in game (0.7.2): the Vendor sell step in `Shuffle.lua`. With a merchant window open and crafted pieces in the bags, the button calls `UseContainerItem` on one stack per press (`btn.sellSlot`, set in `apply`, used in `PostClick`); without a merchant it shows "Open a vendor window to sell N". Before this, only craft and disenchant had actions, so non-Disenchant exits stuck at crafting. AH exits only prompt.
 - Other open items are in ROADMAP.md (vendor faction restrictions, fast-press gating check, calculator price impact, more professions, faster builds, CurseForge release, checking that the `v0.2.4a` tag push did not start a release run). Local main is ahead of origin; none of this work is pushed. The backup bundle `C:\Users\soost\ShuffleDetector-backup.bundle` can be deleted.
 
+- Companion self-update (`selfupdate.py`, used by `gui/app.py`): packaged builds check GitHub at startup, ask, download the OS asset, unpack to `<app>.new` and run a detached swap script (cmd on Windows, sh elsewhere) that waits for the process, swaps folders and relaunches. Source checkouts never self-update. Covered by `tests/test_selfupdate.py`; not yet tried against a real release (see ROADMAP).
+
 ## Suggested next steps
 
 1. Ask the user to confirm step 3 in game (disenchant a few items, `/reload`, check `AHSnapshotDB.disenchants` and that the companion shows observed yields with a sample count).

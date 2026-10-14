@@ -8,6 +8,7 @@ Open items only; finished work is removed. Release notes are generated from comm
 - Confirm in game that the fast-press gating no longer repeats a craft or disenchant step.
 - Shuffle follow-ups: take the craft count or budget from the calculator, and Confirm in game that the Vendor sell step (addon 0.7.2) works. AH listing is out of scope (Auctionator and similar addons do it); AH exits only prompt.
 - Calculator follow-ups: model price impact when buying or selling large quantities (walk the sell side of the order book), and offer a "number of disenchants" target. Use the observed disenchant results (data plan step 3) for the range instead of Poisson once there are enough samples.
+- Try the companion self-update (`selfupdate.py`) against a real release: Windows swap script is verified locally, macOS (`ditto`, `open`) and Linux are untested, and it needs a published release newer than the installed build.
 - Check that pushing the re-pointed `v0.2.4a` tag after the history rewrite did not start an unwanted release run (`release.yml` triggers on `v*` tags).
 
 ## Planned: a permitted source for recipe, price and yield data

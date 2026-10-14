@@ -33,12 +33,13 @@ def _get(url, timeout=10):
 
 
 def latest_release():
-    """Latest published release as a dict {tag, url, assets: {name: download_url}}."""
+    """Latest published release as a dict {tag, url, assets: {name: download_url}, digests: {name: "sha256:..."}}."""
     data = json.loads(_get(f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"))
     return {
         "tag": data["tag_name"],
         "url": data["html_url"],
         "assets": {a["name"]: a["browser_download_url"] for a in data.get("assets", [])},
+        "digests": {a["name"]: a["digest"] for a in data.get("assets", []) if a.get("digest")},
     }
 
 
