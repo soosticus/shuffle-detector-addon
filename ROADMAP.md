@@ -10,7 +10,7 @@ Open items only; finished work is removed. Release notes are hand-written in `re
 - Confirm in game that the Vendor sell step (addon 0.7.2) works. AH listing is out of scope (Auctionator and similar addons do it); AH exits only prompt.
 - Shuffle follow-up: take the craft count or budget from the calculator.
 - Calculator follow-ups: model price impact when buying or selling large quantities (walk the sell side of the order book), and offer a "number of disenchants" target. Use the observed disenchant results (data plan step 3) for the range instead of Poisson once there are enough samples.
-- Confirm the companion self-update (`selfupdate.py`) end to end on Windows with a release newer than a build that includes the progress-dialog fix (0.8.0 and 0.8.1 silently discarded the staged build; builds with the fix must be installed by hand once). macOS (`ditto`, `open`) and Linux are untested.
+- Companion self-update is confirmed on Windows (0.8.4 to 0.8.5). macOS (`ditto`, `open`) and Linux (tar.gz builds; the Flatpak cannot self-update) are untested. A failed Windows swap leaves `%TEMP%\ShuffleDetector-update.log`.
 - Confirm the Linux Flatpak build (`companion/packaging/flatpak/`, built by `release.yml`; it replaced the Linux tar.gz) installs and starts on a real machine, and that the sandbox can reach the WoW folder (Wine prefix, Lutris, Bottles may need `flatpak override`). It was written without being able to run flatpak-builder, so the first CI run may need fixes.
 - Check that pushing the re-pointed `v0.2.4a` tag after the history rewrite did not start an unwanted release run (`release.yml` triggers on `v*` tags).
 

@@ -185,3 +185,8 @@ def test_helper_does_not_start_inside_the_app_folder(tmp_path, monkeypatch, plat
     su.apply_update(tmp_path / "ShuffleDetector-Companion.new", root=root, platform=platform)
     cwd = Path(calls[0]["cwd"]).resolve()
     assert root.resolve() not in (cwd, *cwd.parents)
+
+
+def test_windows_helper_logs_to_temp(tmp_path):
+    win = su.build_helper_script(tmp_path / "App", tmp_path / "App.new", 123, "win32")
+    assert r"%TEMP%\ShuffleDetector-update.log" in win and "swap finished" in win and "keeping the current version" in win

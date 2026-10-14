@@ -22,6 +22,9 @@ APP_NAME = "ShuffleDetector-Companion"
 PLATFORM_SUFFIX = {"windows": "-windows.zip", "macos": "-macos.zip", "linux": "-linux.tar.gz"}
 
 
+LOG_REDIRECT = '>>"%LOG%" 2>&1'
+
+
 class UpdateError(Exception):
     pass
 
@@ -204,6 +207,8 @@ def build_helper_script(root, new_root, pid, platform=None):
     if key == "windows":
         return "\r\n".join([
             "@echo off",
+            r'set "LOG=%TEMP%\ShuffleDetector-update.log"',  # kept so a failed swap can be diagnosed
+            f'echo %date% %time% update started, waiting for PID {int(pid)} > "%LOG%"',
             "set n=0",
             ":waitpid",
             rf'"%SystemRoot%\System32\tasklist.exe" /FI "PID eq {int(pid)}" /FO LIST 2>nul | "%SystemRoot%\System32\find.exe" "PID:" >nul',
@@ -213,19 +218,22 @@ def build_helper_script(root, new_root, pid, platform=None):
             "ping -n 2 127.0.0.1 >nul",
             "goto waitpid",
             ":swap",
+            f'echo %date% %time% PID wait over after %n% checks, moving the app folder {LOG_REDIRECT}',
             "set n=0",
             ":retry",
-            f'move "{root}" "{old}" >nul 2>&1',
+            f'move "{root}" "{old}" {LOG_REDIRECT}',
             "if not errorlevel 1 goto swapped",
             "set /a n+=1",
             "if %n% geq 30 goto fail",  # about 30 s: enough for antivirus to let go, short enough not to look like a stray launch
             "ping -n 2 127.0.0.1 >nul",
             "goto retry",
             ":swapped",
-            f'move "{new_root}" "{root}" >nul 2>&1',
-            f'if errorlevel 1 (move "{old}" "{root}" >nul 2>&1) else (rmdir /s /q "{old}")',
+            f'move "{new_root}" "{root}" {LOG_REDIRECT}',
+            f'if errorlevel 1 (move "{old}" "{root}" {LOG_REDIRECT}) else (rmdir /s /q "{old}")',
+            f'echo %date% %time% swap finished {LOG_REDIRECT}',
             "goto launch",
             ":fail",
+            f'echo %date% %time% could not move the app folder, keeping the current version {LOG_REDIRECT}',
             f'rmdir /s /q "{new_root}"',
             ":launch",
             f'start "" "{exe}"',
