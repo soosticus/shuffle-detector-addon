@@ -63,6 +63,6 @@ Each press does one step: disenchant a crafted piece in your bags, otherwise cra
 
 ## Releases
 
-Pushing a tag like `v0.3.0` runs `.github/workflows/release.yml`, which publishes a GitHub Release containing `ShuffleDetector-<version>.zip` (the addon) and `ShuffleDetector-Companion-<tag>-<os>` (PyInstaller builds of the GUI) for Windows, Linux and macOS. `ci.yml` runs the tests on every push and PR.
+Pushing a tag like `v0.3.0` runs `.github/workflows/release.yml`, which stamps the tag (without the leading `v`) into the addon `.toc` `## Version` and the app version, then publishes a GitHub Release containing `ShuffleDetector-<version>.zip` (the addon) and `ShuffleDetector-Companion-<tag>-<os>` (PyInstaller builds of the GUI) for Windows, Linux and macOS. `ci.yml` runs the tests on every push and PR.
 
 When not run from the source tree, the GUI's Addon > "Check for updates..." looks at the latest release: it offers a download link for a newer app and installs a newer addon automatically. Set `SHUFFLEDETECTOR_REPO=owner/repo` if the repository is not `soosticus/ShuffleDetector`.
