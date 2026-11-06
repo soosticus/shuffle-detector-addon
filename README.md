@@ -45,6 +45,25 @@ Recipes the character has not seen can also come straight from the game's own da
 
 The GUI's Calculator tab plans a batch of the selected shuffle either by number of crafts or by budget. CLI: `shuffledetector --calc "Recipe Name" --crafts 20` or `--budget 250g`. It lists how many of each material to buy (from the AH, walking the cheapest listings, or from a vendor if that is cheaper), the total cost, the expected output, and the net profit after the AH cut. For disenchants it adds a 90% range from yield variance (yields are modelled as independent Poisson counts, so the range is rough for small batches). It honors the exit and price settings, buys no more than is listed, and values output at current prices, so large batches will move the market. Because big purchases pay a spread of prices, you can enter your own average cost per material (the Calculator tab lists every material of the selected shuffle with separate gold, silver and copper boxes pre-filled (in grey) with its market average for the batch; change any of them to enter your own price, or press "Use market" to go back; your prices are remembered per item, or use `--cost "Silk Cloth=1g 20s"` on the CLI, repeatable). A custom cost replaces the market price of that item for any quantity; bolts and bars are still bought or made from raw materials, whichever is cheaper, and the batch notes say when a custom cost was not used.
 
+### Refreshing a running source companion
+
+When launched from this checkout, the companion watches its Python code, bundled addon,
+reference data and release notes on disk. After files stay unchanged for two polls (about
+four seconds), it reloads the code and recreates its window **in the same process**. There
+is no manual kill/restart. File > **Refresh companion code from disk** also refreshes
+immediately. The existing File > Reload still reloads reference/SavedVariables data only.
+
+The refresh preserves the open SavedVariables/extra-reference paths, selected recipe,
+filters, realm/character/client, calculator quantity/budget, material cost overrides,
+current tab and window/splitter geometry. Open dialogs delay automatic refresh. Invalid
+Python or failed imports/window construction show an error and restore the old module
+code; correct the files or use the menu action to retry. Changed dependency requirements
+still need `python run.py --setup`; this feature does not install packages.
+
+Packaged builds use their existing self-updater, not source reload. An already-running
+companion that predates this feature needs one initial relaunch to acquire the watcher.
+Reloading source does not install the changed addon into WoW.
+
 ## In-game shuffle
 
 Select a shuffle in the companion and choose Addon > "Send selected shuffle to game" (or the "Send to game" button; CLI: `--send-plan "Recipe Name"`), then `/reload` in game. One window shows batch target/price controls, batch progress, the live shuffle steps, craftable count and crafted pieces in your bags. The next action includes purchase prices and waiting states. Drag the window to move it; its position and visibility are remembered.

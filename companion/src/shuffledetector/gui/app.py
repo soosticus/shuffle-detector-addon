@@ -7,6 +7,7 @@ import shutil
 import sys
 import threading
 from datetime import datetime
+from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__, addon_manager, calc, calculator, data_loader, plan, releasenotes, selfupdate, updater
+from . import live_reload
 
 STATUS_TEXT = {"known": "Known", "learnable": "Learnable", "needs_skill": "Needs skill", "unknown": "?"}
 ADDON_STATUS_TEXT = {
@@ -137,8 +139,9 @@ class MainWindow(QMainWindow):
     download_progress = Signal(int, int)
     update_staged = Signal(object)
     update_failed = Signal(str)
+    source_reload_requested = Signal()
 
-    def __init__(self, path=None, settings=None):
+    def __init__(self, path=None, settings=None, resumed=False):
         super().__init__()
         self.setWindowTitle("ShuffleDetector")
         self.resize(1100, 680)
@@ -155,6 +158,9 @@ class MainWindow(QMainWindow):
         menu = self.menuBar().addMenu("&File")
         for a in (open_act, ref_act, reload_act):
             menu.addAction(a)
+        self.source_reload_act = QAction("Refresh companion code from disk", self, triggered=self.request_source_reload)
+        self.source_reload_act.setEnabled(updater.from_source_tree() and not getattr(sys, "frozen", False))
+        menu.addAction(self.source_reload_act)
         self.path = None
         self.loaded_mtime = None
         addon_menu = self.menuBar().addMenu("&Addon")
@@ -306,10 +312,12 @@ class MainWindow(QMainWindow):
         self.calc_crafts.valueChanged.connect(self.update_calc)
         self.calc_budget.textChanged.connect(self.update_calc)
         tabs = QTabWidget()
+        self.tabs = tabs
         tabs.addTab(self.detail, "Breakdown")
         tabs.addTab(calc_page, "Calculator")
         tabs.addTab(self.suggest, "Recipes to acquire")
         split = QSplitter(Qt.Horizontal)
+        self.split = split
         split.addWidget(self.table)
         split.addWidget(tabs)
         split.setSizes([680, 460])
@@ -330,7 +338,8 @@ class MainWindow(QMainWindow):
         self.character.currentIndexChanged.connect(self.refresh)
 
         self.populate_clients()
-        self.auto_update_addon()
+        if not resumed:
+            self.auto_update_addon()
         if not updater.from_source_tree() and self.auto_check_app.isChecked():
             self.check_release_async()
         if not updater.from_source_tree():
@@ -340,6 +349,85 @@ class MainWindow(QMainWindow):
             self.load(str(path))
         self.watch_timer = QTimer(self, interval=2000, timeout=self.check_for_changes)
         self.watch_timer.start()
+        self.source_root = Path(__file__).resolve().parents[4]
+        self.source_signature = None
+        self.source_candidate = None
+        self.source_error = False
+        self.source_timer = QTimer(self, interval=2000, timeout=self.check_source_changes)
+        if self.source_reload_act.isEnabled():
+            try:
+                self.source_signature = live_reload.disk_signature(self.source_root)
+            except OSError as e:
+                self.statusBar().showMessage(f"Could not watch companion files: {e}")
+            self.source_timer.start()
+
+    def check_source_changes(self):
+        try:
+            signature = live_reload.disk_signature(self.source_root)
+        except OSError as e:
+            if not self.source_error:
+                self.statusBar().showMessage(f"Could not watch companion files: {e}")
+            self.source_error = True
+            return
+        self.source_error = False
+        if signature == self.source_signature:
+            self.source_candidate = None
+            return
+        if signature != self.source_candidate:
+            self.source_candidate = signature
+            return
+        if self.request_source_reload():
+            self.source_signature = signature
+            self.source_candidate = None
+
+    def request_source_reload(self):
+        if not self.source_reload_act.isEnabled():
+            return False
+        if self.update_dialog or QApplication.activeModalWidget() or QApplication.activePopupWidget():
+            self.statusBar().showMessage("Companion refresh will wait until the current dialog is closed.")
+            return False
+        self.source_reload_requested.emit()
+        return True
+
+    def session_state(self):
+        selected = self.table.selectionModel().selectedRows()
+        return {
+            "path": self.path, "extra_ref": self.extra_ref, "geometry": self.saveGeometry(),
+            "split": self.split.saveState(), "tab": self.tabs.currentIndex(),
+            "combos": {name: getattr(self, name).currentData() for name in
+                       ("realm", "character", "profession", "client", "mode", "sort", "calc_mode")},
+            "spins": {name: getattr(self, name).value() for name in
+                      ("cut", "craft_time", "de_time", "calc_crafts")},
+            "budget": self.calc_budget.text(), "known": self.known_only.isChecked(),
+            "recipe": self.shown[selected[0].row()].name if selected and selected[0].row() < len(self.shown) else None,
+        }
+
+    def restore_session(self, state):
+        self.extra_ref = state["extra_ref"]
+        if not self.reload():
+            raise RuntimeError("Could not restore the open companion data.")
+        for name, value in state["combos"].items():
+            box = getattr(self, name)
+            index = box.findData(value)
+            if index >= 0:
+                box.setCurrentIndex(index)
+        for name, value in state["spins"].items():
+            getattr(self, name).setValue(value)
+        self.calc_budget.setText(state["budget"])
+        self.known_only.setChecked(state["known"])
+        self.refresh()
+        for i, result in enumerate(self.shown):
+            if result.name == state["recipe"]:
+                self.table.selectRow(i)
+                break
+        self.tabs.setCurrentIndex(state["tab"])
+        self.split.restoreState(state["split"])
+        self.restoreGeometry(state["geometry"])
+
+    def closeEvent(self, event):
+        self.watch_timer.stop()
+        self.source_timer.stop()
+        super().closeEvent(event)
 
     def show_release_notes(self):
         notes = releasenotes.all_notes()
@@ -589,10 +677,11 @@ class MainWindow(QMainWindow):
             self.ref = self.base_ref.with_observed(self.scan) if self.scan else self.base_ref
         except Exception as e:
             QMessageBox.critical(self, "Reference data", str(e))
-            return
+            return False
         self.populate_professions()
         if self.path:
-            self.load(self.path)
+            return self.load(self.path)
+        return True
 
     def populate_professions(self):
         wanted = self.profession.currentData() or self.settings.value("profession", "", type=str) or None
@@ -800,8 +889,37 @@ class MainWindow(QMainWindow):
 def main(argv=None):
     argv = sys.argv if argv is None else argv
     updater.use_cached_addon()
-    app = QApplication(argv)
+    app = QApplication.instance() or QApplication(argv)
     win = MainWindow(argv[1] if len(argv) > 1 else None)
+    def refresh_code():
+        nonlocal win
+        old = win
+        state = old.session_state()
+        replacement = None
+        def build(module):
+            nonlocal replacement
+            replacement = module.MainWindow(state["path"], settings=old.settings, resumed=True)
+            replacement.restore_session(state)
+            return replacement
+        try:
+            replacement = live_reload.reload_modules(build)
+        except Exception as e:
+            if replacement:
+                replacement.close()
+                replacement.deleteLater()
+            try:
+                old.source_signature = live_reload.disk_signature(old.source_root)
+            except OSError as read_error:
+                e = f"{e}\nCould not read changed files: {read_error}"
+            QMessageBox.warning(old, "Companion refresh failed", f"{e}\n\nThe current window remains open. Fix the files and retry.")
+            return
+        replacement.source_reload_requested.connect(refresh_code)
+        replacement.show()
+        old.close()
+        old.deleteLater()
+        win = replacement
+        win.statusBar().showMessage("Companion refreshed from disk; batch and selection restored.", 10000)
+    win.source_reload_requested.connect(refresh_code)
     win.show()
     return app.exec()
 

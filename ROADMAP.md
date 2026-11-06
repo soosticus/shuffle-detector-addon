@@ -4,6 +4,7 @@ Open items only; finished work is removed. Release notes are hand-written in `re
 
 ## Open items
 
+- Confirm same-process source companion refresh during real disk updates: dialog deferral, selected shuffle/calculator state and addon version display. Offscreen tests cover stable-file polling, state restoration and reload failure rollback; packaged builds continue using the self-updater.
 - Handle vendor faction/location restrictions.
 - Confirm in game that the addon loads with its Auctionator dependency and that the companion shows prices after an Auctionator scan and `/reload` (prices are read from `Auctionator.lua`, see `auctionator.py`). Open question: the realm key (`PvE`, `ClassicBetaPvE2`) with the freshest data is picked by default; check it is the right realm.
 - Confirm in game that the fast-press gating no longer repeats a craft or disenchant step.
