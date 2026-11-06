@@ -37,6 +37,13 @@ def test_render_plan_escapes_and_is_lua():
     assert plan.lua_string("a\\b\nc") == '"a\\\\b\\010c"'
 
 
+def test_build_plan_preserves_output_quantity():
+    res = result()
+    res.recipe = dict(RECIPE, makes=3)
+    assert plan.build_plan(res)["makes"] == 3
+    assert "makes = 3," in plan.render_plan(plan.build_plan(res))
+
+
 def test_write_plan_and_survives_addon_update(tmp_path, monkeypatch):
     bundle = tmp_path / "bundle"
     make_addon(bundle, "0.3.0")

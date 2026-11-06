@@ -121,6 +121,15 @@ function ns.NextShuffleStep()
         step.bag, step.slot = bag, slot
         return step
     end
+    if ns.SnatchTargetReached and ns.SnatchTargetReached() then
+        step.kind, step.label = "idle", "Craft target reached"
+        if bag and plan.exit == "Vendor" then
+            step.label, step.stage = ("Open a vendor window to sell %d x %s"):format(crafted, plan.recipe), 2
+        elseif bag and plan.exit and plan.exit ~= "" then
+            step.label, step.stage = ("Post %d x %s yourself: %s"):format(crafted, plan.recipe, plan.exit), 2
+        end
+        return step
+    end
     local missing = missingReagent(plan)
     if missing then
         step.stage = 2
@@ -426,6 +435,9 @@ pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_FAILED", "player")
 pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_INTERRUPTED", "player")
 pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_SUCCEEDED", "player")
 ev:SetScript("OnEvent", function(_, event, a1, a2, a3)
+    if event == "UNIT_SPELLCAST_SUCCEEDED" and ns.SnatchCraftCompleted then
+        ns.SnatchCraftCompleted(a3, a2)
+    end
     if event == "UI_ERROR_MESSAGE" or event:find("^UNIT_SPELLCAST") then
         -- Echo what the game says about a press for a few seconds after it, to see why an action did nothing.
         if lastClick and GetTime() - lastClick < 4 then

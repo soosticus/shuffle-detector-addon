@@ -23,6 +23,8 @@ def build_plan(result, now=None):
         plan["spell"] = r["spell"]
     if r.get("item"):
         plan["item"] = r["item"]
+    if (r.get("makes") or 1) > 1:
+        plan["makes"] = r["makes"]
     if result.crafted and result.crafted.name:
         plan["itemName"] = result.crafted.name
     return plan

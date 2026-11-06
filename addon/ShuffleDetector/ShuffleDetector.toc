@@ -12,5 +12,5 @@ Disenchant.lua
 Plan.lua
 ItemList.lua
 Shuffle.lua
-
+Snatch.lua
 

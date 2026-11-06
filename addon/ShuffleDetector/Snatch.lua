@@ -1,0 +1,688 @@
+local _, ns = ...
+
+local MAX_TARGET, POLL_SECONDS = 100000, 3
+local panel, rows, statusText, pollButton
+local running, ahOpen, pending, search, offer
+local nextSearch, cursor, ownCall = 0, 0, false
+local lastCast
+local restored
+local collectingUntil
+local refresh
+
+local function integer(n, min, max)
+    return type(n) == "number" and n == n and n >= min and n <= max and n == math.floor(n)
+end
+
+local function message(text)
+    if statusText then statusText:SetText(text) end
+    ns.log("snatch: " .. text)
+end
+
+local function invoke(name, ...)
+    local api = C_AuctionHouse
+    if not api or type(api[name]) ~= "function" then
+        message("Unavailable auction API: " .. name)
+        return false
+    end
+    ownCall = true
+    local ok, err = pcall(api[name], ...)
+    ownCall = false
+    if not ok then message(name .. " failed: " .. tostring(err)) end
+    return ok
+end
+
+local function plan()
+    local p = ns.plan
+    if type(p) ~= "table" or p.version ~= 1 or not p.spell or not p.item
+        or type(p.reagents) ~= "table" or #p.reagents == 0 then return end
+    if not integer(p.makes or 1, 1, MAX_TARGET) then return end
+    for _, r in ipairs(p.reagents) do
+        if not integer(r.item, 1, 10000000) or not integer(r.qty, 1, MAX_TARGET) then return end
+    end
+    return p
+end
+
+local function identity(p)
+    local parts = { tostring(p.spell), tostring(p.item), tostring(p.makes or 1) }
+    for _, r in ipairs(p.reagents) do parts[#parts + 1] = r.item .. ":" .. r.qty end
+    return table.concat(parts, "/")
+end
+
+local function count(id)
+    local fn = (C_Item and C_Item.GetItemCount) or GetItemCount
+    return fn and fn(id, false) or 0
+end
+
+local function itemName(id)
+    local fn = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    return (fn and fn(id)) or ("Item " .. id)
+end
+
+local function money(n)
+    return ("%dg %ds %dc"):format(math.floor(n / 10000), math.floor(n / 100) % 100, n % 100)
+end
+
+local function parseMoney(text)
+    text = text:lower():gsub("%s", "")
+    if text:match("^%d+$") then
+        local n = tonumber(text)
+        if integer(n, 0, 100000000000) then return n end
+        return
+    end
+    local total, seen = 0, {}
+    while text ~= "" do
+        local digits, unit, rest = text:match("^(%d+)([gsc])(.*)$")
+        if not digits or seen[unit] then return end
+        seen[unit] = true
+        total = total + tonumber(digits) * ({ g = 10000, s = 100, c = 1 })[unit]
+        text = rest
+    end
+    if next(seen) and integer(total, 0, 100000000000) then return total end
+end
+ns.SnatchParseMoney = parseMoney
+
+local function state()
+    local p = plan()
+    if not p then return end
+    local key = UnitGUID("player")
+    if not key then return end
+    AHSnapshotDB.snatcher = AHSnapshotDB.snatcher or {}
+    local s = AHSnapshotDB.snatcher[key]
+    if not s then
+        s = { prices = {}, awaiting = {}, bags = {}, target = 0, completed = 0 }
+        AHSnapshotDB.snatcher[key] = s
+    end
+    local signature = identity(p)
+    if s.recipe ~= signature then
+        s.recipe, s.target, s.completed = signature, 0, 0
+    end
+    if not restored then
+        restored = true
+        if s.inFlight then
+            pending = s.inFlight
+            pending.kind = "uncertain"
+            message("Unconfirmed purchase restored. Check bags and mail, then resolve it.")
+        end
+    end
+    return s, p
+end
+
+local function syncBags(s)
+    for id, qty in pairs(s.awaiting) do
+        local now = count(id)
+        local received = collectingUntil and GetTime() <= collectingUntil
+            and math.max(0, now - (s.bags[id] or now)) or 0
+        s.awaiting[id] = math.max(0, qty - received)
+        s.bags[id] = now
+    end
+end
+
+function ns.SnatchNeeds()
+    local s, p = state()
+    if not s then return {} end
+    syncBags(s)
+    local crafts = math.max(0, math.ceil(s.target / (p.makes or 1)) - s.completed)
+    local needs, byItem = {}, {}
+    for _, r in ipairs(p.reagents) do
+        if not byItem[r.item] then
+            local row = { item = r.item, required = 0 }
+            byItem[r.item] = row
+            needs[#needs + 1] = row
+        end
+        byItem[r.item].required = byItem[r.item].required + crafts * r.qty
+    end
+    for _, r in ipairs(needs) do
+        r.bags, r.awaiting = count(r.item), s.awaiting[r.item] or 0
+        local reserved = s.inFlight and s.inFlight.item == r.item and s.inFlight.qty or 0
+        r.missing = math.max(0, r.required - r.bags - r.awaiting - reserved)
+        r.cap = s.prices[r.item] or 0
+    end
+    return needs
+end
+
+local function need(id)
+    for _, r in ipairs(ns.SnatchNeeds()) do if r.item == id then return r end end
+end
+
+function ns.SnatchTargetReached()
+    local s, p = state()
+    return s and s.target > 0 and s.completed >= math.ceil(s.target / (p.makes or 1))
+end
+
+function ns.SnatchCraftCompleted(spell, cast)
+    local s, p = state()
+    if not s or s.target == 0 or spell ~= p.spell then return end
+    if cast and cast == lastCast then return end
+    lastCast = cast
+    syncBags(s)
+    s.completed = s.completed + 1
+    offer = nil
+    if refresh then refresh() end
+end
+
+local function clearQuote()
+    if pending and (pending.kind == "quote" or pending.kind == "quoted") then
+        invoke("CancelCommoditiesPurchase")
+        pending = nil
+    end
+end
+
+local function stop(text)
+    running, search, offer = false, nil, nil
+    clearQuote()
+    if pollButton then pollButton:SetText("Start AH polling") end
+    if text then message(text) end
+end
+
+local function guarded(fn, ...)
+    local ok, err = pcall(fn, ...)
+    if not ok then
+        if pending and (pending.kind == "buyingCommodity" or pending.kind == "buyingItem") then
+            pending.kind = "uncertain"
+        end
+        stop("Error: " .. tostring(err) .. ". Check bags/mail before retrying.")
+        ns.say("snatcher error: " .. tostring(err))
+    end
+end
+
+local function recordPurchase(id, qty)
+    local s = state()
+    if not s then return end
+    syncBags(s)
+    s.awaiting[id] = (s.awaiting[id] or 0) + qty
+    s.bags[id] = count(id)
+    message(("Bought %d x %s; collect it from mail."):format(qty, itemName(id)))
+end
+
+local function reservePurchase()
+    local s = state()
+    s.inFlight = pending
+    pending.at = GetTime()
+end
+
+local function finishPurchase()
+    local s = state()
+    local p = pending
+    s.inFlight, pending = nil, nil
+    recordPurchase(p.item, p.qty)
+end
+
+local function merchantOffer(id)
+    if not (MerchantFrame and MerchantFrame:IsShown() and GetMerchantNumItems
+        and GetMerchantItemLink and BuyMerchantItem) then return end
+    local r = need(id)
+    if not r or r.missing == 0 or r.cap == 0 then return end
+    local best
+    for i = 1, GetMerchantNumItems() do
+        local link = GetMerchantItemLink(i)
+        if link and tonumber(link:match("item:(%d+)")) == id then
+            local price, bundle, stock, extended, purchasable
+            if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+                local info = C_MerchantFrame.GetItemInfo(i)
+                if info then
+                    price, bundle, stock, extended = info.price, info.stackCount, info.numAvailable, info.hasExtendedCost
+                    purchasable = info.isPurchasable
+                end
+            elseif GetMerchantItemInfo then
+                local _, _, p, q, n, _, canBuy, ext = GetMerchantItemInfo(i)
+                price, bundle, stock, extended = p, q, n, ext
+                purchasable = canBuy
+            end
+            if purchasable and price and bundle and bundle > 0 and not extended and stock
+                and price <= r.cap * bundle and (stock == -1 or stock >= bundle) then
+                local qty = math.floor(r.missing / bundle) * bundle
+                local max = GetMerchantItemMaxStack and GetMerchantItemMaxStack(i) or bundle
+                qty = math.min(qty, math.floor(max / bundle) * bundle)
+                if stock ~= -1 then qty = math.min(qty, math.floor(stock / bundle) * bundle) end
+                local total = qty / bundle * price
+                if qty > 0 and total <= GetMoney() and (not best or price / bundle < best.unit) then
+                    best = { slot = i, item = id, qty = qty, total = total, unit = price / bundle }
+                end
+            end
+        end
+    end
+    return best
+end
+
+function ns.SnatchBuyVendor(id)
+    if pending or InCombatLockdown() then message("Finish the current purchase and leave combat first."); return end
+    local o = merchantOffer(id)
+    if not o then message("No affordable vendor bundle within your quantity and price limits."); return end
+    stop()
+    pending = { kind = "vendor", vendor = true, item = id, before = count(id), qty = o.qty }
+    reservePurchase()
+    local ok, err = pcall(BuyMerchantItem, o.slot, o.qty)
+    if not ok then
+        pending.kind = "uncertain"
+        message("Vendor purchase failed: " .. tostring(err) .. ". Check bags and resolve it.")
+    else
+        message("Waiting for vendor bag update.")
+    end
+    if refresh then refresh() end
+end
+
+local function results(id, key, commodity)
+    local r = need(id)
+    if not r or r.cap == 0 or r.missing == 0 then return end
+    local api = C_AuctionHouse
+    if commodity then
+        local n = api.GetNumCommoditySearchResults(id)
+        local list = {}
+        for i = 1, n do
+            local v = api.GetCommoditySearchResultInfo(id, i)
+            if v and v.quantity > 0 then
+                if v.containsOwnerItem or v.containsAccountItem then return end
+                list[#list + 1] = v
+            end
+        end
+        table.sort(list, function(a, b) return a.unitPrice < b.unitPrice end)
+        local qty, total = 0, 0
+        for _, v in ipairs(list) do
+            if v.unitPrice > r.cap then break end
+            local take = math.min(v.quantity, r.missing - qty)
+            qty, total = qty + take, total + take * v.unitPrice
+            if qty == r.missing then break end
+        end
+        if qty > 0 and total <= GetMoney() then
+            return { kind = "commodity", item = id, key = key, qty = qty, total = total, at = GetTime() }
+        end
+    else
+        local best
+        for i = 1, api.GetNumItemSearchResults(key) do
+            local v = api.GetItemSearchResultInfo(key, i)
+            if v and v.itemKey.itemID == id and not v.containsOwnerItem and not v.containsAccountItem
+                and v.buyoutAmount and v.buyoutAmount > 0 and v.quantity > 0 and v.quantity <= r.missing
+                and v.buyoutAmount <= r.cap * v.quantity and v.buyoutAmount <= GetMoney()
+                and (not best or v.buyoutAmount / v.quantity < best.total / best.qty) then
+                best = { kind = "item", item = id, key = key, qty = v.quantity,
+                    total = v.buyoutAmount, auction = v.auctionID, at = GetTime() }
+            end
+        end
+        return best
+    end
+end
+
+function ns.SnatchPoll()
+    if not running or not ahOpen or pending or offer or InCombatLockdown() or GetTime() < nextSearch then return end
+    if search then
+        if GetTime() - search.at > 15 then stop("AH search timed out. Restart polling to retry.") end
+        return
+    end
+    local api = C_AuctionHouse
+    for _, name in ipairs({ "IsThrottledMessageSystemReady", "MakeItemKey", "GetItemKeyInfo", "SendSearchQuery",
+        "GetNumCommoditySearchResults", "GetCommoditySearchResultInfo", "GetNumItemSearchResults",
+        "GetItemSearchResultInfo", "GetQuoteDurationRemaining", "StartCommoditiesPurchase",
+        "ConfirmCommoditiesPurchase", "CancelCommoditiesPurchase", "PlaceBid" }) do
+        if not api or type(api[name]) ~= "function" then stop("Unavailable auction API: " .. name); return end
+    end
+    if not api.IsThrottledMessageSystemReady() then return end
+    local needs = ns.SnatchNeeds()
+    for _ = 1, #needs do
+        cursor = cursor % #needs + 1
+        local r = needs[cursor]
+        if r.missing > 0 and r.cap > 0 then
+            local key = api.MakeItemKey(r.item)
+            local info = api.GetItemKeyInfo(key)
+            if not info then
+                nextSearch = GetTime() + POLL_SECONDS
+                message("Waiting for item information: " .. itemName(r.item))
+                return
+            end
+            search = { item = r.item, key = key, commodity = info.isCommodity, at = GetTime() }
+            nextSearch = GetTime() + POLL_SECONDS
+            if not invoke("SendSearchQuery", key, {}, true) then search = nil; stop() end
+            return
+        end
+    end
+    stop("No materials need buying at an enabled price. Check bags and awaiting mail.")
+end
+
+function ns.SnatchBuyAH()
+    if not ahOpen or InCombatLockdown() then message("Open the AH and leave combat first."); return end
+    if pending then
+        if pending.kind ~= "quoted" then message("Waiting for purchase confirmation."); return end
+        local r = need(pending.item)
+        local duration = C_AuctionHouse.GetQuoteDurationRemaining()
+        if not r or pending.qty > r.missing or pending.total > r.cap * pending.qty
+            or pending.total > GetMoney() or duration <= 0 or GetTime() - pending.at > 10 then
+            clearQuote()
+            message("Quote expired or limits changed. Poll again for a new offer.")
+            return
+        end
+        pending.kind = "buyingCommodity"
+        reservePurchase()
+        if not invoke("ConfirmCommoditiesPurchase", pending.item, pending.qty) then
+            pending.kind = "uncertain"
+            stop("Purchase failed. Check mail before restarting.")
+        end
+        if refresh then refresh() end
+        return
+    end
+    local o = offer
+    if not o or GetTime() - o.at > 10 then
+        offer = nil
+        message("Offer expired. Wait for a fresh search.")
+        return
+    end
+    local live = results(o.item, o.key, o.kind == "commodity")
+    if not live or live.qty ~= o.qty or live.total ~= o.total or live.auction ~= o.auction then
+        offer = nil
+        message("Listing changed. Wait for a fresh search.")
+        return
+    end
+    offer = nil
+    pending = o
+    if o.kind == "commodity" then
+        pending.kind, pending.at = "quote", GetTime()
+        if not invoke("StartCommoditiesPurchase", o.item, o.qty) then pending = nil; stop() end
+    else
+        pending.kind = "buyingItem"
+        reservePurchase()
+        if not invoke("PlaceBid", o.auction, o.total) then
+            pending.kind = "uncertain"
+            stop("Purchase failed. Check mail before restarting.")
+        end
+    end
+    if refresh then refresh() end
+end
+
+local function onEvent(_, event, a, b)
+    if event == "AUCTION_HOUSE_SHOW" then
+        ahOpen = true
+    elseif event == "AUCTION_HOUSE_CLOSED" then
+        ahOpen = false
+        stop("AH closed. Polling stopped.")
+    elseif event == "COMMODITY_SEARCH_RESULTS_UPDATED" or event == "ITEM_SEARCH_RESULTS_UPDATED" then
+        local id = type(a) == "table" and a.itemID or a
+        if search and id == search.item then
+            offer = results(id, search.key, search.commodity)
+            search = nil
+            if offer then message(("AH offer: %d x %s for %s"):format(offer.qty, itemName(id), money(offer.total))) end
+        end
+    elseif event == "COMMODITY_PRICE_UPDATED" and pending and (pending.kind == "quote" or pending.kind == "quoted") then
+        local r = need(pending.item)
+        if not r or pending.qty > r.missing or a > r.cap or b > r.cap * pending.qty
+            or b > pending.total or b > GetMoney() then
+            clearQuote()
+            message("Quote rose or exceeded your limits; cancelled.")
+        else
+            pending.kind, pending.total, pending.at = "quoted", b, GetTime()
+            message("Quote ready: " .. money(b) .. ". Click Confirm AH purchase.")
+        end
+    elseif event == "COMMODITY_PRICE_UNAVAILABLE" or event == "COMMODITY_PURCHASE_FAILED" then
+        if pending and (pending.kind == "quote" or pending.kind == "quoted" or pending.kind == "buyingCommodity") then
+            clearQuote()
+            local s = state()
+            if s then s.inFlight = nil end
+            pending = nil
+            stop("Commodity purchase unavailable or failed. Check mail before retrying.")
+        end
+    elseif event == "COMMODITY_PURCHASE_SUCCEEDED" and pending and pending.kind == "buyingCommodity" then
+        finishPurchase()
+    elseif event == "AUCTION_HOUSE_PURCHASE_COMPLETED" and pending and pending.kind == "buyingItem" and a == pending.auction then
+        finishPurchase()
+    elseif event == "BAG_UPDATE_DELAYED" then
+        if pending and pending.vendor and count(pending.item) >= pending.before + pending.qty then
+            message("Vendor purchase received.")
+            local s = state()
+            s.inFlight = nil
+            pending = nil
+        end
+        local s = state()
+        if s then syncBags(s) end
+    elseif event == "UI_ERROR_MESSAGE" and pending then
+        if pending.vendor then pending.kind = "uncertain" end
+        message("Game purchase error: " .. tostring(b) .. ". Check bags/mail; purchases remain blocked.")
+        running = false
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        stop("In combat. Polling stopped.")
+    end
+    if refresh then refresh() end
+end
+ns.SnatchOnEvent = onEvent
+
+function ns.SnatchResolvePurchase(received)
+    if not pending or pending.kind ~= "uncertain" then return end
+    local p, s = pending, state()
+    s.inFlight, pending = nil, nil
+    if received and not p.vendor then recordPurchase(p.item, p.qty) end
+    stop("Purchase reconciled. Review quantities before restarting.")
+    if refresh then refresh() end
+end
+
+local function button(parent, text, width, x, y, fn)
+    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    b:SetSize(width, 24)
+    b:SetPoint("TOPLEFT", x, y)
+    b:SetText(text)
+    b:SetScript("OnClick", function(...) guarded(fn, ...) end)
+    return b
+end
+
+local function edit(parent, width, x, y)
+    local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    e:SetSize(width, 22)
+    e:SetPoint("TOPLEFT", x, y)
+    e:SetAutoFocus(false)
+    e:SetMaxLetters(32)
+    return e
+end
+
+local function text(parent, x, y, width)
+    local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    fs:SetPoint("TOPLEFT", x, y)
+    fs:SetWidth(width)
+    fs:SetJustifyH("LEFT")
+    return fs
+end
+
+local function saveInputs()
+    if pending then message("Finish the pending purchase before changing limits."); return false end
+    local target = tonumber(panel.target:GetText())
+    if not integer(target, 0, MAX_TARGET) then message("Target must be a whole number from 0 to 100000."); return false end
+    local prices = {}
+    for _, row in ipairs(rows) do
+        local price = parseMoney(row.price:GetText())
+        if not price then message("Invalid price for " .. itemName(row.item) .. ". Use 1g 20s 5c, or copper."); return false end
+        prices[row.item] = price
+    end
+    local s = state()
+    if not s then message("Send a recipe with item, spell and reagents from the companion first."); return false end
+    stop()
+    s.target = target
+    for id, price in pairs(prices) do s.prices[id] = price end
+    message("Limits saved. Zero disables purchasing; target is total newly crafted items for this batch.")
+    refresh()
+    return true
+end
+
+refresh = function()
+    if not panel then return end
+    local s, p = state()
+    if not s then panel.title:SetText("Snatcher: send a shuffle from the companion first"); return end
+    panel.title:SetText(p.recipe)
+    panel.progress:SetText(("%d / %d crafts completed; %d items per craft"):format(s.completed,
+        math.ceil(s.target / (p.makes or 1)), p.makes or 1))
+    local needs = ns.SnatchNeeds()
+    for i, r in ipairs(needs) do
+        local row = rows[i]
+        if row then
+            row.info:SetText(("%s\nNeed %d | bags %d | awaiting %d | buy %d"):format(
+                itemName(r.item), r.required, r.bags, r.awaiting, r.missing))
+            local vendor = merchantOffer(r.item)
+            row.vendor:SetEnabled(not pending and not InCombatLockdown() and vendor ~= nil)
+            row.vendorInfo:SetText(vendor and ("%d for %s"):format(vendor.qty, money(vendor.total)) or "")
+        end
+    end
+    panel.buy:SetText(pending and pending.kind == "quoted" and "Confirm AH purchase" or "Buy AH offer")
+    panel.buy:SetEnabled(ahOpen and not InCombatLockdown() and
+        ((pending and pending.kind == "quoted") or (not pending and offer ~= nil)) or false)
+    pollButton:SetText(running and "Stop AH polling" or "Start AH polling")
+end
+
+local function populate()
+    for _, row in ipairs(rows) do row.frame:Hide() end
+    rows = {}
+    local s = state()
+    panel.target:SetText(tostring(s and s.target or 0))
+    for i, r in ipairs(ns.SnatchNeeds()) do
+        local f = CreateFrame("Frame", nil, panel.content)
+        f:SetSize(400, 58)
+        f:SetPoint("TOPLEFT", 0, -(i - 1) * 58)
+        local row = { frame = f, item = r.item }
+        row.info = text(f, 0, 0, 220)
+        row.price = edit(f, 110, 8, -32)
+        row.price:SetText(money(r.cap))
+        row.vendor = button(f, "Buy vendor", 108, 266, -5, function() ns.SnatchBuyVendor(r.item) end)
+        row.vendorInfo = text(f, 236, -34, 155)
+        rows[#rows + 1] = row
+    end
+    panel.content:SetHeight(math.max(1, #rows * 58))
+    refresh()
+end
+
+function ns.ToggleSnatcher()
+    if not panel then
+        panel = CreateFrame("Frame", "ShuffleDetectorSnatcher", UIParent, "BasicFrameTemplateWithInset")
+        panel:SetSize(450, 450)
+        panel:SetPoint("CENTER")
+        panel:SetMovable(true)
+        panel:SetClampedToScreen(true)
+        panel:EnableMouse(true)
+        panel:RegisterForDrag("LeftButton")
+        panel:SetScript("OnDragStart", panel.StartMoving)
+        panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
+        panel:SetScript("OnHide", function() stop("Snatcher hidden. Polling stopped.") end)
+        panel.title = text(panel, 12, -30, 420)
+        text(panel, 12, -52, 170):SetText("Finished-item target (0 = off)")
+        panel.target = edit(panel, 80, 200, -48)
+        button(panel, "Save limits", 110, 310, -48, saveInputs)
+        panel.progress = text(panel, 12, -78, 420)
+        text(panel, 12, -100, 420):SetText("Maximum price per unit: g/s/c or copper; 0 = do not buy")
+        local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", 12, -122)
+        scroll:SetSize(402, 210)
+        panel.content = CreateFrame("Frame", nil, scroll)
+        panel.content:SetSize(400, 1)
+        scroll:SetScrollChild(panel.content)
+        pollButton = button(panel, "Start AH polling", 130, 12, -338, function()
+            if running then stop("Polling stopped.")
+            elseif saveInputs() then
+                if ahOpen then running = true; ns.SnatchPoll()
+                else message("Open the auction house first.") end
+            end
+            refresh()
+        end)
+        panel.buy = button(panel, "Buy AH offer", 160, 155, -338, ns.SnatchBuyAH)
+        button(panel, "New batch", 105, 325, -338, function()
+            if pending then message("Pending purchase: check bags/mail before starting a new batch."); return end
+            local s = state()
+            if s then s.completed = 0; stop("New batch started. Awaiting mail is still reserved."); refresh() end
+        end)
+        button(panel, "Resolve uncertain purchase", 200, 12, -366, function()
+            if not pending or pending.kind ~= "uncertain" then
+                message("No uncertain purchase. Wait for confirmation or reload after checking bags/mail.")
+                return
+            end
+            StaticPopupDialogs["SHUFFLEDETECTOR_SNATCH_RESOLVE"] = {
+                text = pending.vendor and ("Check your bags for %d x %s. Confirm only after verifying the vendor purchase succeeded or failed."):format(
+                    pending.qty, itemName(pending.item))
+                    or ("Check bags AND mail for %d x %s. Is this purchase still in mail? Choose No only after confirming it is already in your bags or the purchase failed."):format(
+                        pending.qty, itemName(pending.item)),
+                button1 = pending.vendor and "Checked bags" or "Yes, in mail",
+                button2 = pending.vendor and "Cancel" or "No, checked",
+                button3 = not pending.vendor and "Cancel" or nil,
+                OnAccept = function() ns.SnatchResolvePurchase(true) end,
+                OnCancel = function(_, _, reason)
+                    if reason == "clicked" and pending and not pending.vendor then ns.SnatchResolvePurchase(false) end
+                end,
+                timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+            }
+            StaticPopup_Show("SHUFFLEDETECTOR_SNATCH_RESOLVE")
+        end)
+        button(panel, "Reconcile collected mail", 205, 225, -366, function()
+            if pending then message("Resolve the pending purchase first."); return end
+            StaticPopupDialogs["SHUFFLEDETECTOR_SNATCH_MAIL"] = {
+                text = "Only clear awaiting quantities after ALL purchased materials have been collected from mail. Clear the awaiting-mail ledger?",
+                button1 = "All collected", button2 = "Cancel",
+                OnAccept = function()
+                    local s = state()
+                    if s and not pending then
+                        s.awaiting, s.bags = {}, {}
+                        stop("Awaiting-mail ledger cleared. Review quantities before restarting.")
+                        refresh()
+                    end
+                end,
+                timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+            }
+            StaticPopup_Show("SHUFFLEDETECTOR_SNATCH_MAIL")
+        end)
+        statusText = text(panel, 12, -404, 420)
+        statusText:SetHeight(36)
+        rows = {}
+        panel:Hide()
+    end
+    if panel:IsShown() then panel:Hide()
+    else populate(); panel:Show(); message("Save limits, then poll at the AH or click Buy vendor at a merchant.") end
+end
+
+local events = CreateFrame("Frame")
+for _, event in ipairs({ "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED", "COMMODITY_SEARCH_RESULTS_UPDATED",
+    "ITEM_SEARCH_RESULTS_UPDATED", "COMMODITY_PRICE_UPDATED", "COMMODITY_PRICE_UNAVAILABLE",
+    "COMMODITY_PURCHASE_SUCCEEDED", "COMMODITY_PURCHASE_FAILED", "AUCTION_HOUSE_PURCHASE_COMPLETED",
+    "BAG_UPDATE_DELAYED", "MERCHANT_SHOW", "MERCHANT_UPDATE", "MERCHANT_CLOSED", "UI_ERROR_MESSAGE",
+    "PLAYER_REGEN_DISABLED" }) do events:RegisterEvent(event) end
+events:SetScript("OnEvent", function(...) guarded(onEvent, ...) end)
+local elapsed = 0
+local function update(_, delta)
+    elapsed = elapsed + delta
+    if elapsed < 0.5 then return end
+    elapsed = 0
+    if offer and GetTime() - offer.at > 10 then offer = nil; refresh() end
+    if pending and (pending.kind == "quote" or pending.kind == "quoted") and GetTime() - pending.at > 10 then
+        clearQuote()
+        message("Commodity quote expired.")
+        refresh()
+    end
+    if pending and (pending.kind == "buyingCommodity" or pending.kind == "buyingItem" or pending.kind == "vendor")
+        and GetTime() - pending.at > 15 then
+        pending.kind = "uncertain"
+        stop("Purchase confirmation timed out. Check bags/mail, then resolve the uncertain purchase.")
+        refresh()
+    end
+    ns.SnatchPoll()
+end
+events:SetScript("OnUpdate", function(...) guarded(update, ...) end)
+
+-- Commodity events have no item ID. Other addons must not replace a quote we might confirm.
+if C_AuctionHouse and hooksecurefunc then
+    for _, name in ipairs({ "StartCommoditiesPurchase", "ConfirmCommoditiesPurchase", "CancelCommoditiesPurchase",
+        "SendSearchQuery", "SendSellSearchQuery", "PlaceBid" }) do
+        if type(C_AuctionHouse[name]) == "function" then
+            hooksecurefunc(C_AuctionHouse, name, function()
+                if ownCall then return end
+                if pending then
+                    running = false
+                    message("Another AH action interrupted this purchase. Check mail; reload before retrying.")
+                    if pending.kind == "quote" or pending.kind == "quoted" then pending = nil
+                    elseif pending.kind ~= "vendor" then pending.kind = "uncertain" end
+                end
+
+                search, offer = nil, nil
+                if name == "SendSearchQuery" or name == "SendSellSearchQuery" then
+                    stop("Another addon searched the AH. Polling stopped to avoid interference.")
+                end
+                if refresh then refresh() end
+            end)
+        end
+    end
+end
+
+-- Bag gains from crafting, trades or vendors must not consume the awaiting-mail ledger.
+if hooksecurefunc then
+    for _, name in ipairs({ "TakeInboxItem", "AutoLootMailItem" }) do
+        if type(_G[name]) == "function" then
+            hooksecurefunc(name, function() collectingUntil = GetTime() + 5 end)
+        end
+    end
+end

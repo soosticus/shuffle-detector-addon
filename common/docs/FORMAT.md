@@ -102,6 +102,7 @@ ns.plan = {
     recipe = "Silk Headband",        -- crafting spell name
     spell = 8774, item = 7054,       -- optional ids; item identifies the crafted piece in bags
     itemName = "Silk Headband",      -- optional; used when item is absent
+    makes = 1,                      -- optional output items per craft; defaults to 1
     exit = "Disenchant",             -- or "Sell on AH" / "Vendor" / "" (craft only)
     reagents = { { item = 4305, qty = 4 }, ... },
 }
@@ -112,6 +113,27 @@ or the "Next shuffle step" key binding: disenchant a crafted piece in the bags i
 Disenchant, otherwise craft the next one, until the reagents run out. A tracker frame
 (`/shuffledetector shuffle` to show or hide) highlights the current step. The secure button is
 invisible and chooses the step as it is clicked, because chat commands cannot cast.
+
+# In-game shopping state
+
+`/shuffledetector snatch` uses the loaded plan's direct reagents, `spell`, `item`, and optional
+`makes`. Both IDs are required. It stores `AHSnapshotDB.snatcher[characterGUID]`:
+
+- `recipe`: a fingerprint of the spell, output item, output count and reagents. A changed recipe
+  resets `target` and `completed`, but keeps item price limits and outstanding purchases.
+- `target`: newly crafted finished items for the batch (0 disables it; maximum 100000).
+- `completed`: successful casts of that recipe since the last "New batch".
+- `prices[itemID]`: maximum purchase unit price in copper; 0 disables purchasing.
+- `awaiting[itemID]`: confirmed AH quantities purchased by the snatcher but not yet collected.
+- `bags[itemID]`: last observed bag count used to reconcile normal mail collection.
+- `inFlight`: an unresolved purchase reservation (`item`, `qty`, `kind`, `at`, plus auction key,
+  auction ID and/or quoted `total`, or `vendor`/`before` for a merchant purchase). It is saved
+  before a merchant purchase or AH buyout/quote confirmation. A
+  reload restores it as `uncertain`; subsequent purchases remain blocked until reconciled.
+
+Polling, offers, commodity quotes and the panel's visibility are not persisted. Polling uses live
+`C_AuctionHouse` search results, not Auctionator's saved minimum prices. The companion ignores
+shopping state. The snatcher never writes the selected `Plan.lua`.
 
 # Reference data
 
