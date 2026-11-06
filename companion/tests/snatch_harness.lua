@@ -1011,4 +1011,123 @@ eq(s.inFlight.qty, 10, "submitted reservation survives window visibility changes
 pressPurchase()
 eq(#calls, countBeforeHide, "hidden macro still respects purchase reservation")
 
+local free, outputStack, contents
+local function batchSetup(exit)
+    local state = setup()
+    state.target, bags[1] = 50, 100
+    ns.plan.exit = exit
+    free, outputStack, contents = 32, 1, {}
+    C_Item.GetItemInfo = function() return "Output", nil, nil, nil, nil, nil, nil, outputStack end
+    C_Container = {
+        GetContainerNumFreeSlots = function(bag)
+            if bag == 0 then return free, 0 end
+            return 50, 32 -- specialized slots must not count as general output space
+        end,
+        GetContainerNumSlots = function(bag) return bag == 0 and 40 or 0 end,
+        GetContainerItemInfo = function(bag, slot) return contents[slot] end,
+        GetContainerItemLink = function(bag, slot)
+            local item = contents[slot]
+            return item and "item:" .. item.itemID or nil
+        end,
+        UseContainerItem = function(bag, slot) calls[#calls + 1] = { "sell", bag, slot } end,
+    }
+    local clickBatch = macro()
+    shuffleEvents = frames[#frames]
+    return state, clickBatch
+end
+
+local batchPress
+s, batchPress = batchSetup("Disenchant")
+eq(ns.NextShuffleStep().quantity, 30, "no ten-item cap: leave two general slots open")
+free = 7
+eq(ns.NextShuffleStep().quantity, 5, "batch adapts to free bag slots")
+bags[1] = 6
+eq(ns.NextShuffleStep().quantity, 3, "batch limited by available materials")
+bags[1], s.target, s.completed = 100, 50, 48
+eq(ns.NextShuffleStep().quantity, 2, "batch limited by remaining target")
+s.target, s.completed, ns.plan.makes = 5, 0, 3
+eq(ns.NextShuffleStep().quantity, 1, "multi-output craft must fit entire output")
+free = 8
+eq(ns.NextShuffleStep().quantity, 2, "multi-output target rounded up within space limit")
+s.target, ns.plan.makes = 50, 1
+free = 2
+eq(ns.NextShuffleStep().kind, "idle", "do not consume two reserved slots")
+assert(ns.NextShuffleStep().label:find("2 slots"), "full-bag waiting state explains reserve")
+batchPress()
+eq(#calls, 0, "no protected craft request without reserved space")
+outputStack = 20
+contents[1] = { itemID = 20, stackCount = 17 }
+ns.plan.exit = ""
+eq(ns.NextShuffleStep().quantity, 3, "partial stack room usable with two empty slots")
+contents[1].isLocked = true
+eq(ns.NextShuffleStep().kind, "idle", "locked stack cannot provide output space")
+contents[1].isLocked = false
+free = 1
+eq(ns.NextShuffleStep().kind, "idle", "partial stacks cannot substitute for two empty slots")
+free = 3
+eq(ns.NextShuffleStep().quantity, 23, "combine partial stack room and spare general slot")
+s.target = 0
+bags[1] = 10
+eq(ns.NextShuffleStep().quantity, 5, "batching also works without a snatcher target")
+C_TradeSkillUI = nil
+eq(ns.NextShuffleStep().quantity, 1, "legacy crafting stays one cast per press")
+
+for _, exit in ipairs({ "Disenchant", "Vendor" }) do
+    s, batchPress = batchSetup(exit)
+    free = 6
+    MerchantFrame.shown = exit == "Vendor"
+    batchPress()
+    eq(calls[1][1], "craft")
+    eq(calls[1][3], 4, "queue all crafts fitting spare capacity")
+    for i = 1, 4 do
+        shuffleEvent("UNIT_SPELLCAST_START", "player", "batch" .. i, 10)
+        shuffleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "batch" .. i, 10)
+        bags[1], bags[20], free = bags[1] - 2, i, free - 1
+        contents[i] = { itemID = 20, stackCount = 1 }
+        shuffleEvent("BAG_UPDATE_DELAYED")
+        if i < 4 then
+            batchPress()
+            eq(#calls, 1, "do not exit or craft again during queued batch")
+        end
+    end
+    eq(s.completed, 4, "every finished craft advances target")
+    eq(ns.NextShuffleStep().kind, exit == "Vendor" and "sell" or "disenchant", "exit after entire queue")
+    for i = 1, 4 do
+        batchPress()
+        if exit == "Disenchant" then
+            eq(ShuffleDetectorShuffleButton:GetAttribute("type"), nil, "DE disarmed until loot bags update")
+            shuffleEvent("UNIT_SPELLCAST_START", "player", "de" .. i, 13262)
+            shuffleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "de" .. i, 13262)
+        else
+            eq(calls[#calls][1], "sell")
+        end
+        contents[i], bags[20], free = nil, 4 - i, free + 1
+        shuffleEvent("BAG_UPDATE_DELAYED")
+        eq(s.completed, 4, "exit actions never advance craft target")
+        if i < 4 then
+            eq(ns.NextShuffleStep().kind, exit == "Vendor" and "sell" or "disenchant", "drain entire batch before crafting")
+        end
+    end
+    eq(ns.NextShuffleStep().quantity, 4, "next batch rechecks space after exit phase")
+    batchPress()
+    eq(calls[#calls][1], "craft", "return to crafting after all outputs processed")
+end
+
+s, batchPress = batchSetup("Disenchant")
+free = 6
+batchPress()
+shuffleEvent("UNIT_SPELLCAST_START", "player", "partial", 10)
+shuffleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "partial", 10)
+bags[1], bags[20], free = 98, 1, 5
+contents[1] = { itemID = 20, stackCount = 1 }
+shuffleEvent("BAG_UPDATE_DELAYED")
+shuffleEvent("UNIT_SPELLCAST_INTERRUPTED", "player", "cancelled", 10)
+eq(ns.NextShuffleStep().kind, "disenchant", "interrupted primary queue processes partial output batch")
+eq(s.completed, 1, "interruption does not count unmade queued crafts")
+contents[1], bags[20], free = nil, 0, 6
+shuffleEvent("BAG_UPDATE_DELAYED")
+eq(ns.NextShuffleStep().quantity, 4, "retry recalculates space after partial batch")
+C_Container.GetContainerNumFreeSlots = nil
+eq(ns.NextShuffleStep().quantity, 1, "missing capacity API keeps conservative single craft")
+
 print("snatcher checks passed")

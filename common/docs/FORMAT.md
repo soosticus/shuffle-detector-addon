@@ -111,8 +111,13 @@ ns.plan = {
 ```
 
 The shuffle runs one step per press of a macro (`/click ShuffleDetectorShuffleButton`)
-or the "Next shuffle step" key binding: disenchant a crafted piece in the bags if the exit is
-Disenchant, otherwise craft the next one, until the reagents run out. A tracker frame
+or the "Next shuffle step" key binding: drain crafted pieces through Disenchant or Vendor
+exit presses, otherwise queue the crafts that fit available materials, remaining target
+and bag output capacity while reserving two empty general-purpose bag slots. Existing
+unlocked output stacks contribute space; specialized empty slots and future reagent
+consumption do not. Multi-output recipes use `makes` to bound whole casts. The queue stays
+locked until completion or interruption; every successful main-recipe cast increments
+`completed`. Legacy crafting/bag APIs fall back to one craft per press. A tracker frame
 (`/shuffledetector shuffle` to show or hide) highlights the current step. The secure button is
 invisible and chooses the step as it is clicked, because chat commands cannot cast.
 

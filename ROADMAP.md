@@ -8,6 +8,7 @@ Open items only; finished work is removed. Release notes are hand-written in `re
 - Handle vendor faction/location restrictions.
 - Confirm in game that the addon loads with its Auctionator dependency and that the companion shows prices after an Auctionator scan and `/reload` (prices are read from `Auctionator.lua`, see `auctionator.py`). Open question: the realm key (`PvE`, `ClassicBetaPvE2`) with the freshest data is picked by default; check it is the right realm.
 - Confirm in game that the fast-press gating no longer repeats a craft or disenchant step.
+- Confirm space-limited finished-item craft batches in game: reserve two empty general-purpose slots, account for unlocked partial output stacks and multi-output recipes, stop at materials/target, then drain the full batch through vendor or disenchant presses. Check interruption, full bags and loot headroom; queue/capacity behavior is covered by the Lua harness.
 - Confirm in game that the Vendor sell step (addon 0.7.2) works. AH listing is out of scope (Auctionator and similar addons do it); AH exits only prompt.
 - Shuffle follow-up: take the craft count or budget from the calculator.
 - Confirm the in-game material snatcher on Forever 1.60.1: resend a multi-output shuffle, set a small target with cheap materials, test merchant bundles/stock, AH item buyouts and commodity quote/confirmation, price changes, mailbox collection, reload recovery and Auctionator interference. Implementation has a Lua API stub harness; protected actions and real server events are not verified in game.

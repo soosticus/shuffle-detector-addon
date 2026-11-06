@@ -93,6 +93,33 @@ local function craftableCount(plan)
     return n or 0
 end
 
+local function outputCapacity(plan)
+    local c = C_Container
+    local freeSlots = (c and c.GetContainerNumFreeSlots) or GetContainerNumFreeSlots
+    if not freeSlots then return end
+    local info = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    local stack = info and plan.item and select(8, info(plan.item))
+    stack = type(stack) == "number" and stack > 0 and stack or 1
+    local slots = (c and c.GetContainerNumSlots) or GetContainerNumSlots
+    local slotInfo = c and c.GetContainerItemInfo
+    local empty, partial = 0, 0
+    for bag = 0, NUM_BAG_SLOTS or 4 do
+        local free, family = freeSlots(bag)
+        -- Count general bags only; specialized bags may reject the crafted output.
+        if family == 0 and type(free) == "number" then empty = empty + free end
+        if stack > 1 and slots and slotInfo then
+            for slot = 1, slots(bag) or 0 do
+                local item = slotInfo(bag, slot)
+                if item and item.itemID == plan.item and not item.isLocked then
+                    partial = partial + math.max(0, stack - (item.stackCount or stack))
+                end
+            end
+        end
+    end
+    if empty < 2 then return 0 end
+    return (empty - 2) * stack + partial
+end
+
 local function merchantOpen()
     return MerchantFrame ~= nil and MerchantFrame:IsShown()
 end
@@ -154,7 +181,21 @@ function ns.NextShuffleStep()
         end
         return step
     end
-    step.kind, step.label, step.stage = "craft", "Craft " .. plan.recipe, 1
+    local makes = plan.makes or 1
+    local quantity = step.craftable
+    local remaining = ns.SnatchCraftsRemaining and ns.SnatchCraftsRemaining()
+    if remaining then quantity = math.min(quantity, remaining) end
+    local capacity = outputCapacity(plan)
+    if capacity then quantity = math.min(quantity, math.floor(capacity / makes)) end
+    if quantity <= 0 then
+        step.kind, step.label = "idle", "Free bag space (keep 2 slots open) before crafting " .. plan.recipe
+        return step
+    end
+    if not capacity or not (plan.spell and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe) then
+        quantity = 1
+    end
+    step.kind, step.label, step.stage = "craft", ("Craft %d x %s"):format(quantity, plan.recipe), 1
+    step.quantity = quantity
     return step
 end
 
@@ -199,7 +240,7 @@ local function refreshTracker(step)
         tracker.foot:SetText("In combat - the next step is set when it ends")
     elseif step.kind == "idle" then
         tracker.foot:SetText(step.label)
-    elseif step.recipe or step.purchase then
+    elseif step.recipe or step.purchase or (step.quantity and step.quantity > 1) then
         tracker.foot:SetText(step.label .. " - press your shuffle macro")
     else
         tracker.foot:SetText("Run your shuffle macro")

@@ -198,6 +198,13 @@ function ns.SnatchTargetReached()
     return s and s.target > 0 and s.completed >= math.ceil(s.target / (p.makes or 1))
 end
 
+function ns.SnatchCraftsRemaining()
+    local s, p = state()
+    if s and s.target > 0 then
+        return math.max(0, math.ceil(s.target / (p.makes or 1)) - s.completed)
+    end
+end
+
 function ns.NextSnatchRefinement(id)
     local s = state()
     if not s or s.target == 0 or ns.SnatchTargetReached() then return end
