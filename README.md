@@ -47,7 +47,15 @@ The GUI's Calculator tab plans a batch of the selected shuffle either by number 
 
 ## In-game shuffle
 
-Select a shuffle in the companion and choose Addon > "Send selected shuffle to game" (or the "Send to game" button; CLI: `--send-plan "Recipe Name"`), then `/reload` in game. A small tracker appears showing the shuffle's steps with the current one highlighted, plus how many crafts your reagents allow and how many crafted pieces are in your bags. Drag it to move it; `/shuffledetector shuffle` shows or hides it.
+Select a shuffle in the companion and choose Addon > "Send selected shuffle to game" (or the "Send to game" button; CLI: `--send-plan "Recipe Name"`), then `/reload` in game. One window shows batch target/price controls, batch progress, the live shuffle steps, craftable count and crafted pieces in your bags. The next action includes purchase prices and waiting states. Drag the window to move it; its position and visibility are remembered.
+
+Use `/shuffledetector shuffle` to toggle this combined window; `/shuffledetector snatch` is an alias, not a separate shopping window. You can put the toggle in its own macro:
+
+```
+/shuffledetector shuffle
+```
+
+This show/hide macro is separate from the action macro below. Hiding the window stops AH polling and cancels an unconfirmed quote, but does not reset saved batch settings or purchase reservations. An explicit action-macro press can restart polling while the window remains hidden.
 
 To run the shuffle, make a macro (`/shuffledetector macro` prints it) and press it repeatedly:
 
@@ -59,11 +67,13 @@ Each press does one step: disenchant a crafted piece in your bags, otherwise cra
 
 ### In-game material snatcher
 
-Send the selected shuffle from the companion, install the updated addon, and `/reload`. Use `/shuffledetector snatch` to open its shopping panel:
+Send the selected shuffle from the companion, install the updated addon, and `/reload`. Use `/shuffledetector shuffle` (or `/shuffledetector snatch`) to show the combined shuffle/batch window:
 
 1. Enter a **finished-item target** and each direct reagent's **maximum unit price** (`1g 20s 5c`, or a number of copper), then click **Save limits**. Zero disables the target or that reagent's purchases. For multi-output recipes, resend the plan with the updated companion so it includes the output quantity; crafts are rounded up.
-2. At a merchant, **Buy vendor** purchases one affordable batch of a matching gold-only listing, at the live reputation-adjusted price. It respects stock, bundle sizes and remaining quantities; it never buys an oversized bundle. Keep clicking as bag updates arrive. Vendors are not bought from unattended.
-3. At the AH, click **Start AH polling**. Searches rotate through outstanding reagents, at most once every three seconds, and respect the client's throttle. **Buy AH offer** buys an individual auction outright, or requests a commodity quote. Commodities require a second click on **Confirm AH purchase**. There is no unattended AH purchasing, bidding below buyout, or companion-driven purchase automation.
+2. At a merchant, press **your normal shuffle macro** (or **Buy vendor**) to purchase one affordable batch of a matching gold-only listing, at the live reputation-adjusted price. It respects stock, bundle sizes and remaining quantities; it never buys an oversized bundle. Keep pressing as bag updates arrive. Vendors are not bought from unattended.
+3. At the AH, press **the same macro** to start polling (or click **Start AH polling**). Searches rotate through outstanding reagents, at most once every three seconds, and respect the client's throttle. Once the tracker displays an offer, another macro press buys an individual auction outright, or requests a commodity quote. Commodities require a **separate press after the quote arrives** to confirm. **Buy AH offer** and **Confirm AH purchase** remain available in the panel. There is no unattended AH purchasing, bidding below buyout, or companion-driven purchase automation.
+
+The single-button flow uses `/click ShuffleDetectorShuffleButton` and its existing key binding. Save your target and price limits in the snatcher panel first; macro presses never save unsubmitted edits. The tracker shows the next action and price. Purchase confirmations and bag updates block further buying; existing crafted items are still processed through disenchant/vendor exit actions first. Once purchasing is done, collect the materials from mail and open your profession: the same macro prepares intermediates and crafts the selected recipe. Uncertain purchases must still be resolved explicitly in the panel, never by repeatedly pressing the macro.
 
 Requirements subtract bag stock, completed crafts and this snatcher's purchases awaiting mail collection. The shuffle macro stops crafting at the batch target but still processes crafted items through its exit step. **New batch** resets craft progress, not the awaiting-mail ledger. Targets, progress and prices are saved per character; changing the recipe disables the old target. Bank stock, existing finished items and other addons' purchases are not included. Single-step raw-material preparation is described below.
 
@@ -77,7 +87,7 @@ With a snatcher target enabled, **the normal shuffle macro automatically prepare
 
 Supported conversions have one raw reagent and produce one intermediate per cast, with a spell recorded as learned on this character. This also covers similar single-input bars/bolts. Multi-step chains, multi-output intermediate recipes, and raw materials shared by multiple direct requirements are not expanded; the panel explains when to buy an intermediate directly. Missing or mismatched recipe records require reopening the profession window. Prices compare available batches, not a globally optimized multi-auction crafting chain.
 
-Offers expire after ten seconds. Live results are checked again before buying; quotes exceeding the cap, available gold or displayed total are rejected. Commodity result tiers must be within the unit cap, and the server quote must also fit the capped total cost; a quote does not expose its individual price tiers. Individual-auction stacks cannot exceed the outstanding quantity. Polling stops when the panel/AH closes, combat begins, or another addon searches; avoid using Auctionator's shopping/scanning at the same time. The snatcher conservatively ignores commodity results containing your own/account auctions.
+Offers expire after ten seconds. Live results are checked again before buying; quotes exceeding the cap, available gold or displayed total are rejected. Commodity result tiers must be within the unit cap, and the server quote must also fit the capped total cost; a quote does not expose its individual price tiers. Individual-auction stacks cannot exceed the outstanding quantity. Polling stops when the panel/AH closes, combat begins, or another addon searches; an explicit macro press at the AH can restart it using saved limits, even with the panel hidden. Avoid using Auctionator's shopping/scanning at the same time. The snatcher conservatively ignores commodity results containing your own/account auctions.
 
 Unconfirmed purchases remain reserved across `/reload` and block further purchases. After checking bags **and mail** (bags only for vendor purchases), use **Resolve uncertain purchase** to identify whether the materials remain in mail or the reservation can be released. Mail collection is detected after normal attachment/auto-loot actions; if materials were collected with this addon disabled, after a slow mail response, or through another collection method, use **Reconcile collected mail** only after collecting **all** purchased materials. Never clear reservations just to retry a purchase whose outcome is unknown.
 

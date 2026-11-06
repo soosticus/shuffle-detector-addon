@@ -531,6 +531,63 @@ function ns.SnatchBuyAH()
     if refresh then refresh() end
 end
 
+function ns.NextSnatchPurchase()
+    local s = state()
+    if not s or s.target == 0 then return end
+    if pending then
+        if pending.kind == "quoted" then
+            return { kind = "purchase", action = "ah", item = pending.item, qty = pending.qty, total = pending.total,
+                label = ("Confirm %d x %s for %s"):format(pending.qty, itemName(pending.item), money(pending.total)) }
+        end
+        return { kind = "idle", label = pending.kind == "uncertain"
+            and "Resolve uncertain purchase in the snatcher panel" or "Waiting for purchase confirmation or bag update" }
+    end
+    if ns.SnatchTargetReached() then return end
+    if MerchantFrame and MerchantFrame:IsShown() then
+        for _, r in ipairs(ns.SnatchNeeds()) do
+            local o = vendorChoice(r.item)
+            if o then
+                return { kind = "purchase", action = "vendor", item = o.item, qty = o.qty, total = o.total,
+                    label = ("Buy %d x %s from vendor for %s"):format(o.qty, itemName(o.item), money(o.total)) }
+            end
+        end
+    elseif ahOpen then
+        if offer and GetTime() - offer.at <= 10 then
+            return { kind = "purchase", action = "ah", item = offer.item, qty = offer.qty, total = offer.total,
+                label = ("%s %d x %s for %s"):format(offer.kind == "commodity" and "Quote" or "Buy",
+                    offer.qty, itemName(offer.item), money(offer.total)) }
+        end
+        for _, r in ipairs(ns.SnatchNeeds()) do
+            if r.missing > 0 and r.cap > 0 then
+                return { kind = running and "idle" or "purchase", action = "poll",
+                    label = running and "Waiting for AH offers within saved limits" or "Start AH polling with saved limits" }
+            end
+        end
+        for _, r in ipairs(ns.SnatchNeeds()) do
+            if r.awaiting > 0 then return { kind = "idle", label = "Collect purchased materials from mail" } end
+        end
+    end
+end
+
+function ns.SnatchPurchaseStep(expected)
+    guarded(function()
+        if InCombatLockdown() then message("Leave combat before purchasing."); return end
+        local current = ns.NextSnatchPurchase()
+        if not current or current.kind ~= "purchase" or current.action ~= expected.action
+            or current.item ~= expected.item or current.qty ~= expected.qty or current.total ~= expected.total then
+            message("Purchase step changed. Press again to review the next step.")
+            return
+        end
+        if current.action == "vendor" then ns.SnatchBuyVendor(current.item)
+        elseif current.action == "ah" then ns.SnatchBuyAH()
+        else
+            running = true
+            ns.SnatchPoll()
+            if refresh then refresh() end
+        end
+    end)
+end
+
 local function onEvent(_, event, a, b)
     if event == "AUCTION_HOUSE_SHOW" then
         ahOpen = true
@@ -647,10 +704,21 @@ local function saveInputs()
 end
 
 refresh = function()
+    if ns.RefreshShuffleTracker then ns.RefreshShuffleTracker() end
     if not panel then return end
     local s, p = state()
-    if not s then panel.title:SetText("Snatcher: send a shuffle from the companion first"); return end
-    panel.title:SetText(p.recipe)
+    if not s then
+        panel.title:SetText("Send a shuffle from the companion to configure a batch")
+        panel.progress:SetText("")
+        for _, row in ipairs(rows) do row.frame:Hide() end
+        rows = {}
+        panel.content:SetHeight(1)
+        panel.buy:SetEnabled(false)
+        pollButton:SetEnabled(false)
+        return
+    end
+    pollButton:SetEnabled(true)
+    panel.title:SetText("Batch: " .. p.recipe)
     panel.progress:SetText(("%d / %d crafts completed; %d items per craft"):format(s.completed,
         math.ceil(s.target / (p.makes or 1)), p.makes or 1))
     local needs = ns.SnatchNeeds()
@@ -696,31 +764,35 @@ populate = function()
     refresh()
 end
 
-function ns.ToggleSnatcher()
+local function createPanel()
     if not panel then
         panel = CreateFrame("Frame", "ShuffleDetectorSnatcher", UIParent, "BasicFrameTemplateWithInset")
-        panel:SetSize(450, 450)
+        if panel.TitleText then panel.TitleText:SetText("ShuffleDetector") end
+        panel:SetSize(450, 550)
         panel:SetPoint("CENTER")
         panel:SetMovable(true)
         panel:SetClampedToScreen(true)
         panel:EnableMouse(true)
         panel:RegisterForDrag("LeftButton")
         panel:SetScript("OnDragStart", panel.StartMoving)
-        panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
-        panel:SetScript("OnHide", function() stop("Snatcher hidden. Polling stopped.") end)
+        panel:SetScript("OnDragStop", function(self)
+            self:StopMovingOrSizing()
+            local point, _, relPoint, x, y = self:GetPoint()
+            AHSnapshotDB.shuffleTracker = { point = point, relPoint = relPoint, x = x, y = y }
+        end)
         panel.title = text(panel, 12, -30, 420)
         text(panel, 12, -52, 170):SetText("Finished-item target (0 = off)")
         panel.target = edit(panel, 80, 200, -48)
         button(panel, "Save limits", 110, 310, -48, saveInputs)
         panel.progress = text(panel, 12, -78, 420)
-        text(panel, 12, -100, 420):SetText("Maximum price per unit: g/s/c or copper; 0 = do not buy")
+        text(panel, 12, -202, 420):SetText("Maximum price per unit: g/s/c or copper; 0 = do not buy")
         local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-        scroll:SetPoint("TOPLEFT", 12, -122)
+        scroll:SetPoint("TOPLEFT", 12, -224)
         scroll:SetSize(402, 210)
         panel.content = CreateFrame("Frame", nil, scroll)
         panel.content:SetSize(400, 1)
         scroll:SetScrollChild(panel.content)
-        pollButton = button(panel, "Start AH polling", 130, 12, -338, function()
+        pollButton = button(panel, "Start AH polling", 130, 12, -440, function()
             if running then stop("Polling stopped.")
             elseif saveInputs() then
                 if ahOpen then running = true; ns.SnatchPoll()
@@ -728,13 +800,13 @@ function ns.ToggleSnatcher()
             end
             refresh()
         end)
-        panel.buy = button(panel, "Buy AH offer", 160, 155, -338, ns.SnatchBuyAH)
-        button(panel, "New batch", 105, 325, -338, function()
+        panel.buy = button(panel, "Buy AH offer", 160, 155, -440, ns.SnatchBuyAH)
+        button(panel, "New batch", 105, 325, -440, function()
             if pending then message("Pending purchase: check bags/mail before starting a new batch."); return end
             local s = state()
             if s then s.completed = 0; stop("New batch started. Awaiting mail is still reserved."); refresh() end
         end)
-        button(panel, "Resolve uncertain purchase", 200, 12, -366, function()
+        button(panel, "Resolve uncertain purchase", 200, 12, -468, function()
             if not pending or pending.kind ~= "uncertain" then
                 message("No uncertain purchase. Wait for confirmation or reload after checking bags/mail.")
                 return
@@ -755,7 +827,7 @@ function ns.ToggleSnatcher()
             }
             StaticPopup_Show("SHUFFLEDETECTOR_SNATCH_RESOLVE")
         end)
-        button(panel, "Reconcile collected mail", 205, 225, -366, function()
+        button(panel, "Reconcile collected mail", 205, 225, -468, function()
             if pending then message("Resolve the pending purchase first."); return end
             StaticPopupDialogs["SHUFFLEDETECTOR_SNATCH_MAIL"] = {
                 text = "Only clear awaiting quantities after ALL purchased materials have been collected from mail. Clear the awaiting-mail ledger?",
@@ -772,13 +844,36 @@ function ns.ToggleSnatcher()
             }
             StaticPopup_Show("SHUFFLEDETECTOR_SNATCH_MAIL")
         end)
-        statusText = text(panel, 12, -404, 420)
+        statusText = text(panel, 12, -506, 420)
         statusText:SetHeight(36)
         rows = {}
         panel:Hide()
+        panel:SetScript("OnShow", function() AHSnapshotDB.shuffleTrackerShown = true end)
+        panel:SetScript("OnHide", function()
+            AHSnapshotDB.shuffleTrackerShown = false
+            stop("Shuffle window hidden. Polling stopped.")
+        end)
+        if ns.AttachShuffleTracker then panel.shuffleStatus = ns.AttachShuffleTracker(panel) end
     end
+end
+
+function ns.ToggleSnatcher()
+    createPanel()
     if panel:IsShown() then panel:Hide()
-    else populate(); panel:Show(); message("Save limits, then poll at the AH or click Buy vendor at a merchant.") end
+    else populate(); panel:Show(); message("Save batch limits, then use your shuffle macro for the next action.") end
+end
+
+function ns.RestoreShuffleWindow()
+    createPanel()
+    local position = AHSnapshotDB.shuffleTracker
+    if position and position.point then
+        panel:ClearAllPoints()
+        panel:SetPoint(position.point, UIParent, position.relPoint or position.point, position.x or 0, position.y or 0)
+    end
+    populate()
+    if AHSnapshotDB.shuffleTrackerShown ~= false and ns.plan and ns.plan.version == 1 and ns.plan.recipe then
+        panel:Show()
+    end
 end
 
 local events = CreateFrame("Frame")

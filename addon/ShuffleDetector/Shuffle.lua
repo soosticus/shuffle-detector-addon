@@ -98,7 +98,7 @@ local function merchantOpen()
 end
 
 -- Decides what the next press should do.
--- Returns { kind = "craft" | "disenchant" | "sell" | "idle", label, stage = 1 (craft) | 2 (disenchant/sell) | nil,
+-- Returns { kind = "craft" | "disenchant" | "sell" | "purchase" | "idle", label, stage = 1 (craft) | 2 (disenchant/sell) | nil,
 --           crafted = pieces in bags, craftable = crafts the reagents allow, bag, slot }.
 function ns.NextShuffleStep()
     local plan = currentPlan()
@@ -119,6 +119,11 @@ function ns.NextShuffleStep()
     if plan.exit == "Vendor" and bag and merchantOpen() then
         step.kind, step.label, step.stage = "sell", "Sell " .. plan.recipe .. " to the vendor", 2
         step.bag, step.slot = bag, slot
+        return step
+    end
+    local shopping = ns.NextSnatchPurchase and ns.NextSnatchPurchase()
+    if shopping then
+        step.kind, step.label, step.purchase = shopping.kind, shopping.label, shopping
         return step
     end
     if ns.SnatchTargetReached and ns.SnatchTargetReached() then
@@ -193,7 +198,7 @@ local function refreshTracker(step)
         tracker.foot:SetText("In combat - the next step is set when it ends")
     elseif step.kind == "idle" then
         tracker.foot:SetText(step.label)
-    elseif step.recipe then
+    elseif step.recipe or step.purchase then
         tracker.foot:SetText(step.label .. " - press your shuffle macro")
     else
         tracker.foot:SetText("Run your shuffle macro")
@@ -209,6 +214,7 @@ local function clearAction()
     btn:SetAttribute("target-item", nil)
     btn.craftRecipe = nil
     btn.sellSlot = nil
+    btn.purchase = nil
 end
 
 -- Attributes of a secure button can only change out of combat; the tracker can always update.
@@ -238,6 +244,8 @@ local function apply()
                 btn:SetAttribute("type", "spell")
                 btn:SetAttribute("spell", recipe)
             end
+        elseif step.kind == "purchase" then
+            btn.purchase = step.purchase
         elseif step.kind == "sell" then
             btn.sellSlot = { step.bag, step.slot }
         elseif step.kind == "disenchant" then
@@ -248,6 +256,7 @@ local function apply()
     end
     refreshTracker(step)
 end
+ns.RefreshShuffleTracker = apply
 
 release = function()
     busy = nil
@@ -266,19 +275,6 @@ local function startBusy()
         if isCasting() then C_Timer.After(5, failsafe) else release() end -- a long cast is still working
     end
     C_Timer.After(20, failsafe)
-end
-
-local function savePosition()
-    local point, _, relPoint, x, y = tracker:GetPoint()
-    AHSnapshotDB.shuffleTracker = { point = point, relPoint = relPoint, x = x, y = y }
-end
-
-local function restorePosition()
-    local p = AHSnapshotDB.shuffleTracker
-    if p and p.point then
-        tracker:ClearAllPoints()
-        tracker:SetPoint(p.point, UIParent, p.relPoint or p.point, p.x or 0, p.y or 0)
-    end
 end
 
 local function create()
@@ -311,6 +307,14 @@ local function create()
         end
         if isCasting() then
             log("click ignored: still casting")
+            return
+        end
+        if self.purchase then
+            local purchase = self.purchase
+            clearAction()
+            log("click: purchase " .. purchase.action .. " " .. tostring(purchase.item))
+            ns.SnatchPurchaseStep(purchase)
+            apply()
             return
         end
         local sellSlot = self.sellSlot
@@ -355,15 +359,6 @@ local function create()
     tracker:SetSize(300, 94)
     tracker:SetPoint("CENTER", UIParent, "CENTER", 0, -200)
     tracker:SetFrameStrata("MEDIUM")
-    tracker:SetMovable(true)
-    tracker:SetClampedToScreen(true)
-    tracker:EnableMouse(true)
-    tracker:RegisterForDrag("LeftButton")
-    tracker:SetScript("OnDragStart", function(self) self:StartMoving() end)
-    tracker:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        savePosition()
-    end)
     local bg = tracker:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
     bg:SetColorTexture(0, 0, 0, 0.65)
@@ -383,10 +378,18 @@ local function create()
 end
 
 function ns.ToggleShuffleTracker()
-    local show = not tracker:IsShown()
-    tracker:SetShown(show)
-    AHSnapshotDB.shuffleTrackerShown = show
-    if show then apply() end
+    ns.ToggleSnatcher()
+end
+
+function ns.AttachShuffleTracker(parent)
+    tracker:SetParent(parent)
+    tracker:ClearAllPoints()
+    tracker:SetPoint("TOPLEFT", parent, "TOPLEFT", 12, -94)
+    tracker:SetSize(420, 100)
+    tracker:EnableMouse(false)
+    tracker:Show()
+    apply()
+    return tracker
 end
 
 -- /shuffle: prepare the next step by hand; the button also does this on every click.
@@ -484,8 +487,7 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3)
         busy = nil
     end
     if event == "PLAYER_LOGIN" then
-        restorePosition()
-        if AHSnapshotDB.shuffleTrackerShown ~= false and currentPlan() then tracker:Show() end
+        ns.RestoreShuffleWindow()
     end
     apply()
 end)

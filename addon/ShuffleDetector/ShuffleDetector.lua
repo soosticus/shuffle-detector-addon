@@ -446,7 +446,7 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
     elseif msg == "yields" then
         ns.RefreshItemDetails()
     else
-        say("usage: /shuffledetector items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | shuffle (show/hide the step tracker) | snatch (material shopping) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
+        say("usage: /shuffledetector items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | shuffle or snatch (toggle batch and shuffle window) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
     end
 end
 

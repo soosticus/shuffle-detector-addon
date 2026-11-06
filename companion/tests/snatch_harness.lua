@@ -11,6 +11,11 @@ local function frame()
         "SetScrollChild", "RegisterEvent", "RegisterUnitEvent", "StartMoving", "StopMovingOrSizing",
         "SetFrameStrata", "RegisterForClicks", "SetAllPoints", "SetColorTexture", "SetTextColor" }) do f[method] = noop end
     function f:SetScript(event, fn) self.scripts[event] = fn end
+    function f:SetParent(parent) self.parent = parent end
+    function f:ClearAllPoints() self.point = nil end
+    function f:SetPoint(...) self.point = { ... } end
+    function f:GetPoint() return table.unpack(self.point or { "CENTER", UIParent, "CENTER", 0, 0 }) end
+    function f:SetSize(width, height) self.width, self.height = width, height end
     function f:CreateFontString() return frame() end
     function f:CreateTexture() return frame() end
     function f:HookScript(event, fn) self.scripts[event] = fn end
@@ -19,8 +24,12 @@ local function frame()
     function f:SetText(value) self.value = value end
     function f:GetText() return self.value end
     function f:SetEnabled(value) self.enabled = value end
-    function f:IsShown() return self.shown end
-    function f:Show() self.shown = true end
+    function f:IsShown() return self.shown and (not self.parent or self.parent:IsShown()) end
+    function f:Show()
+        local wasShown = self.shown
+        self.shown = true
+        if not wasShown and self.scripts.OnShow then self.scripts.OnShow(self) end
+    end
     function f:SetShown(value) self.shown = value end
     function f:Hide()
         self.shown = false
@@ -656,5 +665,250 @@ eq(ShuffleDetectorShuffleButton:GetAttribute("spell"), "Bolt of Linen Cloth")
 s = linen()
 AHSnapshotDB.characters["Tailor-Realm-Alliance"].professions.Tailoring.recipes[1].makes = 2
 eq(#ns.SnatchNeeds(), 1, "multi-output intermediate is not mispriced as single-output")
+
+local function macro()
+    C_Timer = { After = function() end }
+    UnitCastingInfo = function() return nil end
+    C_TradeSkillUI = {
+        CraftRecipe = function(spell, qty) calls[#calls + 1] = { "craft", spell, qty } end,
+        GetRecipeInfo = function() return { learned = true } end,
+    }
+    assert(loadfile("addon/ShuffleDetector/Shuffle.lua"))("ShuffleDetector", ns)
+    return function()
+        now = now + 0.5
+        local b = ShuffleDetectorShuffleButton
+        b.scripts.PreClick(b, "LeftButton", true)
+        b.scripts.PostClick(b, "LeftButton", true)
+        b.scripts.PreClick(b, "LeftButton", false)
+        b.scripts.PostClick(b, "LeftButton", false)
+    end
+end
+
+s = setup()
+s.target, s.prices[1] = 5, 100
+MerchantFrame.shown = true
+merchants = { { id = 1, price = 80, stackCount = 1, numAvailable = -1, isPurchasable = true } }
+local pressPurchase = macro()
+eq(ns.NextShuffleStep().kind, "purchase")
+pressPurchase()
+eq(#calls, 1, "down/up only buys one vendor batch")
+eq(calls[1][1], "vendor")
+eq(calls[1][3], 10)
+pressPurchase()
+eq(#calls, 1, "macro waits for vendor receipt")
+bags[1] = 10
+event("BAG_UPDATE_DELAYED")
+MerchantFrame.shown = false
+pressPurchase()
+eq(calls[2][1], "craft", "same macro proceeds to craft after buying")
+
+s = setup()
+s.target, s.prices[1] = 5, 100
+commodity[1] = { { quantity = 10, unitPrice = 80 } }
+pressPurchase = macro()
+event("AUCTION_HOUSE_SHOW")
+eq(ns.NextShuffleStep().purchase.action, "poll")
+pressPurchase()
+eq(#calls, 1)
+eq(calls[1][1], "search", "macro starts polling without opening shopping panel")
+pressPurchase()
+eq(#calls, 1, "macro waits for search instead of overlapping")
+result(1)
+eq(ns.NextShuffleStep().purchase.action, "ah")
+pressPurchase()
+eq(calls[2][1], "quote")
+pressPurchase()
+eq(#calls, 2, "cannot buy while quote is pending")
+event("COMMODITY_PRICE_UPDATED", 80, 800)
+eq(ns.NextShuffleStep().label, "Confirm 10 x Item 1 for 0g 8s 0c")
+pressPurchase()
+eq(calls[3][1], "confirm", "same macro confirms on a separate press")
+eq(#calls, 3, "one confirmation for down/up")
+ns.SnatchBuyAH()
+pressPurchase()
+eq(#calls, 3, "panel and macro share the purchase lock")
+event("COMMODITY_PURCHASE_SUCCEEDED")
+eq(ns.NextShuffleStep().label, "Collect purchased materials from mail")
+pressPurchase()
+eq(#calls, 3, "does not buy purchased mail again")
+
+s = setup()
+ns.plan.reagents = { { item = 2, qty = 1 } }
+ns.SnatchNeeds()
+s.target, s.prices[2] = 3, 100
+items[2] = { { itemKey = { itemID = 2 }, quantity = 3, buyoutAmount = 240, auctionID = 101 } }
+pressPurchase = macro()
+event("AUCTION_HOUSE_SHOW")
+pressPurchase(); result(2); pressPurchase()
+eq(calls[2][1], "buyout", "macro supports individual auction buyouts")
+event("AUCTION_HOUSE_PURCHASE_COMPLETED", 101)
+eq(s.awaiting[2], 3)
+eq(ns.NextShuffleStep().kind, "idle")
+
+s = setup()
+s.target, s.prices[1] = 5, 100
+commodity[1] = { { quantity = 10, unitPrice = 80 } }
+pressPurchase = macro()
+event("AUCTION_HOUSE_SHOW")
+pressPurchase(); result(1)
+commodity[1][1].unitPrice = 120
+pressPurchase()
+eq(#calls, 1, "macro rejects changed over-cap listings")
+eq(s.inFlight, nil)
+
+s = setup()
+s.target, s.prices[1] = 5, 100
+commodity[1] = { { quantity = 10, unitPrice = 80 } }
+pressPurchase = macro()
+event("AUCTION_HOUSE_SHOW")
+pressPurchase(); result(1); pressPurchase()
+event("COMMODITY_PRICE_UPDATED", 80, 800)
+InCombatLockdown = function() return true end
+pressPurchase()
+eq(#calls, 2, "macro cannot confirm purchases in combat")
+InCombatLockdown = function() return false end
+pressPurchase()
+eq(calls[3][1], "confirm")
+advance(16)
+eq(ns.NextShuffleStep().label, "Resolve uncertain purchase in the snatcher panel")
+pressPurchase()
+eq(#calls, 3, "unknown outcomes cannot be retried with macro")
+
+s = setup()
+s.target, s.prices[1] = 0, 100
+MerchantFrame.shown = true
+merchants = { { id = 1, price = 80, stackCount = 1, numAvailable = -1, isPurchasable = true } }
+pressPurchase = macro()
+pressPurchase()
+eq(#calls, 0, "disabled target never spends through macro")
+
+s = linen()
+commodity[2996] = { { quantity = 6, unitPrice = 80 } }
+commodity[2589] = { { quantity = 12, unitPrice = 30 } }
+pressPurchase = macro()
+event("AUCTION_HOUSE_SHOW")
+pressPurchase(); result(2996); advance(3); result(2589); pressPurchase()
+eq(calls[#calls][2], 2589, "single button keeps cheaper raw selection")
+eq(calls[#calls][3], 12)
+event("COMMODITY_PRICE_UPDATED", 30, 360)
+pressPurchase()
+eq(calls[#calls][1], "confirm")
+event("COMMODITY_PURCHASE_SUCCEEDED")
+TakeInboxItem(1, 1)
+bags[2589] = 12
+event("BAG_UPDATE_DELAYED")
+event("AUCTION_HOUSE_CLOSED")
+eq(ns.NextShuffleStep().spell, 2963, "single button proceeds from raw buying to bolt preparation")
+pressPurchase()
+eq(calls[#calls][1], "craft")
+eq(calls[#calls][2], 2963)
+
+s = setup()
+s.target, s.prices[1] = 5, 100
+MerchantFrame.shown = true
+merchants = { { id = 1, price = 80, stackCount = 1, numAvailable = -1, isPurchasable = true } }
+pressPurchase = macro()
+local expected = ns.NextShuffleStep().purchase
+merchants[1].price = 90
+ns.SnatchPurchaseStep(expected)
+eq(#calls, 0, "dispatch rejects price changes between selection and execution")
+pressPurchase()
+eq(calls[1][1], "vendor")
+
+s = setup()
+s.target, s.prices[1] = 5, 100
+commodity[1] = { { quantity = 10, unitPrice = 80 } }
+pressPurchase = macro()
+event("AUCTION_HOUSE_SHOW")
+pressPurchase(); result(1)
+local b = ShuffleDetectorShuffleButton
+now = now + 0.5
+b.scripts.PreClick(b, "LeftButton", false)
+event("AUCTION_HOUSE_CLOSED")
+b.scripts.PostClick(b, "LeftButton", false)
+eq(#calls, 1, "closing AH before execution cannot spend")
+
+s = setup()
+s.target, s.prices[1] = 5, 100
+SlashCmdList = {}
+date = os.date
+UnitName = function() return "Tailor" end
+GetRealmName = function() return "Realm" end
+UnitFactionGroup = function() return "Alliance" end
+assert(loadfile("addon/ShuffleDetector/ShuffleDetector.lua"))("ShuffleDetector", ns)
+pressPurchase = macro()
+ns.RestoreShuffleWindow()
+local window = ShuffleDetectorSnatcher
+eq(window:IsShown(), true, "existing default tracker visibility opens the shared window")
+eq(window.shuffleStatus, ShuffleDetectorTracker)
+eq(ShuffleDetectorTracker.parent, window, "live tracker is embedded, not another window")
+eq(window.width, 450)
+eq(window.height, 550)
+eq(window.progress.value, "0 / 5 crafts completed; 1 items per craft")
+eq(window.target:GetText(), "5", "batch controls share state with tracker")
+eq(ShuffleDetectorTracker.foot.value, "Out of Item 1", "shared window shows live shuffle action")
+SlashCmdList.SHUFFLEDETECTOR("shuffle")
+eq(window:IsShown(), false, "shuffle slash command toggles the shared window")
+eq(ShuffleDetectorTracker:IsShown(), false, "embedded tracker hides with batch options")
+eq(AHSnapshotDB.shuffleTrackerShown, false, "close visibility persists")
+SlashCmdList.SHUFFLEDETECTOR("snatch")
+eq(window:IsShown(), true, "snatch remains an alias for the same window")
+eq(ShuffleDetectorSnatcher, window, "aliases do not create another panel")
+window:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 40, -50)
+window.scripts.OnDragStop(window)
+eq(AHSnapshotDB.shuffleTracker.x, 40)
+eq(AHSnapshotDB.shuffleTracker.y, -50)
+window:Hide()
+ns.RestoreShuffleWindow()
+eq(window:IsShown(), false, "hidden state remains hidden on restoration")
+eq(window.point[4], 40, "restores old tracker position to merged window")
+eq(window.point[5], -50)
+SlashCmdList.SHUFFLEDETECTOR("shuffle")
+event("AUCTION_HOUSE_SHOW")
+pressPurchase()
+eq(calls[1][1], "search")
+window:Hide()
+advance(20)
+eq(#calls, 1, "hiding merged window stops polling")
+eq(window:IsShown(), false)
+pressPurchase()
+eq(calls[2][1], "search", "action macro remains usable while merged window is hidden")
+eq(window:IsShown(), false, "action macro does not reopen options")
+bags[1] = 10
+event("BAG_UPDATE_DELAYED")
+event("AUCTION_HOUSE_CLOSED")
+SlashCmdList.SHUFFLEDETECTOR("snatch")
+eq(ShuffleDetectorTracker.foot.value, "Run your shuffle macro", "live state updates after bag acquisition")
+eq(window.target:GetText(), "5", "toggling does not reset batch target")
+ns.plan = nil
+event("BAG_UPDATE_DELAYED")
+eq(window.progress.value, "", "no stale batch progress after plan removal")
+eq(ShuffleDetectorTracker.title.value, "Shuffle")
+eq(window.buy.enabled, false, "missing plans cannot buy")
+
+s = setup()
+s.target, s.prices[1] = 5, 100
+commodity[1] = { { quantity = 10, unitPrice = 80 } }
+pressPurchase = macro()
+ns.ToggleSnatcher()
+window = ShuffleDetectorSnatcher
+event("AUCTION_HOUSE_SHOW")
+pressPurchase(); result(1); pressPurchase()
+event("COMMODITY_PRICE_UPDATED", 80, 800)
+window:Hide()
+eq(calls[#calls][1], "cancel", "hiding shared window cancels only an unconfirmed quote")
+eq(s.target, 5)
+eq(s.prices[1], 100)
+pressPurchase()
+advance(3); result(1); pressPurchase()
+event("COMMODITY_PRICE_UPDATED", 80, 800)
+pressPurchase()
+local countBeforeHide = #calls
+ns.ToggleSnatcher()
+window:Hide()
+eq(#calls, countBeforeHide, "hiding window does not cancel an already submitted purchase")
+eq(s.inFlight.qty, 10, "submitted reservation survives window visibility changes")
+pressPurchase()
+eq(#calls, countBeforeHide, "hidden macro still respects purchase reservation")
 
 print("snatcher checks passed")

@@ -74,6 +74,8 @@ The addon also stores UI state
 (`shuffleTracker`, `shuffleTrackerShown`, `logEcho`) and a diagnostic ring buffer `log` (up to 300
 `"HH:MM:SS message"` strings about button clicks, casts and game errors) in the same table; the companion
 ignores them. `/shuffledetector log` prints the buffer.
+`shuffleTracker` (point, relPoint, x, y) and `shuffleTrackerShown` now control the single combined
+batch/shuffle window; existing standalone-tracker positions and visibility are reused.
 
 # Item list (companion -> addon)
 
@@ -140,9 +142,19 @@ only casts of the main recipe advance `completed`.
   before a merchant purchase or AH buyout/quote confirmation. A
   reload restores it as `uncertain`; subsequent purchases remain blocked until reconciled.
 
-Polling, offers, commodity quotes and the panel's visibility are not persisted. Polling uses live
+Polling, offers and commodity quotes are not persisted. The combined panel's position and
+visibility use the existing `shuffleTracker`/`shuffleTrackerShown` UI fields. Polling uses live
 `C_AuctionHouse` search results, not Auctionator's saved minimum prices. The companion ignores
 shopping state. The snatcher never writes the selected `Plan.lua`.
+
+The shuffle button also dispatches vendor buys, AH polling, buyouts and commodity
+quote/confirmation steps through the same shopping state and checks as the panel. Each
+purchase action requires a hardware press; quotes need a later confirmation press.
+The macro uses saved limits only. Its tracker shows purchase prices and waiting/mail
+states; unresolved reservations must be reconciled in the panel.
+`/shuffledetector shuffle` and `/shuffledetector snatch` toggle that same window, containing
+both batch/price controls and the live shuffle status. The secure action button remains
+independent of window visibility.
 
 # Reference data
 
