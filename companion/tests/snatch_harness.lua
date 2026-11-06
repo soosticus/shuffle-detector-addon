@@ -642,6 +642,104 @@ s.completed = 2
 eq(ns.NextShuffleStep().label, "Craft target reached", "no excess conversion after batch target")
 
 s = linen()
+bags[2589] = 20
+C_Item.GetItemInfo = function(id)
+    return "Item " .. id, nil, nil, nil, nil, nil, nil, 20
+end
+eq(ns.NextSnatchRefinement(2996).quantity, 6, "queue only remaining batch's bolts despite excess cloth")
+s.target, bags[2589] = 20, 200
+eq(ns.NextSnatchRefinement(2996).quantity, 60, "mass creation can span multiple output stacks")
+s.target, bags[2589] = 2, 20
+bags[2996] = 1
+s.awaiting[2996] = 2
+eq(ns.NextSnatchRefinement(2996).quantity, 3, "existing and reserved bolts reduce queue")
+bags[2589] = 3
+eq(ns.NextSnatchRefinement(2996).quantity, 1, "queue limited to whole conversions from bagged raw")
+s.awaiting[2589] = 100
+eq(ns.NextSnatchRefinement(2996).quantity, 1, "raw mail is not craftable")
+C_Item.GetItemInfo = function() return "Nonstackable", nil, nil, nil, nil, nil, nil, 1 end
+bags[2589] = 20
+eq(ns.NextSnatchRefinement(2996).quantity, 1, "nonstackable output keeps single crafting")
+C_Item.GetItemInfo = function() return nil end
+eq(ns.NextSnatchRefinement(2996).quantity, 1, "unknown stack size keeps single crafting")
+C_Item.GetItemInfo = function() return "Bolts", nil, nil, nil, nil, nil, nil, 20 end
+local rawRecipe = AHSnapshotDB.characters["Tailor-Realm-Alliance"].professions.Tailoring.recipes[1]
+rawRecipe.reagents[1].qty = 1
+ns.plan.reagents[1].raw.qty = 1
+eq(ns.NextSnatchRefinement(2996).quantity, 1, "one-for-one conversion is not inventory compression")
+rawRecipe.reagents[1].qty = 2
+ns.plan.reagents[1].raw.qty = 2
+bags[2996], s.awaiting[2996], s.awaiting[2589] = 0, 0, 0
+timers, casting = {}, false
+C_TradeSkillUI = {
+    GetRecipeInfo = function() return { learned = true } end,
+    CraftRecipe = function(spell, qty) calls[#calls + 1] = { "craft", spell, qty }; casting = true end,
+}
+assert(loadfile("addon/ShuffleDetector/Shuffle.lua"))("ShuffleDetector", ns)
+shuffleEvents = frames[#frames]
+eq(ns.NextShuffleStep().quantity, 6, "quantity propagated to shuffle action")
+assert(ns.NextShuffleStep().label:find("6 x"), "tracker previews queue quantity")
+press()
+eq(calls[#calls][3], 6, "one hardware press queues six bolts")
+local queuedCalls = #calls
+for i = 1, 6 do
+    shuffleEvent("UNIT_SPELLCAST_START", "player", "queued" .. i, 2963)
+    casting = false
+    shuffleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "queued" .. i, 2963)
+    shuffleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "queued" .. i, 2963)
+    eq(s.completed, 0, "queued bolts do not count as bags")
+    if i == 1 then
+        now = now + 20
+        timers[2][2]()
+    end
+    press()
+    eq(#calls, queuedCalls, "queue locked pending each bag update")
+    if i < 6 then
+        shuffleEvent("UNIT_SPELLCAST_INTERRUPTED", "player", "unrelated", 99)
+    end
+    bags[2589], bags[2996] = bags[2589] - 2, i
+    shuffleEvent("BAG_UPDATE_DELAYED")
+    if i < 6 then
+        for _, timer in ipairs(timers) do
+            if timer[1] == 2 then timer[2]() end
+        end
+        press()
+        eq(#calls, queuedCalls, "queue locked even between casts after bag updates")
+    end
+end
+press()
+eq(calls[#calls][2], 10, "completed queue returns to bag crafting")
+eq(calls[#calls][3], 1, "finished recipe remains one cast per press")
+casting = false
+shuffleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "queuedbag", 10)
+bags[2996] = 3
+shuffleEvent("BAG_UPDATE_DELAYED")
+eq(s.completed, 1, "only main craft advances target after batch preparation")
+eq(ns.NextShuffleStep().recipe, nil, "prepared enough bolts for next bag too")
+
+s = linen()
+bags[2589] = 12
+C_Item.GetItemInfo = function() return "Bolts", nil, nil, nil, nil, nil, nil, 20 end
+timers, casting = {}, false
+assert(loadfile("addon/ShuffleDetector/Shuffle.lua"))("ShuffleDetector", ns)
+shuffleEvents = frames[#frames]
+press()
+eq(calls[#calls][3], 6)
+shuffleEvent("UNIT_SPELLCAST_START", "player", "interrupted1", 2963)
+casting = false
+shuffleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "interrupted1", 2963)
+bags[2589], bags[2996] = 10, 1
+shuffleEvent("BAG_UPDATE_DELAYED")
+shuffleEvent("UNIT_SPELLCAST_INTERRUPTED", "player", "interrupted2", 2963)
+press()
+eq(calls[#calls][3], 5, "interrupted queue recalculates missing bolts on next press")
+casting = false
+shuffleEvent("UNIT_SPELLCAST_FAILED", "player", "failedretry", 2963)
+press()
+eq(calls[#calls][3], 5, "failed queue unlocks for retry")
+casting = false
+
+s = linen()
 s.awaiting[2996], bags[2589] = 6, 12
 assert(loadfile("addon/ShuffleDetector/Shuffle.lua"))("ShuffleDetector", ns)
 eq(ns.SnatchNeeds()[1].toCraft, 0, "do not refine redundant raw while bought bolts are in mail")
@@ -657,8 +755,10 @@ eq(ns.NextSnatchRefinement(2996), nil, "no auto refinement with target disabled"
 s = linen()
 bags[2589] = 12
 C_TradeSkillUI = nil
+C_Item.GetItemInfo = function() return "Bolts", nil, nil, nil, nil, nil, nil, 20 end
 assert(loadfile("addon/ShuffleDetector/Shuffle.lua"))("ShuffleDetector", ns)
 ns.ShuffleStep()
+eq(ns.NextSnatchRefinement(2996).quantity, 1, "legacy tracker previews a single conversion")
 eq(ShuffleDetectorShuffleButton:GetAttribute("type"), "spell", "legacy conversion uses secure spell action")
 eq(ShuffleDetectorShuffleButton:GetAttribute("spell"), "Bolt of Linen Cloth")
 

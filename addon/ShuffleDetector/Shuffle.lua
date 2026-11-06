@@ -141,6 +141,7 @@ function ns.NextShuffleStep()
         if prepare then
             step.kind, step.label, step.stage = "craft", prepare.label, 1
             step.spell, step.recipe = prepare.spell, prepare.recipe
+            step.quantity = prepare.quantity
             return step
         end
         step.stage = 2
@@ -213,6 +214,7 @@ local function clearAction()
     btn:SetAttribute("macrotext", nil)
     btn:SetAttribute("target-item", nil)
     btn.craftRecipe = nil
+    btn.craftQuantity = nil
     btn.sellSlot = nil
     btn.purchase = nil
 end
@@ -240,6 +242,7 @@ local function apply()
             if spell and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
                 -- Casting a recipe by name does nothing in the modern profession UI; craft through it instead.
                 btn.craftRecipe = spell
+                btn.craftQuantity = step.quantity or 1
             else
                 btn:SetAttribute("type", "spell")
                 btn:SetAttribute("spell", recipe)
@@ -264,15 +267,25 @@ release = function()
 end
 
 -- Called right after a press that did something: disarm the button until the action has finished.
-local function startBusy()
-    local token = { started = false }
+local function startBusy(spell, quantity)
+    local token = { started = false, spell = spell, remaining = quantity or 1 }
     busy = token
     clearAction()
     -- No cast started: the press did nothing (wrong target, missing window...), so do not stay stuck.
     C_Timer.After(1, function() if busy == token and not token.started then release() end end)
     local function failsafe()
         if busy ~= token then return end
-        if isCasting() then C_Timer.After(5, failsafe) else release() end -- a long cast is still working
+        if isCasting() then
+            token.idleSince = nil
+        elseif token.started and token.remaining > 0 then
+            -- A queued craft can briefly be between casts; only abandon a queue that stays idle.
+            if token.idleSince and GetTime() - token.idleSince >= 5 then release(); return end
+            token.idleSince = token.idleSince or GetTime()
+        else
+            release()
+            return
+        end
+        C_Timer.After(5, failsafe)
     end
     C_Timer.After(20, failsafe)
 end
@@ -318,6 +331,7 @@ local function create()
             return
         end
         local sellSlot = self.sellSlot
+        local craftRecipe, craftQuantity = self.craftRecipe, self.craftQuantity
         local acted = (self.craftRecipe or sellSlot or self:GetAttribute("type")) and not InCombatLockdown()
         log(("click: %s (%s) down=%s"):format(self.craftRecipe and "tradeskill craft" or sellSlot and "vendor sale" or tostring(self:GetAttribute("type")),
             tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe), tostring(self.lastDown)))
@@ -333,7 +347,8 @@ local function create()
             if T.GetRecipeInfo and not T.GetRecipeInfo(self.craftRecipe) then
                 say("the profession window has not loaded this recipe yet - open your profession window once, then try again.")
             end
-            local ok, err = pcall(T.CraftRecipe, self.craftRecipe, 1)
+            log(("craft queue: %d x spell %d"):format(craftQuantity, craftRecipe))
+            local ok, err = pcall(T.CraftRecipe, craftRecipe, craftQuantity)
             if not ok then
                 say("craft failed: " .. tostring(err))
                 acted = false
@@ -345,7 +360,7 @@ local function create()
             acted = false
         end
         if acted then
-            startBusy()
+            startBusy(craftRecipe, craftQuantity)
             if sellSlot then
                 -- No cast to wait for: the bags update when the sale goes through (BAG_UPDATE_DELAYED).
                 busy.started, busy.done = true, true
@@ -467,15 +482,22 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3)
             -- A cast that this addon did not start has ended; arm the button again.
             C_Timer.After(0.2, apply)
         end
-        if busy and event:find("^UNIT_SPELLCAST") then
+        if busy and event:find("^UNIT_SPELLCAST") and (not busy.spell or busy.spell == a3) then
             local token = busy
             if event == "UNIT_SPELLCAST_START" then
                 token.started = true
+                token.idleSince = nil
             elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-                token.started, token.done = true, true
+                if a2 and token.lastCast == a2 then return end
+                token.lastCast = a2
+                token.idleSince = nil
+                token.remaining = token.remaining - 1
+                token.started, token.done = true, token.remaining <= 0
                 -- The item or reagent changes reach the bags a moment after the cast; BAG_UPDATE_DELAYED releases
                 -- the button then. This is only the fallback for a cast that changes nothing.
-                C_Timer.After(2, function() if busy == token then release() end end)
+                if token.done then
+                    C_Timer.After(2, function() if busy == token and not isCasting() then release() end end)
+                end
             else
                 release()
             end

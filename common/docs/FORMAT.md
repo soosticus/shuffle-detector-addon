@@ -123,7 +123,10 @@ the saved scan. The addon checks it against a learned single-input, single-outpu
 recorded on the current character; old plans without the field can use recorded recipes too.
 Raw bag/mail/in-flight stock covers the intermediate requirement rather than creating a second
 independent shopping target. A macro press can craft that intermediate before the main recipe;
-only casts of the main recipe advance `completed`.
+stackable intermediates consuming multiple raw items per output use the modern crafting queue
+for the remaining batch shortfall, limited to raw materials in bags. The button stays locked
+until the queue completes or is interrupted. Other intermediates and the legacy spell action
+remain one cast per press; only casts of the main recipe advance `completed`.
 
 # In-game shopping state
 

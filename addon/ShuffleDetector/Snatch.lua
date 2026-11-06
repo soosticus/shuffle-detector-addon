@@ -203,8 +203,13 @@ function ns.NextSnatchRefinement(id)
     if not s or s.target == 0 or ns.SnatchTargetReached() then return end
     local r = need(id)
     if r and r.raw and r.toCraft > 0 then
+        local info = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+        local stack = info and select(8, info(id))
+        local quantity = C_TradeSkillUI and C_TradeSkillUI.CraftRecipe
+            and type(stack) == "number" and stack > 1 and r.raw.qty > 1 and r.toCraft or 1
         return { spell = r.raw.spell, recipe = r.raw.recipe,
-            label = "Make " .. r.raw.recipe .. " from " .. itemName(r.raw.item) }
+            quantity = quantity,
+            label = ("Make %d x %s from %s"):format(quantity, r.raw.recipe, itemName(r.raw.item)) }
     end
 end
 
