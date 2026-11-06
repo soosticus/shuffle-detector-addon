@@ -16,7 +16,11 @@ local function frame()
     function f:SetPoint(...) self.point = { ... } end
     function f:GetPoint() return table.unpack(self.point or { "CENTER", UIParent, "CENTER", 0, 0 }) end
     function f:SetSize(width, height) self.width, self.height = width, height end
-    function f:CreateFontString() return frame() end
+    function f:CreateFontString()
+        local label = frame()
+        frames[#frames + 1] = label
+        return label
+    end
     function f:CreateTexture() return frame() end
     function f:HookScript(event, fn) self.scripts[event] = fn end
     function f:SetAttribute(key, value) self[key] = value end
@@ -475,7 +479,7 @@ s.prices[2589] = 25
 commodity[2996] = { { quantity = 6, unitPrice = 80 } }
 commodity[2589] = { { quantity = 12, unitPrice = 30 } }
 start(s); result(2996); advance(3); result(2589); ns.SnatchBuyAH()
-eq(calls[#calls][2], 2996, "raw price cap remains mandatory")
+eq(#calls, 2, "raw and derived bolt caps both reject over-limit prices")
 
 s = linen()
 commodity[2996] = {}
@@ -1305,5 +1309,51 @@ statsEvents.scripts.OnEvent(statsEvents, "BAG_UPDATE_DELAYED")
 eq(stat.income, 250, "macro sale integration records matching income")
 ns.plan = nil
 event("BAG_UPDATE_DELAYED")
+
+s = linen()
+s.prices[2996], s.prices[2589] = 99999, 37
+eq(ns.SnatchNeeds()[1].cap, 74, "bolt cap derived from two cloth regardless of obsolete saved bolt cap")
+s.prices[2589] = 0
+eq(ns.SnatchNeeds()[1].cap, 0, "zero raw cap disables intermediate purchases too")
+s.prices[2589] = 37
+ns.ToggleSnatcher()
+local derived, rawInput
+for _, f in ipairs(frames) do
+    if f.value == "Derived: 0g 0s 74c (2 x raw cap)" then derived = f end
+    if f.value == "0g 0s 37c" then rawInput = f end
+end
+assert(derived and rawInput, "UI has read-only derived label and editable raw price")
+derived:SetText("not a price") -- labels are never parsed as inputs
+rawInput:SetText("40c")
+click("Save limits")
+eq(s.prices[2589], 40, "only raw price input saved")
+eq(ns.SnatchNeeds()[1].cap, 80)
+eq(derived.value, "Derived: 0g 0s 80c (2 x raw cap)", "derived label refreshes after saving")
+rawInput:SetText("0")
+click("Save limits")
+eq(ns.SnatchNeeds()[1].cap, 0)
+eq(ns.SnatchNeeds()[2].cap, 0)
+rawInput:SetText("50")
+click("Save limits")
+commodity[2996] = { { quantity = 6, unitPrice = 80 } }
+commodity[2589] = { { quantity = 12, unitPrice = 50 } }
+start(s); result(2996); advance(3); result(2589); ns.SnatchBuyAH()
+eq(calls[#calls][1], "quote")
+eq(calls[#calls][2], 2996, "derived cap permits cheaper direct bolts")
+s.prices[2589] = 30
+event("COMMODITY_PRICE_UPDATED", 80, 480)
+eq(calls[#calls][1], "cancel", "lower raw cap cancels now-overpriced bolt quote")
+
+s = linen()
+s.prices[2589] = 30
+MerchantFrame.shown = true
+merchants = {
+    { id = 2996, price = 61, stackCount = 1, numAvailable = -1, isPurchasable = true },
+}
+ns.SnatchBuyVendor(2996)
+eq(#calls, 0, "vendor bolts above derived ceiling rejected")
+merchants[1].price = 60
+ns.SnatchBuyVendor(2996)
+eq(calls[1][1], "vendor", "vendor bolts at exact raw-derived ceiling allowed")
 
 print("snatcher checks passed")

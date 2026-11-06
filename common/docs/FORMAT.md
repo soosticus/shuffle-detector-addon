@@ -143,6 +143,10 @@ remain one cast per press; only casts of the main recipe advance `completed`.
 - `target`: newly crafted finished items for the batch (0 disables it; maximum 100000).
 - `completed`: successful casts of that recipe since the last "New batch".
 - `prices[itemID]`: maximum purchase unit price in copper; 0 disables purchasing.
+  For a verified supported single-input intermediate, its effective cap is the raw item's
+  saved cap multiplied by raw quantity per intermediate. The UI shows that cap read-only;
+  old saved intermediate caps are ignored while conversion is verified. A zero raw cap
+  disables both purchases. Unsupported/unverified conversions keep the direct saved cap.
 - `awaiting[itemID]`: confirmed AH quantities purchased by the snatcher but not yet collected.
 - `bags[itemID]`: last observed bag count used to reconcile normal mail collection.
 - `inFlight`: an unresolved purchase reservation (`item`, `qty`, `kind`, `at`, plus auction key,

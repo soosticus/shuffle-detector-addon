@@ -177,6 +177,7 @@ function ns.SnatchNeeds()
         end
         if r.raw then
             local raw = r.raw
+            r.cap = (s.prices[raw.item] or 0) * raw.qty
             local child = { item = raw.item, parent = r.item, per = raw.qty, required = r.missing * raw.qty,
                 bags = count(raw.item), awaiting = s.awaiting[raw.item] or 0, cap = s.prices[raw.item] or 0 }
             local reserved = s.inFlight and s.inFlight.item == raw.item and s.inFlight.qty or 0
@@ -708,9 +709,11 @@ local function saveInputs()
     if not integer(target, 0, MAX_TARGET) then message("Target must be a whole number from 0 to 100000."); return false end
     local prices = {}
     for _, row in ipairs(rows) do
-        local price = parseMoney(row.price:GetText())
-        if not price then message("Invalid price for " .. itemName(row.item) .. ". Use 1g 20s 5c, or copper."); return false end
-        prices[row.item] = price
+        if not row.derived then
+            local price = parseMoney(row.price:GetText())
+            if not price then message("Invalid price for " .. itemName(row.item) .. ". Use 1g 20s 5c, or copper."); return false end
+            prices[row.item] = price
+        end
     end
     local s = state()
     if not s then message("Send a recipe with item, spell and reagents from the companion first."); return false end
@@ -755,7 +758,10 @@ refresh = function()
     for i, r in ipairs(needs) do
         local row = rows[i]
         if row then
-            if row.item ~= r.item then populate(); return end
+            if row.item ~= r.item or row.derived ~= (r.raw ~= nil) then populate(); return end
+            if row.derived then
+                row.price:SetText(("Derived: %s (%d x raw cap)"):format(money(r.cap), r.raw.qty))
+            end
             local note = r.parent and ("Raw for " .. itemName(r.parent))
                 or r.raw and ("Craft " .. r.toCraft .. " from bag stock via " .. r.raw.recipe) or r.note or ""
             row.info:SetText(("%s\nNeed %d | bags %d | awaiting %d | buy %d\n%s"):format(
@@ -781,10 +787,15 @@ populate = function()
         local f = CreateFrame("Frame", nil, panel.content)
         f:SetSize(400, 76)
         f:SetPoint("TOPLEFT", 0, -(i - 1) * 76)
-        local row = { frame = f, item = r.item }
+        local row = { frame = f, item = r.item, derived = r.raw ~= nil }
         row.info = text(f, 0, 0, 220)
-        row.price = edit(f, 110, 8, -52)
-        row.price:SetText(money(r.cap))
+        if row.derived then
+            row.price = text(f, 8, -52, 225)
+            row.price:SetText(("Derived: %s (%d x raw cap)"):format(money(r.cap), r.raw.qty))
+        else
+            row.price = edit(f, 110, 8, -52)
+            row.price:SetText(money(r.cap))
+        end
         row.vendor = button(f, "Buy vendor", 108, 266, -5, function() ns.SnatchBuyVendor(r.item) end)
         row.vendorInfo = text(f, 236, -52, 155)
         rows[#rows + 1] = row
