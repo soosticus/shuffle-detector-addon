@@ -43,6 +43,7 @@ ev:SetScript("OnEvent", function(_, event, _, _, spellID)
         if spellID ~= DISENCHANT_ID then return end
         if not (targeted and GetTime() - targeted.at < RESULT_WINDOW) then return end
         local quality, ilvl = itemInfo(targeted.item)
+        if ns.BatchStatsDisenchanted then ns.BatchStatsDisenchanted(targeted.item) end
         pending = { item = targeted.item, quality = quality, ilvl = ilvl, at = GetTime(), when = time() }
         targeted = nil
     elseif event == "LOOT_OPENED" then

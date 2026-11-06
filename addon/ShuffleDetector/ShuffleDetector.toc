@@ -11,6 +11,6 @@ ShuffleDetector.lua
 Disenchant.lua
 Plan.lua
 ItemList.lua
+Statistics.lua
 Shuffle.lua
 Snatch.lua
-

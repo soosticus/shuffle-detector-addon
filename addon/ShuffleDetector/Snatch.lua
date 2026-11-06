@@ -98,6 +98,7 @@ local function state()
     end
     local signature = identity(p)
     if s.recipe ~= signature then
+        if ns.BatchStatsClose and not ns.BatchStatsClose(s) then return end
         s.recipe, s.target, s.completed = signature, 0, 0
     end
     if not restored then
@@ -108,6 +109,7 @@ local function state()
             message("Unconfirmed purchase restored. Check bags and mail, then resolve it.")
         end
     end
+    if ns.BatchStatsEnsure then ns.BatchStatsEnsure(p, s) end
     return s, p
 end
 
@@ -227,6 +229,7 @@ function ns.SnatchCraftCompleted(spell, cast)
     lastCast = cast
     syncBags(s)
     s.completed = s.completed + 1
+    if ns.BatchStatsCraft then ns.BatchStatsCraft(s, p) end
     offer = nil
     if refresh then refresh() end
 end
@@ -268,6 +271,7 @@ end
 
 local function reservePurchase()
     local s = state()
+    pending.batch = s.statsId
     s.inFlight = pending
     pending.at = GetTime()
 end
@@ -276,6 +280,7 @@ local function finishPurchase()
     local s = state()
     local p = pending
     s.inFlight, pending = nil, nil
+    if ns.BatchStatsPurchase then ns.BatchStatsPurchase(p) end
     recordPurchase(p.item, p.qty)
 end
 
@@ -356,7 +361,7 @@ function ns.SnatchBuyVendor(id)
     local o = vendorChoice(id)
     if not o or o.item ~= id then message("No cheapest vendor bundle for this row within your limits."); return end
     stop()
-    pending = { kind = "vendor", vendor = true, item = id, before = count(id), qty = o.qty }
+    pending = { kind = "vendor", vendor = true, item = id, before = count(id), qty = o.qty, total = o.total }
     reservePurchase()
     local ok, err = pcall(BuyMerchantItem, o.slot, o.qty)
     if not ok then
@@ -644,6 +649,7 @@ local function onEvent(_, event, a, b)
         if pending and pending.vendor and count(pending.item) >= pending.before + pending.qty then
             message("Vendor purchase received.")
             local s = state()
+            if ns.BatchStatsPurchase then ns.BatchStatsPurchase(pending) end
             s.inFlight = nil
             pending = nil
         end
@@ -664,6 +670,7 @@ function ns.SnatchResolvePurchase(received)
     if not pending or pending.kind ~= "uncertain" then return end
     local p, s = pending, state()
     s.inFlight, pending = nil, nil
+    if received and ns.BatchStatsPurchase then ns.BatchStatsPurchase(p) end
     if received and not p.vendor then recordPurchase(p.item, p.qty) end
     stop("Purchase reconciled. Review quantities before restarting.")
     if refresh then refresh() end
@@ -715,13 +722,22 @@ local function saveInputs()
     return true
 end
 
+function ns.RefreshBatchStatisticsDisplay()
+    if panel and panel.statistics then
+        local s = state()
+        panel.statistics:SetText(s and ns.BatchStatsText(s) or "")
+    end
+end
+
 refresh = function()
+    if ns.RefreshBatchAnalytics then ns.RefreshBatchAnalytics() end
     if ns.RefreshShuffleTracker then ns.RefreshShuffleTracker() end
     if not panel then return end
     local s, p = state()
     if not s then
         panel.title:SetText("Send a shuffle from the companion to configure a batch")
         panel.progress:SetText("")
+        if panel.statistics then panel.statistics:SetText("") end
         for _, row in ipairs(rows) do row.frame:Hide() end
         rows = {}
         panel.content:SetHeight(1)
@@ -733,6 +749,7 @@ refresh = function()
     panel.title:SetText("Batch: " .. p.recipe)
     panel.progress:SetText(("%d / %d crafts completed; %d items per craft"):format(s.completed,
         math.ceil(s.target / (p.makes or 1)), p.makes or 1))
+    if panel.statistics then panel.statistics:SetText(ns.BatchStatsText(s)) end
     local needs = ns.SnatchNeeds()
     if #rows ~= #needs then populate(); return end
     for i, r in ipairs(needs) do
@@ -797,6 +814,11 @@ local function createPanel()
         panel.target = edit(panel, 80, 200, -48)
         button(panel, "Save limits", 110, 310, -48, saveInputs)
         panel.progress = text(panel, 12, -78, 420)
+        if ns.BatchStatsText then
+            panel:SetSize(450, 660)
+            panel.statistics = text(panel, 12, -550, 420)
+            button(panel, "Analytics", 105, 325, -630, ns.ToggleBatchAnalytics)
+        end
         text(panel, 12, -202, 420):SetText("Maximum price per unit: g/s/c or copper; 0 = do not buy")
         local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
         scroll:SetPoint("TOPLEFT", 12, -224)
@@ -816,7 +838,12 @@ local function createPanel()
         button(panel, "New batch", 105, 325, -440, function()
             if pending then message("Pending purchase: check bags/mail before starting a new batch."); return end
             local s = state()
-            if s then s.completed = 0; stop("New batch started. Awaiting mail is still reserved."); refresh() end
+            if s then
+                if ns.BatchStatsClose and not ns.BatchStatsClose(s) then return end
+                s.completed = 0
+                stop("New batch started. Awaiting mail is still reserved.")
+                refresh()
+            end
         end)
         button(panel, "Resolve uncertain purchase", 200, 12, -468, function()
             if not pending or pending.kind ~= "uncertain" then

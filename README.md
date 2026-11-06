@@ -119,6 +119,47 @@ Unconfirmed purchases remain reserved across `/reload` and block further purchas
 
 This first version has a deterministic Lua API test harness, but real Forever-client purchases and UI/protected-action behavior still need in-game confirmation. Start with a small target and inexpensive materials. Check `/shuffledetector log` for diagnostics.
 
+### Batch statistics and history
+
+With a saved, nonzero batch target, the combined in-game window shows **confirmed spending,
+income, cash net and average cash net per newly crafted item**. Snatcher purchases are charged
+only after confirmation, including raw cloth and vendor bundles. Shuffle-macro vendor sales
+require matching output loss and gold gain and are limited to this batch's recorded output.
+Disenchanting removes finished stock but **does not count unsold loot as income**. Ordinary
+AH sales, unrelated merchant sales and general gold changes are not automatically attributed.
+
+Resend a shuffle from the updated companion to include its **per-craft estimated cost and
+net exit value**. These prices are frozen when a statistics batch starts, and the window
+shows estimated cost, value and profit for successful crafts separately from actual cash.
+These are scan-based estimates, including the companion's chosen AH fees; not realized sales.
+Existing materials are not free economically, but their historical purchase cost is unknown.
+Actual cash net charges the full confirmed purchase (including leftovers), so it is not
+an inventory-adjusted profit margin and can stay negative until outputs are sold.
+
+Open **Analytics** from the batch window, `/shuffledetector stats` (alias `analytics`), or
+the **ShuffleDetector** AddOn settings entry when the client's Settings API is available.
+The separate movable window shows retained-history totals, latest batch results, paired
+cost/income bars and a cumulative cash-net chart for up to 16 displayed batches.
+**Older batches** / **Newer batches** browse retained history. History is per
+character and persists across `/reload`/logout; at most **200 batches** are retained, so
+totals are for retained history, not lifetime earnings. The newest batch stays active until
+**New batch** or a recipe change closes it; reaching the craft target alone does not close
+it because selling may still be in progress.
+
+In Analytics, enter verified **untracked** expenses or net AH/loot sale proceeds in g/s/c
+and use **Add cost** / **Add income**. Leave **Batch ID** blank for the active batch or enter
+a displayed historical ID to attribute later AH proceeds to a closed batch. Do not enter
+amounts already tracked automatically. **Undo last entry** reverses the last manual entry
+in the selected batch. An unconfirmed
+vendor sale is flagged incomplete and may require a verified manual income entry; an
+unresolved snatcher purchase still uses the existing reconciliation workflow. Statistics
+begin with this version and do not reconstruct old crafting or purchases.
+
+These charts show measured cash-flow trends, **not proof that the addon increased income**:
+that claim would require comparable activity without the addon. The companion does not
+yet provide history charts. Confirm statistics and Settings integration in game using a
+small inexpensive batch before relying on the totals.
+
 Prices: Auctionator is required (the companion shows a warning with a CurseForge link when it is missing from the selected client; it does not download it for you). Scan the auction house with Auctionator as usual, then `/reload` (or log out) so the game writes its price database to disk, and refresh the companion. Auctionator keeps minimum prices only, so the companion assumes any quantity can be bought at that price, and the realm box lists Auctionator's realm keys (the one with the freshest prices is selected first).
 
 Disenchant yields: with Auctionator installed, the companion reads the disenchant table that ships in Auctionator's folder (next to your SavedVariables; the addon only records each item's class and level, `/shuffledetector yields` refreshes older entries) and uses those expected yields for the Disenchant step; yields observed from your own disenchants take over once there are samples, and the bundled seed estimates are only the fallback. The Calculator and details view say which source was used. Items an Enchanter crafts (wands) cannot be disenchanted, so Enchanting recipes get no Disenchant exit.

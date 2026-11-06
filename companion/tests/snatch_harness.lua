@@ -1130,4 +1130,180 @@ eq(ns.NextShuffleStep().quantity, 4, "retry recalculates space after partial bat
 C_Container.GetContainerNumFreeSlots = nil
 eq(ns.NextShuffleStep().quantity, 1, "missing capacity API keeps conservative single craft")
 
+local function statisticsSetup()
+    local state = setup()
+    time = function() return 1700000000 + math.floor(now) end
+    date = os.date
+    C_Timer = { After = function() end }
+    assert(loadfile("addon/ShuffleDetector/Statistics.lua"))("ShuffleDetector", ns)
+    local statsEvents = frames[#frames]
+    state.target = 2
+    ns.plan.estimate = { cost = 100, income = 180 }
+    ns.SnatchNeeds()
+    return state, statsEvents, AHSnapshotDB.batchStats.characters.char.history[1]
+end
+
+local statsEvents, stat
+s, statsEvents, stat = statisticsSetup()
+eq(stat.crafts, 0)
+assert(ns.BatchStatsText(s):find("Estimated profit 0g 0s 0c"), "estimate safe before first craft")
+ns.plan.estimate.income = 999
+eq(stat.estimate.income, 180, "price estimates frozen at batch start")
+ns.SnatchCraftCompleted(10, "stat1")
+ns.SnatchCraftCompleted(10, "stat1")
+eq(stat.items, 1, "stats deduplicate main recipe successes")
+eq(stat.crafts, 1)
+ns.SnatchCraftCompleted(2963, "bolt")
+eq(stat.crafts, 1, "intermediates do not inflate statistics")
+MerchantFrame.shown = true
+s.prices[1] = 100
+merchants = { { id = 1, price = 80, stackCount = 1, numAvailable = -1, isPurchasable = true } }
+ns.SnatchBuyVendor(1)
+eq(stat.cost, 0, "no spending before confirmed vendor receipt")
+bags[1] = 2
+event("BAG_UPDATE_DELAYED")
+eq(stat.cost, 160, "confirmed vendor purchase records actual bundle cost")
+event("BAG_UPDATE_DELAYED")
+eq(stat.cost, 160, "purchase confirmations cannot double count")
+
+bags[20] = 1
+C_Item.GetItemInfo = function() return "Output", nil, nil, nil, nil, nil, nil, 1, nil, nil, 300 end
+C_Container.GetContainerItemLink = function() return "item:20" end
+ns.BatchStatsSale(0, 1)
+local notices = {}
+ns.say = function(message) notices[#notices + 1] = message end
+eq(ns.BatchStatsClose(s), false, "unconfirmed sale prevents batch rollover")
+eq(#notices, 1, "unconfirmed sale explicitly notifies user")
+bags[20] = 0
+statsEvents.scripts.OnEvent(statsEvents, "BAG_UPDATE_DELAYED")
+eq(stat.income, 0, "bag loss alone is not sale income")
+balance = balance + 300
+statsEvents.scripts.OnEvent(statsEvents, "PLAYER_MONEY")
+eq(stat.income, 300, "matching gold and output loss confirm sale income")
+statsEvents.scripts.OnEvent(statsEvents, "PLAYER_MONEY")
+eq(stat.income, 300, "sale receipt cannot be counted twice")
+local cost, income, net, average = ns.BatchStatsTotals(stat)
+eq(cost, 160)
+eq(income, 300)
+eq(net, 140)
+eq(average, 140)
+eq(stat.available, 0)
+ns.ToggleBatchAnalytics()
+eq(ShuffleDetectorAnalytics:IsShown(), true, "separate analytics window opens")
+ShuffleDetectorAnalytics.amount:SetText("1g")
+click("Add income")
+eq(stat.manualIncome, 10000)
+click("Undo last entry")
+eq(stat.manualIncome, 0, "mistaken manual entry can be undone")
+ShuffleDetectorAnalytics.amount:SetText("bad")
+click("Add cost")
+eq(stat.manualCost, 0, "invalid adjustment rejected")
+ShuffleDetectorAnalytics.amount:SetText("2s")
+click("Add cost")
+eq(stat.manualCost, 200)
+assert(ns.BatchStatsClose(s))
+eq(stat.closed, time(), "closing batch persists history")
+ShuffleDetectorAnalytics.batchId:SetText(tostring(stat.id))
+ShuffleDetectorAnalytics.amount:SetText("1s")
+click("Add income")
+eq(stat.manualIncome, 100, "late AH proceeds can be attributed to closed batch")
+click("Undo last entry")
+eq(stat.manualIncome, 0, "closed batch manual adjustment supports undo")
+ShuffleDetectorAnalytics.batchId:SetText("")
+ns.BatchStatsEnsure(ns.plan, s)
+eq(#AHSnapshotDB.batchStats.characters.char.history, 2)
+eq(ns.BatchStatsTotals(stat), 360, "closed batch retains actual and manual expenses")
+assert(loadfile("addon/ShuffleDetector/Statistics.lua"))("ShuffleDetector", ns)
+eq(ns.BatchStatsEnsure(ns.plan, s).id, s.statsId, "reload resumes existing batch without duplicate history")
+for i = 1, 205 do
+    ns.BatchStatsClose(s)
+    ns.BatchStatsEnsure(ns.plan, s)
+end
+eq(#AHSnapshotDB.batchStats.characters.char.history, 200, "history is bounded")
+
+s, statsEvents, stat = statisticsSetup()
+s.prices[1] = 100
+commodity[1] = { { quantity = 4, unitPrice = 80 } }
+start(s); result(1); ns.SnatchBuyAH()
+event("COMMODITY_PRICE_UPDATED", 80, 320)
+ns.SnatchBuyAH()
+eq(stat.cost, 0, "pending AH quote is not spending")
+event("COMMODITY_PURCHASE_SUCCEEDED")
+eq(stat.cost, 320, "AH confirmation records quote total")
+eq(stat.purchases, 4)
+event("COMMODITY_PURCHASE_SUCCEEDED")
+eq(stat.cost, 320, "AH success counted once")
+ns.SnatchCraftCompleted(10, "de-stat")
+ns.BatchStatsDisenchanted(99)
+eq(stat.available, 1, "other disenchant ignored")
+ns.BatchStatsDisenchanted(20)
+eq(stat.available, 0, "disenchant removes produced stock from sale allocation")
+eq(stat.income, 0, "unsold DE loot is not cash income")
+
+s, statsEvents, stat = statisticsSetup()
+ns.plan.makes = 3
+ns.SnatchNeeds()
+s.target = 6
+ns.SnatchCraftCompleted(10, "multi-stat")
+local multi = AHSnapshotDB.batchStats.characters.char.history[#AHSnapshotDB.batchStats.characters.char.history]
+eq(multi.items, 3, "multi-output statistics count produced items")
+ns.BatchStatsPurchase({ batch = multi.id, total = 90, qty = 2 })
+local _, _, _, perItem = ns.BatchStatsTotals(multi)
+eq(perItem, -30, "average cash net divides by items rather than casts")
+local oldId = multi.id
+assert(ns.BatchStatsClose(s))
+ns.BatchStatsEnsure(ns.plan, s)
+ns.BatchStatsPurchase({ batch = oldId, total = 10, qty = 1 })
+eq(multi.cost, 100, "delayed receipt attributed to original closed batch")
+eq(AHSnapshotDB.batchStats.characters.char.history[#AHSnapshotDB.batchStats.characters.char.history].cost, 0)
+UnitGUID = function() return "other" end
+local other = ns.BatchStatsEnsure(ns.plan, { target = 2 })
+eq(other.cost, 0, "statistics isolated per character")
+eq(#AHSnapshotDB.batchStats.characters.other.history, 1)
+
+s, statsEvents, stat = statisticsSetup()
+local registered
+Settings = {
+    RegisterCanvasLayoutCategory = function(frame, name) return { frame = frame, name = name } end,
+    RegisterAddOnCategory = function(category) registered = category end,
+}
+statsEvents.scripts.OnEvent(statsEvents, "PLAYER_LOGIN")
+eq(registered.name, "ShuffleDetector", "analytics linked from native AddOn Settings")
+ns.ToggleBatchAnalytics()
+click("Older batches")
+click("Newer batches")
+Settings = nil
+stat.available, bags[20] = 1, 1
+C_Item.GetItemInfo = function() return "Output", nil, nil, nil, nil, nil, nil, 1, nil, nil, 300 end
+C_Container.GetContainerItemLink = function() return "item:20" end
+local saleTimers = {}
+C_Timer = { After = function(delay, fn) saleTimers[#saleTimers + 1] = { delay, fn } end }
+ns.say = function() end
+ns.BatchStatsSale(0, 1)
+saleTimers[1][2]()
+eq(stat.income, 0, "timed-out sale never invents income")
+eq(stat.incomplete, true, "unconfirmed sale flagged incomplete")
+eq(stat.sale, nil)
+ns.BatchStatsSale(0, 1)
+statsEvents.scripts.OnEvent(statsEvents, "PLAYER_LOGIN")
+eq(stat.sale, nil, "reload uncertainty cleared with explicit notice, not guessed")
+eq(stat.income, 0)
+
+s, batchPress = batchSetup("Vendor")
+assert(loadfile("addon/ShuffleDetector/Statistics.lua"))("ShuffleDetector", ns)
+statsEvents = frames[#frames]
+ns.SnatchNeeds()
+stat = AHSnapshotDB.batchStats.characters.char.history[1]
+ns.SnatchCraftCompleted(10, "macro-stat")
+bags[20], contents[1] = 1, { itemID = 20, stackCount = 1 }
+C_Item.GetItemInfo = function() return "Output", nil, nil, nil, nil, nil, nil, 1, nil, nil, 250 end
+MerchantFrame.shown = true
+batchPress()
+assert(stat.sale, "shuffle macro arms sale attribution before vendor request")
+bags[20], contents[1], balance = 0, nil, balance + 250
+statsEvents.scripts.OnEvent(statsEvents, "BAG_UPDATE_DELAYED")
+eq(stat.income, 250, "macro sale integration records matching income")
+ns.plan = nil
+event("BAG_UPDATE_DELAYED")
+
 print("snatcher checks passed")

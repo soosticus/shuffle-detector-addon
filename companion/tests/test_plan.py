@@ -43,6 +43,16 @@ def test_build_plan_preserves_output_quantity():
     assert plan.build_plan(res)["makes"] == 3
     assert "makes = 3," in plan.render_plan(plan.build_plan(res))
 
+def test_build_plan_exports_finite_per_craft_estimates():
+    res = result()
+    res.cost, res.net = 123.5, 456.75
+    assert plan.build_plan(res)["estimate"] == {"cost": 123.5, "income": 456.75}
+    assert "estimate = { cost = 123.5, income = 456.75 }" in plan.render_plan(plan.build_plan(res))
+    res.cost = float("nan")
+    assert "estimate" not in plan.build_plan(res)
+    res.cost, res.net = 100, float("inf")
+    assert "estimate" not in plan.build_plan(res)
+
 
 def test_build_plan_exports_raw_alternative_even_without_prices():
     res = result()

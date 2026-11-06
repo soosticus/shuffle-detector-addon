@@ -1,6 +1,7 @@
 """Export data to the addon: a chosen shuffle (Plan.lua, for the in-game tracker and macro) and the item ids it should
 ask the game about (ItemList.lua)."""
 
+import math
 import os
 import time
 
@@ -32,6 +33,9 @@ def build_plan(result, now=None):
         plan["makes"] = r["makes"]
     if result.crafted and result.crafted.name:
         plan["itemName"] = result.crafted.name
+    if (result.cost is not None and result.net is not None
+            and math.isfinite(result.cost) and math.isfinite(result.net)):
+        plan["estimate"] = {"cost": result.cost, "income": result.net}
     return plan
 
 

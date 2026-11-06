@@ -4,6 +4,8 @@ Open items only; finished work is removed. Release notes are hand-written in `re
 
 ## Open items
 
+- Confirm batch statistics in game: confirmed vendor/AH purchases, macro vendor-sale bag/gold matching, raw conversions, multi-output averages, uncertain/reloaded sales and purchase reconciliation. Resend priced plans, check frozen estimates, AddOn Settings link, chart layout, history rollover and manual-entry undo. Cash-flow trends are not a causal income-improvement baseline; companion history charts and automatic AH-proceeds attribution remain follow-ups.
+
 - Confirm same-process source companion refresh during real disk updates: dialog deferral, selected shuffle/calculator state and addon version display, virtual desktop/screen placement and minimized/maximized state. Lua/data edits refresh the existing UI; Python refresh preserves the native outer window. Offscreen tests cover stable-file polling, state restoration and reload failure rollback; packaged builds continue using the self-updater.
 - Handle vendor faction/location restrictions.
 - Confirm in game that the addon loads with its Auctionator dependency and that the companion shows prices after an Auctionator scan and `/reload` (prices are read from `Auctionator.lua`, see `auctionator.py`). Open question: the realm key (`PvE`, `ClassicBetaPvE2`) with the freshest data is picked by default; check it is the right realm.

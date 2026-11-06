@@ -377,9 +377,11 @@ local function create()
         log(("click: %s (%s) down=%s"):format(self.craftRecipe and "tradeskill craft" or sellSlot and "vendor sale" or tostring(self:GetAttribute("type")),
             tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe), tostring(self.lastDown)))
         if sellSlot then
+            if ns.BatchStatsSale then ns.BatchStatsSale(sellSlot[1], sellSlot[2]) end
             local use = (C_Container and C_Container.UseContainerItem) or UseContainerItem
             local ok, err = pcall(use, sellSlot[1], sellSlot[2])
             if not ok then
+                if ns.BatchStatsSaleFailed then ns.BatchStatsSaleFailed() end
                 say("sale failed: " .. tostring(err))
                 acted = false
             end

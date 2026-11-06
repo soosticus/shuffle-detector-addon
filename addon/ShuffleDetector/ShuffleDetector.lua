@@ -431,6 +431,8 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
         ns.ToggleShuffleTracker()
     elseif msg == "snatch" then
         ns.ToggleSnatcher()
+    elseif msg == "stats" or msg == "analytics" then
+        ns.ToggleBatchAnalytics()
     elseif msg == "step" then
         ns.ShuffleStep()
     elseif msg == "macro" then
@@ -446,7 +448,7 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
     elseif msg == "yields" then
         ns.RefreshItemDetails()
     else
-        say("usage: /shuffledetector items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | shuffle or snatch (toggle batch and shuffle window) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
+        say("usage: /shuffledetector items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | shuffle or snatch (toggle batch and shuffle window) | stats (batch analytics) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
     end
 end
 

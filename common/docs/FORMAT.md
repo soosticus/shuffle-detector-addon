@@ -164,6 +164,31 @@ states; unresolved reservations must be reconciled in the panel.
 both batch/price controls and the live shuffle status. The secure action button remains
 independent of window visibility.
 
+# Batch statistics
+
+`AHSnapshotDB.batchStats = { nextId = n, characters = { [characterGUID] = { history = {...} } } }`
+stores up to 200 batches per character, oldest first. `snatcher[GUID].statsId` links the active
+batch; `inFlight.batch` links a purchase reservation to its original batch, and vendor
+reservations now include `total` (actual bundle cost in copper).
+
+Each history record has `id`, `recipe`, `item`, `started`, `target`, `makes`, `crafts`, `items`,
+`available` (recorded output not yet sold/disenchanted), `cost`, `income`, `manualCost`,
+`manualIncome`, `purchases` (units bought), `sold` (output units sold), and optional `closed`
+timestamp / `incomplete` flag. Optional `estimate = {cost, income}` copies per-craft companion
+cost and net exit value at batch creation. It is never counted as actual cash. Manual entries
+can retain `lastAdjustment = {kind, value}` for one-step undo. A pending macro vendor sale
+stores `sale = {before, gold, price, at}` until matching bag/gold changes confirm it; restored
+or timed-out sales are flagged incomplete rather than inventing income.
+
+Costs count confirmed snatcher spending in full; income counts attributed macro vendor
+sales plus manual additions. Unsold AH items and disenchant loot have no realized income.
+Cash net is `cost + manualCost` subtracted from `income + manualIncome`; average divides
+this by newly crafted `items` (unavailable until at least one item was crafted). A closed
+batch remains in history until retention removes it. The companion ignores this ledger.
+
+Plans may include `estimate = { cost = <copper per craft>, income = <net copper per craft> }`
+when the selected result has finite values for both. Old plans omit it and still work.
+
 # Reference data
 
 `common/data/reference.json` holds item names, vendor prices, recipes (reagents, plus optional `profession` (default Tailoring) and `makes`, the pieces one craft produces), `refined` (bolt or bar item -> raw item and quantity per piece) and average
