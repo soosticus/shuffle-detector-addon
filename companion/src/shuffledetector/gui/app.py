@@ -376,6 +376,20 @@ class MainWindow(QMainWindow):
         if signature != self.source_candidate:
             self.source_candidate = signature
             return
+        previous_python = tuple(entry for entry in self.source_signature or () if entry[0].endswith(".py"))
+        changed_python = tuple(entry for entry in signature if entry[0].endswith(".py"))
+        if previous_python == changed_python:
+            if self.update_dialog or QApplication.activeModalWidget() or QApplication.activePopupWidget():
+                return
+            state = self.session_state()
+            try:
+                self.populate_clients()
+                self.restore_session(state)
+            except Exception as e:
+                QMessageBox.warning(self, "Companion refresh failed", str(e))
+            self.source_signature = signature
+            self.source_candidate = None
+            return
         if self.request_source_reload():
             self.source_signature = signature
             self.source_candidate = None
@@ -886,11 +900,23 @@ class MainWindow(QMainWindow):
         self.calc_out.setHtml(_batch_html(batch))
 
 
+class CompanionWindow(QMainWindow):
+    def closeEvent(self, event):
+        self.centralWidget().close()
+        super().closeEvent(event)
+
+
 def main(argv=None):
     argv = sys.argv if argv is None else argv
     updater.use_cached_addon()
     app = QApplication.instance() or QApplication(argv)
     win = MainWindow(argv[1] if len(argv) > 1 else None)
+    # Keep the native window alive: desktop/workspace placement belongs to it, not saveGeometry().
+    shell = CompanionWindow()
+    shell.setWindowTitle(win.windowTitle())
+    shell.resize(win.size())
+    win.setWindowFlags(Qt.Widget)
+    shell.setCentralWidget(win)
     def refresh_code():
         nonlocal win
         old = win
@@ -914,13 +940,17 @@ def main(argv=None):
             QMessageBox.warning(old, "Companion refresh failed", f"{e}\n\nThe current window remains open. Fix the files and retry.")
             return
         replacement.source_reload_requested.connect(refresh_code)
+        replacement.setWindowFlags(Qt.Widget)
+        old = shell.takeCentralWidget()
+        shell.setCentralWidget(replacement)
+        shell.setWindowTitle(replacement.windowTitle())
         replacement.show()
         old.close()
         old.deleteLater()
         win = replacement
         win.statusBar().showMessage("Companion refreshed from disk; batch and selection restored.", 10000)
     win.source_reload_requested.connect(refresh_code)
-    win.show()
+    shell.show()
     return app.exec()
 
 

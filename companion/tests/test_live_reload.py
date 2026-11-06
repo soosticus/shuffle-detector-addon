@@ -52,6 +52,36 @@ def test_read_failure_is_visible(window, monkeypatch):
     assert "cannot read" in window.statusBar().currentMessage()
 
 
+def test_lua_edit_refreshes_existing_ui(window, monkeypatch):
+    python = ("app.py", 1, 2)
+    window.source_signature = (python, ("Shuffle.lua", 1, 2))
+    changed = (python, ("Shuffle.lua", 2, 3))
+    monkeypatch.setattr(live_reload, "disk_signature", lambda root: changed)
+    calls = []
+    monkeypatch.setattr(window, "populate_clients", lambda: calls.append("clients"))
+    window.source_reload_requested.connect(lambda: calls.append("rebuild"))
+    window.calc_crafts.setValue(58)
+    table = window.table
+    window.check_source_changes()
+    assert calls == []
+    window.check_source_changes()
+    assert calls == ["clients"]
+    assert window.table is table
+    assert window.calc_crafts.value() == 58
+    assert window.source_signature == changed
+
+
+def test_closing_outer_window_stops_refresh_timers(window):
+    shell = gui.CompanionWindow()
+    window.setWindowFlags(gui.Qt.Widget)
+    shell.setCentralWidget(window)
+    shell.show()
+    shell.close()
+    assert not window.watch_timer.isActive()
+    assert not window.source_timer.isActive()
+    shell.takeCentralWidget()
+
+
 def test_session_preserves_batch_and_layout(window):
     window.calc_crafts.setValue(57)
     window.calc_budget.setText("123g 4s")
@@ -122,7 +152,7 @@ def test_real_reload_and_failure_rollback_in_same_process(tmp_path):
 import os
 from pathlib import Path
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMainWindow
 from shuffledetector.gui import app as gui, live_reload
 from shuffledetector import calc
 
@@ -195,7 +225,7 @@ def test_running_application_replaces_window_without_restarting(tmp_path):
 import os
 from pathlib import Path
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMainWindow
 from shuffledetector.gui import app as gui
 qapp = QApplication([])
 pid = os.getpid()
@@ -203,8 +233,12 @@ gui.MainWindow.auto_update_addon = lambda self: None
 old = None
 passed = False
 def update():
-    global old
-    old = next(w for w in qapp.topLevelWidgets() if isinstance(w, gui.MainWindow))
+    global old, shell, native_id, geometry, screen
+    shell = next(w for w in qapp.topLevelWidgets() if isinstance(w, QMainWindow) and w.isVisible())
+    old = shell.centralWidget()
+    shell.move(123, 87)
+    shell.resize(950, 600)
+    native_id, geometry, screen = shell.winId(), shell.geometry(), shell.screen()
     old.calc_crafts.setValue(43)
     old.tabs.setCurrentIndex(1)
     path = Path(gui.__file__)
@@ -214,7 +248,7 @@ def update():
     QTimer.singleShot(0, verify)
 def verify():
     global passed
-    new = next(w for w in qapp.topLevelWidgets() if isinstance(w, gui.MainWindow) and w.isVisible())
+    new = shell.centralWidget()
     assert new is not old
     assert new.disk_marker == "updated"
     assert new.calc_crafts.value() == 43
@@ -222,6 +256,18 @@ def verify():
     assert new.source_timer.isActive()
     assert new.watch_timer.isActive()
     assert os.getpid() == pid
+    assert shell.winId() == native_id
+    assert shell.geometry() == geometry
+    assert shell.screen() is screen
+    assert new.window() is shell
+    assert not new.isWindow()
+    # A refresh while minimized must not show or activate a new native window.
+    shell.showMinimized()
+    old_content = new
+    new.request_source_reload()
+    assert shell.centralWidget() is not old_content
+    assert shell.winId() == native_id
+    assert shell.isMinimized()
     passed = True
     qapp.quit()
 QTimer.singleShot(0, update)

@@ -49,7 +49,10 @@ The GUI's Calculator tab plans a batch of the selected shuffle either by number 
 
 When launched from this checkout, the companion watches its Python code, bundled addon,
 reference data and release notes on disk. After files stay unchanged for two polls (about
-four seconds), it reloads the code and recreates its window **in the same process**. There
+four seconds), Lua/addon and data changes refresh the existing UI without rebuilding it.
+Python changes reload the code and replace only the inner UI **in the same process**;
+the native outer window stays alive, preserving screen position, virtual desktop,
+visibility and maximized/minimized state. There
 is no manual kill/restart. File > **Refresh companion code from disk** also refreshes
 immediately. The existing File > Reload still reloads reference/SavedVariables data only.
 
