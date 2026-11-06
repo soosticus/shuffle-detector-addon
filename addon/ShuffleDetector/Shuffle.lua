@@ -132,6 +132,12 @@ function ns.NextShuffleStep()
     end
     local missing = missingReagent(plan)
     if missing then
+        local prepare = ns.NextSnatchRefinement and ns.NextSnatchRefinement(missing.item)
+        if prepare then
+            step.kind, step.label, step.stage = "craft", prepare.label, 1
+            step.spell, step.recipe = prepare.spell, prepare.recipe
+            return step
+        end
         step.stage = 2
         if bag and plan.exit == "Vendor" then
             step.kind, step.label = "idle", ("Open a vendor window to sell %d x %s"):format(crafted, plan.recipe)
@@ -187,6 +193,8 @@ local function refreshTracker(step)
         tracker.foot:SetText("In combat - the next step is set when it ends")
     elseif step.kind == "idle" then
         tracker.foot:SetText(step.label)
+    elseif step.recipe then
+        tracker.foot:SetText(step.label .. " - press your shuffle macro")
     else
         tracker.foot:SetText("Run your shuffle macro")
     end
@@ -222,12 +230,13 @@ local function apply()
             step = { kind = "idle", label = "Casting...", crafted = step.crafted, craftable = step.craftable, stage = step.stage }
         elseif step.kind == "craft" then
             local plan = ns.plan
-            if plan.spell and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
+            local spell, recipe = step.spell or plan.spell, step.recipe or plan.recipe
+            if spell and C_TradeSkillUI and C_TradeSkillUI.CraftRecipe then
                 -- Casting a recipe by name does nothing in the modern profession UI; craft through it instead.
-                btn.craftRecipe = plan.spell
+                btn.craftRecipe = spell
             else
                 btn:SetAttribute("type", "spell")
-                btn:SetAttribute("spell", plan.recipe)
+                btn:SetAttribute("spell", recipe)
             end
         elseif step.kind == "sell" then
             btn.sellSlot = { step.bag, step.slot }
@@ -296,6 +305,10 @@ local function create()
         if lastClick and now - lastClick < 0.2 then return end -- down + up of one press
         lastClick = now
         if busy then return end
+        if InCombatLockdown() then
+            log("click ignored: in combat")
+            return
+        end
         if isCasting() then
             log("click ignored: still casting")
             return

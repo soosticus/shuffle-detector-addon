@@ -148,6 +148,7 @@ end
 local function charKey()
     return (UnitName("player") or "?") .. "-" .. realmKey()
 end
+ns.charKey = charKey
 
 local function snapshotSkills()
     local profs = {}

@@ -7,7 +7,9 @@ local nextSearch, cursor, ownCall = 0, 0, false
 local lastCast
 local restored
 local collectingUntil
+local snapshots = {}
 local refresh
+local populate
 
 local function integer(n, min, max)
     return type(n) == "number" and n == n and n >= min and n <= max and n == math.floor(n)
@@ -38,6 +40,8 @@ local function plan()
     if not integer(p.makes or 1, 1, MAX_TARGET) then return end
     for _, r in ipairs(p.reagents) do
         if not integer(r.item, 1, 10000000) or not integer(r.qty, 1, MAX_TARGET) then return end
+        if r.raw and (type(r.raw) ~= "table" or not integer(r.raw.item, 1, 10000000)
+            or r.raw.item == r.item or not integer(r.raw.qty, 1, MAX_TARGET)) then return end
     end
     return p
 end
@@ -117,6 +121,23 @@ local function syncBags(s)
     end
 end
 
+local function refinement(id)
+    local character = ns.charKey and (AHSnapshotDB.characters or {})[ns.charKey()]
+    for _, profession in pairs(character and character.professions or {}) do
+        for _, recipe in ipairs(profession.recipes or {}) do
+            local reagents = recipe.reagents
+            if recipe.item == id and type(reagents) == "table" and #reagents == 1 then
+                local raw, makes = reagents[1], recipe.makes or 1
+                if integer(raw.item, 1, 10000000) and raw.item ~= id
+                    and integer(raw.qty, 1, MAX_TARGET) and makes == 1
+                    and type(recipe.name) == "string" and integer(recipe.spell, 1, 10000000) then
+                    return { item = raw.item, qty = raw.qty, recipe = recipe.name, spell = recipe.spell }
+                end
+            end
+        end
+    end
+end
+
 function ns.SnatchNeeds()
     local s, p = state()
     if not s then return {} end
@@ -130,12 +151,40 @@ function ns.SnatchNeeds()
             needs[#needs + 1] = row
         end
         byItem[r.item].required = byItem[r.item].required + crafts * r.qty
+        byItem[r.item].rawHint = r.raw
     end
     for _, r in ipairs(needs) do
         r.bags, r.awaiting = count(r.item), s.awaiting[r.item] or 0
         local reserved = s.inFlight and s.inFlight.item == r.item and s.inFlight.qty or 0
         r.missing = math.max(0, r.required - r.bags - r.awaiting - reserved)
         r.cap = s.prices[r.item] or 0
+    end
+    local rawUses = {}
+    for _, r in ipairs(needs) do
+        r.raw = refinement(r.item)
+        if r.rawHint and (not r.raw or r.raw.item ~= r.rawHint.item or r.raw.qty ~= r.rawHint.qty) then
+            r.note, r.raw = "Open this character's profession window to verify the raw recipe.", nil
+        end
+        if r.raw then rawUses[r.raw.item] = (rawUses[r.raw.item] or 0) + 1 end
+    end
+    local directCount = #needs
+    for i = 1, directCount do
+        local r = needs[i]
+        if r.raw and (byItem[r.raw.item] or rawUses[r.raw.item] > 1) then
+            r.note, r.raw = "Shared raw material: buy the intermediate directly.", nil
+        end
+        if r.raw then
+            local raw = r.raw
+            local child = { item = raw.item, parent = r.item, per = raw.qty, required = r.missing * raw.qty,
+                bags = count(raw.item), awaiting = s.awaiting[raw.item] or 0, cap = s.prices[raw.item] or 0 }
+            local reserved = s.inFlight and s.inFlight.item == raw.item and s.inFlight.qty or 0
+            local held = child.bags + child.awaiting + reserved
+            child.missing = math.max(0, child.required - held)
+            child.remainder = held % raw.qty
+            r.missing = math.ceil(child.missing / raw.qty)
+            r.toCraft = math.min(child.required / raw.qty, math.floor(child.bags / raw.qty))
+            needs[#needs + 1] = child
+        end
     end
     return needs
 end
@@ -147,6 +196,16 @@ end
 function ns.SnatchTargetReached()
     local s, p = state()
     return s and s.target > 0 and s.completed >= math.ceil(s.target / (p.makes or 1))
+end
+
+function ns.NextSnatchRefinement(id)
+    local s = state()
+    if not s or s.target == 0 or ns.SnatchTargetReached() then return end
+    local r = need(id)
+    if r and r.raw and r.toCraft > 0 then
+        return { spell = r.raw.spell, recipe = r.raw.recipe,
+            label = "Make " .. r.raw.recipe .. " from " .. itemName(r.raw.item) }
+    end
 end
 
 function ns.SnatchCraftCompleted(spell, cast)
@@ -169,6 +228,7 @@ end
 
 local function stop(text)
     running, search, offer = false, nil, nil
+    snapshots = {}
     clearQuote()
     if pollButton then pollButton:SetText("Start AH polling") end
     if text then message(text) end
@@ -207,6 +267,16 @@ local function finishPurchase()
     recordPurchase(p.item, p.qty)
 end
 
+local function equivalent(o, r)
+    if r.parent then return math.floor((o.qty + r.remainder) / r.per) end
+    return o.qty
+end
+
+local function completeQuantity(qty, r)
+    if not r.parent then return qty end
+    return math.max(0, math.floor((qty + r.remainder) / r.per) * r.per - r.remainder)
+end
+
 local function merchantOffer(id)
     if not (MerchantFrame and MerchantFrame:IsShown() and GetMerchantNumItems
         and GetMerchantItemLink and BuyMerchantItem) then return end
@@ -234,10 +304,35 @@ local function merchantOffer(id)
                 local max = GetMerchantItemMaxStack and GetMerchantItemMaxStack(i) or bundle
                 qty = math.min(qty, math.floor(max / bundle) * bundle)
                 if stock ~= -1 then qty = math.min(qty, math.floor(stock / bundle) * bundle) end
+                while qty > 0 and qty ~= completeQuantity(qty, r) do qty = qty - bundle end
                 local total = qty / bundle * price
-                if qty > 0 and total <= GetMoney() and (not best or price / bundle < best.unit) then
-                    best = { slot = i, item = id, qty = qty, total = total, unit = price / bundle }
+                local units = equivalent({ qty = qty }, r)
+                if qty > 0 and total <= GetMoney() and (not best or total / units < best.total / best.units) then
+                    best = { slot = i, item = id, qty = qty, total = total, units = units }
                 end
+            end
+        end
+    end
+    return best
+end
+
+local function prefer(a, b)
+    if not a then return b end
+    if not b then return a end
+    return b.total / b.units < a.total / a.units and b or a
+end
+
+local function vendorChoice(id)
+    local r = need(id)
+    if not r then return end
+    local parent = r.parent or id
+    local best
+    for _, row in ipairs(ns.SnatchNeeds()) do
+        if row.item == parent or row.parent == parent then
+            local candidate = merchantOffer(row.item)
+            if candidate then
+                candidate.units = equivalent(candidate, row)
+                if candidate.units > 0 then best = prefer(best, candidate) end
             end
         end
     end
@@ -246,8 +341,8 @@ end
 
 function ns.SnatchBuyVendor(id)
     if pending or InCombatLockdown() then message("Finish the current purchase and leave combat first."); return end
-    local o = merchantOffer(id)
-    if not o then message("No affordable vendor bundle within your quantity and price limits."); return end
+    local o = vendorChoice(id)
+    if not o or o.item ~= id then message("No cheapest vendor bundle for this row within your limits."); return end
     stop()
     pending = { kind = "vendor", vendor = true, item = id, before = count(id), qty = o.qty }
     reservePurchase()
@@ -283,8 +378,20 @@ local function results(id, key, commodity)
             qty, total = qty + take, total + take * v.unitPrice
             if qty == r.missing then break end
         end
+        local complete = completeQuantity(qty, r)
+        if complete ~= qty then
+            qty, total = complete, 0
+            local remaining = qty
+            for _, v in ipairs(list) do
+                local take = math.min(v.quantity, remaining)
+                total, remaining = total + take * v.unitPrice, remaining - take
+                if remaining == 0 then break end
+            end
+        end
         if qty > 0 and total <= GetMoney() then
-            return { kind = "commodity", item = id, key = key, qty = qty, total = total, at = GetTime() }
+            local candidate = { kind = "commodity", item = id, key = key, qty = qty, total = total, at = GetTime() }
+            candidate.units = equivalent(candidate, r)
+            return candidate
         end
     else
         local best
@@ -292,14 +399,51 @@ local function results(id, key, commodity)
             local v = api.GetItemSearchResultInfo(key, i)
             if v and v.itemKey.itemID == id and not v.containsOwnerItem and not v.containsAccountItem
                 and v.buyoutAmount and v.buyoutAmount > 0 and v.quantity > 0 and v.quantity <= r.missing
-                and v.buyoutAmount <= r.cap * v.quantity and v.buyoutAmount <= GetMoney()
-                and (not best or v.buyoutAmount / v.quantity < best.total / best.qty) then
-                best = { kind = "item", item = id, key = key, qty = v.quantity,
+                and v.quantity == completeQuantity(v.quantity, r)
+                and v.buyoutAmount <= r.cap * v.quantity and v.buyoutAmount <= GetMoney() then
+                local candidate = { kind = "item", item = id, key = key, qty = v.quantity,
                     total = v.buyoutAmount, auction = v.auctionID, at = GetTime() }
+                candidate.units = equivalent(candidate, r)
+                best = prefer(best, candidate)
             end
         end
         return best
     end
+end
+
+local function ahChoice(id)
+    local r = need(id)
+    if not r then return end
+    local parent, best = r.parent or id, nil
+    for _, row in ipairs(ns.SnatchNeeds()) do
+        if (row.item == parent or row.parent == parent) and row.missing > 0 and row.cap > 0 then
+            local snapshot = snapshots[row.item]
+            if not snapshot or GetTime() - snapshot.at > 10 then return end
+            local candidate = results(row.item, snapshot.key, snapshot.commodity)
+            if candidate then
+                candidate.at = snapshot.at
+                best = prefer(best, candidate)
+            end
+        end
+    end
+    return best
+end
+
+local function quotePreferred(purchase)
+    local r = need(purchase.item)
+    if not r or purchase.qty ~= completeQuantity(purchase.qty, r) then return false end
+    local units = equivalent(purchase, r)
+    local parent = r.parent or r.item
+    for _, row in ipairs(ns.SnatchNeeds()) do
+        if row.item ~= r.item and (row.item == parent or row.parent == parent)
+            and row.missing > 0 and row.cap > 0 then
+            local snapshot = snapshots[row.item]
+            if not snapshot or GetTime() - snapshot.at > 10 then return false end
+            local alternative = results(row.item, snapshot.key, snapshot.commodity)
+            if alternative and alternative.total / alternative.units < purchase.total / units then return false end
+        end
+    end
+    return units > 0
 end
 
 function ns.SnatchPoll()
@@ -344,9 +488,10 @@ function ns.SnatchBuyAH()
         local r = need(pending.item)
         local duration = C_AuctionHouse.GetQuoteDurationRemaining()
         if not r or pending.qty > r.missing or pending.total > r.cap * pending.qty
-            or pending.total > GetMoney() or duration <= 0 or GetTime() - pending.at > 10 then
+            or pending.total > GetMoney() or duration <= 0 or GetTime() - pending.at > 10
+            or not quotePreferred(pending) then
             clearQuote()
-            message("Quote expired or limits changed. Poll again for a new offer.")
+            message("Quote expired, limits changed or another source is cheaper. Poll for a new offer.")
             return
         end
         pending.kind = "buyingCommodity"
@@ -364,8 +509,8 @@ function ns.SnatchBuyAH()
         message("Offer expired. Wait for a fresh search.")
         return
     end
-    local live = results(o.item, o.key, o.kind == "commodity")
-    if not live or live.qty ~= o.qty or live.total ~= o.total or live.auction ~= o.auction then
+    local live = ahChoice(o.item)
+    if not live or live.item ~= o.item or live.qty ~= o.qty or live.total ~= o.total or live.auction ~= o.auction then
         offer = nil
         message("Listing changed. Wait for a fresh search.")
         return
@@ -395,9 +540,14 @@ local function onEvent(_, event, a, b)
     elseif event == "COMMODITY_SEARCH_RESULTS_UPDATED" or event == "ITEM_SEARCH_RESULTS_UPDATED" then
         local id = type(a) == "table" and a.itemID or a
         if search and id == search.item then
-            offer = results(id, search.key, search.commodity)
+            snapshots[id] = search
+            offer = ahChoice(id)
             search = nil
-            if offer then message(("AH offer: %d x %s for %s"):format(offer.qty, itemName(id), money(offer.total))) end
+            if offer then
+                local r = need(offer.item)
+                local suffix = r.parent and ("; craft " .. offer.units .. " x " .. itemName(r.parent)) or ""
+                message(("AH offer: %d x %s for %s%s"):format(offer.qty, itemName(offer.item), money(offer.total), suffix))
+            end
         end
     elseif event == "COMMODITY_PRICE_UPDATED" and pending and (pending.kind == "quote" or pending.kind == "quoted") then
         local r = need(pending.item)
@@ -504,12 +654,17 @@ refresh = function()
     panel.progress:SetText(("%d / %d crafts completed; %d items per craft"):format(s.completed,
         math.ceil(s.target / (p.makes or 1)), p.makes or 1))
     local needs = ns.SnatchNeeds()
+    if #rows ~= #needs then populate(); return end
     for i, r in ipairs(needs) do
         local row = rows[i]
         if row then
-            row.info:SetText(("%s\nNeed %d | bags %d | awaiting %d | buy %d"):format(
-                itemName(r.item), r.required, r.bags, r.awaiting, r.missing))
-            local vendor = merchantOffer(r.item)
+            if row.item ~= r.item then populate(); return end
+            local note = r.parent and ("Raw for " .. itemName(r.parent))
+                or r.raw and ("Craft " .. r.toCraft .. " from bag stock via " .. r.raw.recipe) or r.note or ""
+            row.info:SetText(("%s\nNeed %d | bags %d | awaiting %d | buy %d\n%s"):format(
+                itemName(r.item), r.required, r.bags, r.awaiting, r.missing, note))
+            local vendor = vendorChoice(r.item)
+            if vendor and vendor.item ~= r.item then vendor = nil end
             row.vendor:SetEnabled(not pending and not InCombatLockdown() and vendor ~= nil)
             row.vendorInfo:SetText(vendor and ("%d for %s"):format(vendor.qty, money(vendor.total)) or "")
         end
@@ -520,24 +675,24 @@ refresh = function()
     pollButton:SetText(running and "Stop AH polling" or "Start AH polling")
 end
 
-local function populate()
+populate = function()
     for _, row in ipairs(rows) do row.frame:Hide() end
     rows = {}
     local s = state()
     panel.target:SetText(tostring(s and s.target or 0))
     for i, r in ipairs(ns.SnatchNeeds()) do
         local f = CreateFrame("Frame", nil, panel.content)
-        f:SetSize(400, 58)
-        f:SetPoint("TOPLEFT", 0, -(i - 1) * 58)
+        f:SetSize(400, 76)
+        f:SetPoint("TOPLEFT", 0, -(i - 1) * 76)
         local row = { frame = f, item = r.item }
         row.info = text(f, 0, 0, 220)
-        row.price = edit(f, 110, 8, -32)
+        row.price = edit(f, 110, 8, -52)
         row.price:SetText(money(r.cap))
         row.vendor = button(f, "Buy vendor", 108, 266, -5, function() ns.SnatchBuyVendor(r.item) end)
-        row.vendorInfo = text(f, 236, -34, 155)
+        row.vendorInfo = text(f, 236, -52, 155)
         rows[#rows + 1] = row
     end
-    panel.content:SetHeight(math.max(1, #rows * 58))
+    panel.content:SetHeight(math.max(1, #rows * 76))
     refresh()
 end
 

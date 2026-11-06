@@ -114,6 +114,15 @@ Disenchant, otherwise craft the next one, until the reagents run out. A tracker 
 (`/shuffledetector shuffle` to show or hide) highlights the current step. The secure button is
 invisible and chooses the step as it is clicked, because chat commands cannot cast.
 
+A reagent can also include `raw = { item = 2589, qty = 2 }` (for reagent item 2996, Bolt of
+Linen Cloth): raw item ID and raw units per intermediate. The companion exports this from
+the calculator's existing refinement metadata, regardless of which source was cheapest in
+the saved scan. The addon checks it against a learned single-input, single-output recipe
+recorded on the current character; old plans without the field can use recorded recipes too.
+Raw bag/mail/in-flight stock covers the intermediate requirement rather than creating a second
+independent shopping target. A macro press can craft that intermediate before the main recipe;
+only casts of the main recipe advance `completed`.
+
 # In-game shopping state
 
 `/shuffledetector snatch` uses the loaded plan's direct reagents, `spell`, `item`, and optional

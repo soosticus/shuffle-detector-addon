@@ -44,6 +44,30 @@ def test_build_plan_preserves_output_quantity():
     assert "makes = 3," in plan.render_plan(plan.build_plan(res))
 
 
+def test_build_plan_exports_raw_alternative_even_without_prices():
+    res = result()
+    res.reagents = [calc.Line(4305, "Bolt of Silk Cloth", 4, None, None,
+                             raw_item=4306, raw_qty=4)]
+    p = plan.build_plan(res)
+    assert p["reagents"] == [
+        {"item": 4305, "qty": 4, "raw": {"item": 4306, "qty": 4}},
+        {"item": 4291, "qty": 2},
+    ]
+    assert "raw = { item = 4306, qty = 4 }" in plan.render_plan(p)
+
+
+def test_evaluated_linen_plan_keeps_conversion_independent_of_cheapest_source():
+    recipe = {"name": "Linen Bag", "item": 4238, "spell": 3755,
+              "reagents": [{"item": 2996, "qty": 3}], "yields": []}
+    ref = data_loader.Reference(items={2996: "Bolt of Linen Cloth", 2589: "Linen Cloth"},
+                                refined={2996: (2589, 2)})
+    items = {2996: {"qty": 100, "min": 10, "prices": [(10, 100)]},
+             2589: {"qty": 100, "min": 20, "prices": [(20, 100)]}}
+    res = calc.evaluate(recipe, items, ref, calc.Settings())
+    assert res.reagents[0].source == "AH"
+    assert plan.build_plan(res)["reagents"][0]["raw"] == {"item": 2589, "qty": 2}
+
+
 def test_write_plan_and_survives_addon_update(tmp_path, monkeypatch):
     bundle = tmp_path / "bundle"
     make_addon(bundle, "0.3.0")

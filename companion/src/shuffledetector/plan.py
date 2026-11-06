@@ -17,8 +17,13 @@ def build_plan(result, now=None):
         "exit": result.exit if result.exit and result.exit != "-" else "",
         "reagents": [],
     }
+    lines = {line.item: line for line in result.reagents}
     for x in r.get("reagents", []):
-        plan["reagents"].append({"item": x["item"], "qty": x["qty"]})
+        reagent = {"item": x["item"], "qty": x["qty"]}
+        line = lines.get(x["item"])
+        if line and line.raw_item and line.raw_qty > 0:
+            reagent["raw"] = {"item": line.raw_item, "qty": line.raw_qty}
+        plan["reagents"].append(reagent)
     if r.get("spell"):
         plan["spell"] = r["spell"]
     if r.get("item"):
