@@ -16,6 +16,7 @@ local function frame()
     function f:SetPoint(...) self.point = { ... } end
     function f:GetPoint() return table.unpack(self.point or { "CENTER", UIParent, "CENTER", 0, 0 }) end
     function f:SetSize(width, height) self.width, self.height = width, height end
+    function f:SetHeight(height) self.height = height end
     function f:CreateFontString()
         local label = frame()
         frames[#frames + 1] = label
@@ -53,8 +54,9 @@ local function setup()
         GetItemCount = function(id, bank) assert(not bank, "bank excluded"); return bags[id] or 0 end,
         GetItemInfo = function(id) return "Item " .. id end,
     }
-    CreateFrame = function(_, name)
+    CreateFrame = function(_, name, parent)
         local f = frame()
+        f.parent = parent
         if name then _G[name] = f end
         frames[#frames + 1] = f
         return f
@@ -947,7 +949,7 @@ eq(window:IsShown(), true, "existing default tracker visibility opens the shared
 eq(window.shuffleStatus, ShuffleDetectorTracker)
 eq(ShuffleDetectorTracker.parent, window, "live tracker is embedded, not another window")
 eq(window.width, 450)
-eq(window.height, 550)
+eq(window.height, 510)
 eq(window.progress.value, "0 / 5 crafts completed; 1 items per craft")
 eq(window.target:GetText(), "5", "batch controls share state with tracker")
 eq(ShuffleDetectorTracker.foot.value, "Out of Item 1", "shared window shows live shuffle action")
@@ -1323,6 +1325,20 @@ for _, f in ipairs(frames) do
     if f.value == "0g 0s 37c" then rawInput = f end
 end
 assert(derived and rawInput, "UI has read-only derived label and editable raw price")
+eq(rawInput.point[2], 266, "price input occupies former vendor-button column")
+eq(rawInput.point[3], -5, "price input is at top of compact row")
+eq(derived.point[2], 266, "derived cap occupies same right-hand column")
+eq(ShuffleDetectorSnatcher.content.height, 120, "two material rows use sixty pixels each")
+eq(ShuffleDetectorSnatcher.controls:IsShown(), false, "secondary controls hidden by default")
+click("More controls")
+eq(ShuffleDetectorSnatcher.controls:IsShown(), true)
+eq(ShuffleDetectorSnatcher.height, 605, "expanding controls allocates space without overlap")
+click("Less controls")
+eq(ShuffleDetectorSnatcher.controls:IsShown(), false)
+eq(ShuffleDetectorSnatcher.height, 510, "collapsing controls returns compact height")
+for _, f in ipairs(frames) do
+    assert(f.value ~= "Buy vendor", "material rows no longer create vendor buttons")
+end
 derived:SetText("not a price") -- labels are never parsed as inputs
 rawInput:SetText("40c")
 click("Save limits")

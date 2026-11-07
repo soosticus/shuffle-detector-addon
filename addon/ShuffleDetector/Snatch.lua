@@ -766,10 +766,6 @@ refresh = function()
                 or r.raw and ("Craft " .. r.toCraft .. " from bag stock via " .. r.raw.recipe) or r.note or ""
             row.info:SetText(("%s\nNeed %d | bags %d | awaiting %d | buy %d\n%s"):format(
                 itemName(r.item), r.required, r.bags, r.awaiting, r.missing, note))
-            local vendor = vendorChoice(r.item)
-            if vendor and vendor.item ~= r.item then vendor = nil end
-            row.vendor:SetEnabled(not pending and not InCombatLockdown() and vendor ~= nil)
-            row.vendorInfo:SetText(vendor and ("%d for %s"):format(vendor.qty, money(vendor.total)) or "")
         end
     end
     panel.buy:SetText(pending and pending.kind == "quoted" and "Confirm AH purchase" or "Buy AH offer")
@@ -785,22 +781,20 @@ populate = function()
     panel.target:SetText(tostring(s and s.target or 0))
     for i, r in ipairs(ns.SnatchNeeds()) do
         local f = CreateFrame("Frame", nil, panel.content)
-        f:SetSize(400, 76)
-        f:SetPoint("TOPLEFT", 0, -(i - 1) * 76)
+        f:SetSize(400, 60)
+        f:SetPoint("TOPLEFT", 0, -(i - 1) * 60)
         local row = { frame = f, item = r.item, derived = r.raw ~= nil }
         row.info = text(f, 0, 0, 220)
         if row.derived then
-            row.price = text(f, 8, -52, 225)
+            row.price = text(f, 266, -5, 130)
             row.price:SetText(("Derived: %s (%d x raw cap)"):format(money(r.cap), r.raw.qty))
         else
-            row.price = edit(f, 110, 8, -52)
+            row.price = edit(f, 110, 266, -5)
             row.price:SetText(money(r.cap))
         end
-        row.vendor = button(f, "Buy vendor", 108, 266, -5, function() ns.SnatchBuyVendor(r.item) end)
-        row.vendorInfo = text(f, 236, -52, 155)
         rows[#rows + 1] = row
     end
-    panel.content:SetHeight(math.max(1, #rows * 76))
+    panel.content:SetHeight(math.max(1, #rows * 60))
     refresh()
 end
 
@@ -808,7 +802,8 @@ local function createPanel()
     if not panel then
         panel = CreateFrame("Frame", "ShuffleDetectorSnatcher", UIParent, "BasicFrameTemplateWithInset")
         if panel.TitleText then panel.TitleText:SetText("ShuffleDetector") end
-        panel:SetSize(450, 550)
+        local compactHeight = ns.BatchStatsText and 600 or 510
+        panel:SetSize(450, compactHeight)
         panel:SetPoint("CENTER")
         panel:SetMovable(true)
         panel:SetClampedToScreen(true)
@@ -825,10 +820,19 @@ local function createPanel()
         panel.target = edit(panel, 80, 200, -48)
         button(panel, "Save limits", 110, 310, -48, saveInputs)
         panel.progress = text(panel, 12, -78, 420)
+        panel.controls = CreateFrame("Frame", nil, panel)
+        panel.controls:SetSize(450, 95)
+        panel.controls:SetPoint("TOPLEFT", 0, -compactHeight)
+        panel.controls:Hide()
+        button(panel, "More controls", 130, 300, -(compactHeight - 30), function(self)
+            local show = not panel.controls:IsShown()
+            panel.controls:SetShown(show)
+            panel:SetHeight(compactHeight + (show and 95 or 0))
+            self:SetText(show and "Less controls" or "More controls")
+        end)
         if ns.BatchStatsText then
-            panel:SetSize(450, 660)
-            panel.statistics = text(panel, 12, -550, 420)
-            button(panel, "Analytics", 105, 325, -630, ns.ToggleBatchAnalytics)
+            panel.statistics = text(panel, 12, -485, 420)
+            button(panel.controls, "Analytics", 105, 12, -56, ns.ToggleBatchAnalytics)
         end
         text(panel, 12, -202, 420):SetText("Maximum price per unit: g/s/c or copper; 0 = do not buy")
         local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
@@ -837,7 +841,7 @@ local function createPanel()
         panel.content = CreateFrame("Frame", nil, scroll)
         panel.content:SetSize(400, 1)
         scroll:SetScrollChild(panel.content)
-        pollButton = button(panel, "Start AH polling", 130, 12, -440, function()
+        pollButton = button(panel.controls, "Start AH polling", 130, 12, 0, function()
             if running then stop("Polling stopped.")
             elseif saveInputs() then
                 if ahOpen then running = true; ns.SnatchPoll()
@@ -845,8 +849,8 @@ local function createPanel()
             end
             refresh()
         end)
-        panel.buy = button(panel, "Buy AH offer", 160, 155, -440, ns.SnatchBuyAH)
-        button(panel, "New batch", 105, 325, -440, function()
+        panel.buy = button(panel.controls, "Buy AH offer", 160, 155, 0, ns.SnatchBuyAH)
+        button(panel.controls, "New batch", 105, 325, 0, function()
             if pending then message("Pending purchase: check bags/mail before starting a new batch."); return end
             local s = state()
             if s then
@@ -856,7 +860,7 @@ local function createPanel()
                 refresh()
             end
         end)
-        button(panel, "Resolve uncertain purchase", 200, 12, -468, function()
+        button(panel.controls, "Resolve uncertain purchase", 200, 12, -28, function()
             if not pending or pending.kind ~= "uncertain" then
                 message("No uncertain purchase. Wait for confirmation or reload after checking bags/mail.")
                 return
@@ -877,7 +881,7 @@ local function createPanel()
             }
             StaticPopup_Show("SHUFFLEDETECTOR_SNATCH_RESOLVE")
         end)
-        button(panel, "Reconcile collected mail", 205, 225, -468, function()
+        button(panel.controls, "Reconcile collected mail", 205, 225, -28, function()
             if pending then message("Resolve the pending purchase first."); return end
             StaticPopupDialogs["SHUFFLEDETECTOR_SNATCH_MAIL"] = {
                 text = "Only clear awaiting quantities after ALL purchased materials have been collected from mail. Clear the awaiting-mail ledger?",
@@ -894,7 +898,7 @@ local function createPanel()
             }
             StaticPopup_Show("SHUFFLEDETECTOR_SNATCH_MAIL")
         end)
-        statusText = text(panel, 12, -506, 420)
+        statusText = text(panel, 12, -440, 420)
         statusText:SetHeight(36)
         rows = {}
         panel:Hide()
