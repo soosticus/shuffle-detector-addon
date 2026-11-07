@@ -921,6 +921,7 @@ def main(argv=None):
         nonlocal win
         old = win
         state = old.session_state()
+        geometry = shell.geometry()
         replacement = None
         def build(module):
             nonlocal replacement
@@ -945,6 +946,7 @@ def main(argv=None):
         shell.setCentralWidget(replacement)
         shell.setWindowTitle(replacement.windowTitle())
         replacement.show()
+        shell.setGeometry(geometry)
         old.close()
         old.deleteLater()
         win = replacement
