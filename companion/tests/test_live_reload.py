@@ -238,9 +238,13 @@ def update():
     old = shell.centralWidget()
     shell.move(123, 87)
     shell.resize(950, 600)
-    native_id, geometry, screen = shell.winId(), shell.geometry(), shell.screen()
     old.calc_crafts.setValue(43)
     old.tabs.setCurrentIndex(1)
+    QTimer.singleShot(0, refresh)
+def refresh():
+    global native_id, geometry, screen
+    shell.layout().activate()
+    native_id, geometry, screen = shell.winId(), shell.geometry(), shell.screen()
     path = Path(gui.__file__)
     path.write_text(path.read_text() + "\nMainWindow.disk_marker = 'updated'\n")
     old.check_source_changes()
@@ -257,7 +261,7 @@ def verify():
     assert new.watch_timer.isActive()
     assert os.getpid() == pid
     assert shell.winId() == native_id
-    assert shell.geometry() == geometry
+    assert shell.geometry() == geometry, f"window moved/resized: {geometry} -> {shell.geometry()}"
     assert shell.screen() is screen
     assert new.window() is shell
     assert not new.isWindow()

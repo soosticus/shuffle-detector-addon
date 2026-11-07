@@ -946,6 +946,7 @@ def main(argv=None):
         shell.setCentralWidget(replacement)
         shell.setWindowTitle(replacement.windowTitle())
         replacement.show()
+        shell.layout().activate()
         shell.setGeometry(geometry)
         old.close()
         old.deleteLater()
