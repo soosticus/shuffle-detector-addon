@@ -35,6 +35,27 @@ The GUI finds your WoW install(s) (or use Addon > Choose WoW folder..., or set `
 
 To bundle the addon into a built package, run `python companion/scripts/bundle_addon.py` before building; from a repo checkout the app uses `addon/` directly.
 
+### Installation data and stale characters
+
+The companion's WoW client selector controls both addon actions and loaded data. Switching
+clients replaces the active SavedVariables, characters, observed recipes and prices with
+data from that installation only. The selected installation is remembered; startup and
+automatic polling do not fall back to another installation's newer file. A client without
+SavedVariables or Auctionator prices clears previous results instead of showing stale ones.
+Client entries show their full AddOns path as a tooltip, including installs with identical names.
+
+Use **File > Manage character data...** to uncheck stale characters and save. Their recorded
+professions and recipes are excluded from the companion's reference/character selection.
+Reopen the dialog and recheck them to restore. Exclusions are saved separately for each
+installation, persist across companion refreshes, and **never rewrite or delete WoW's
+SavedVariables**. Shared item/vendor/disenchant observations remain installation-wide.
+This is companion-side cleanup, not deletion of the game's character records.
+
+Opening a SavedVariables file under another discovered installation selects that client
+automatically. For a file outside discovered installs, choose its WoW folder first. When
+multiple accounts have SavedVariables in one client, automatic discovery uses its newest
+file; File > Open SavedVariables lets you choose a different account explicitly.
+
 Copy `addon/ShuffleDetector` into `Interface/AddOns`. Open each profession window (and a vendor) once so the addon can record recipes and prices, then `/reload` or log out so the game writes them.
 
 To have the addon look up names and vendor sell prices for every recipe item without you meeting them first, run `shuffledetector --local-recipes --send-items` (it writes the item ids to the addon's `ItemList.lua`), then `/reload` in game; the addon requests them in the background (`/shuffledetector items` repeats it). Vendor buy prices still come only from visiting a vendor.

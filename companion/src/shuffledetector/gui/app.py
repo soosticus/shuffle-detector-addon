@@ -13,7 +13,7 @@ from PySide6.QtCore import QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QLayout, QMainWindow, QMessageBox, QProgressDialog, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
+    QLayout, QMainWindow, QMessageBox, QProgressDialog, QScrollArea, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
     QTextBrowser, QVBoxLayout, QWidget, QAbstractItemView, QHeaderView,
 )
 
@@ -158,6 +158,7 @@ class MainWindow(QMainWindow):
         menu = self.menuBar().addMenu("&File")
         for a in (open_act, ref_act, reload_act):
             menu.addAction(a)
+        menu.addAction(QAction("Manage character data...", self, triggered=self.manage_characters))
         self.source_reload_act = QAction("Refresh companion code from disk", self, triggered=self.request_source_reload)
         self.source_reload_act.setEnabled(updater.from_source_tree() and not getattr(sys, "frozen", False))
         menu.addAction(self.source_reload_act)
@@ -200,7 +201,7 @@ class MainWindow(QMainWindow):
         self.auctionator_warning.setWordWrap(True)
         self.auctionator_warning.setStyleSheet("background: #fff3cd; color: #664d03; padding: 6px; border: 1px solid #e0c36a;")
         self.auctionator_warning.hide()
-        self.client.currentIndexChanged.connect(self.update_addon_label)
+        self.client.currentIndexChanged.connect(self.change_client)
         self.realm = QComboBox()
         self.character = QComboBox()
         self.cut = QDoubleSpinBox(minimum=0, maximum=50, value=5, suffix=" %", singleStep=0.5)
@@ -344,7 +345,7 @@ class MainWindow(QMainWindow):
             self.check_release_async()
         if not updater.from_source_tree():
             QTimer.singleShot(500, self.show_whats_new)
-        path = path or next(iter(data_loader.candidate_saved_variables(self.wow_roots())), None)
+        path = path or self.selected_data_path()
         if path:
             self.load(str(path))
         self.watch_timer = QTimer(self, interval=2000, timeout=self.check_for_changes)
@@ -478,7 +479,7 @@ class MainWindow(QMainWindow):
     def check_for_changes(self):
         """Reload when the game rewrites the SavedVariables file (or one appears)."""
         try:
-            path = self.path or next(iter(data_loader.candidate_saved_variables(self.wow_roots())), None)
+            path = self.path or self.selected_data_path()
             if not path:
                 return
             mtime = os.stat(path).st_mtime
@@ -494,12 +495,98 @@ class MainWindow(QMainWindow):
         return [saved] if saved else []
 
     def populate_clients(self):
+        previous = self.install_key() or self.settings.value("selected_install", "", type=str)
         self.client.blockSignals(True)
         self.client.clear()
         for inst in addon_manager.discover_installs(self.wow_roots()):
             self.client.addItem(inst.flavor, inst)
+            self.client.setItemData(self.client.count() - 1, str(inst.addons_dir), Qt.ToolTipRole)
+        for i in range(self.client.count()):
+            if self.install_key(self.client.itemData(i)) == previous:
+                self.client.setCurrentIndex(i)
+                break
         self.client.blockSignals(False)
+        if self.path is not None and previous != self.install_key():
+            self.change_client()
+        else:
+            self.update_addon_label()
+
+    def install_key(self, inst=None):
+        inst = inst or self.client.currentData()
+        return str(inst.addons_dir.parent.parent.resolve()) if inst else ""
+
+    def selected_data_path(self):
+        inst = self.client.currentData()
+        if inst is None:
+            return None
+        root = inst.addons_dir.parent.parent
+        paths = list(root.glob("WTF/Account/*/SavedVariables/ShuffleDetector.lua"))
+        return max(paths, key=lambda p: p.stat().st_mtime) if paths else None
+
+    def change_client(self):
+        self.settings.setValue("selected_install", self.install_key())
         self.update_addon_label()
+        self.clear_loaded_data()
+        path = self.selected_data_path()
+        if path:
+            self.load(str(path))
+        else:
+            self.statusBar().showMessage("No ShuffleDetector SavedVariables for the selected installation. Log in and /reload, or open its file.")
+
+    def clear_loaded_data(self):
+        self.scan, self.path, self.loaded_mtime = None, None, None
+        self.ref = self.base_ref
+        for box in (self.realm, self.character):
+            box.blockSignals(True)
+            box.clear()
+            box.blockSignals(False)
+        self.populate_professions()
+        self.results, self.shown = [], []
+        self.table.setRowCount(0)
+        self.detail.clear()
+        self.calc_out.clear()
+        self.suggest.clear()
+
+    def excluded_characters(self):
+        return json.loads(self.settings.value("excluded_characters_by_install", "{}", type=str))
+
+    def manage_characters(self):
+        if not self.path:
+            QMessageBox.information(self, "Character data", "Open SavedVariables for the selected installation first.")
+            return
+        try:
+            data = data_loader.load_scan_data(self.path)
+        except Exception as e:
+            QMessageBox.critical(self, "Character data", str(e))
+            return
+        key = self.install_key() or str(Path(self.path).resolve())
+        excluded = self.excluded_characters()
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Character data - selected installation")
+        layout = QVBoxLayout(dlg)
+        label = QLabel(f"{self.path}\nUncheck stale characters to exclude their professions/recipes.\nThis does not modify the game's SavedVariables. Recheck to restore.")
+        label.setWordWrap(True)
+        layout.addWidget(label)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        choices = QVBoxLayout(content)
+        boxes = {}
+        for name in sorted(set(data.characters) | set(excluded.get(key, []))):
+            box = QCheckBox(name)
+            box.setChecked(name not in excluded.get(key, []))
+            choices.addWidget(box)
+            boxes[name] = box
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+        if dlg.exec() == QDialog.Accepted:
+            excluded[key] = [name for name, box in boxes.items() if not box.isChecked()]
+            self.settings.setValue("excluded_characters_by_install", json.dumps(excluded))
+            self.load(self.path)
 
     def update_addon_label(self):
         inst = self.client.currentData()
@@ -710,13 +797,37 @@ class MainWindow(QMainWindow):
         self.profession.blockSignals(False)
 
     def load(self, path, silent=False):
+        source = Path(path).resolve()
+        matching = None
+        for i in range(self.client.count()):
+            root = Path(self.install_key(self.client.itemData(i)))
+            if source.is_relative_to(root):
+                matching = i
+                break
+        if matching is not None:
+            changed_install = matching != self.client.currentIndex()
+            self.client.blockSignals(True)
+            self.client.setCurrentIndex(matching)
+            self.client.blockSignals(False)
+            self.settings.setValue("selected_install", self.install_key())
+            self.update_addon_label()
+            if changed_install:
+                self.clear_loaded_data()
+        elif self.client.currentData() is not None:
+            if not silent:
+                QMessageBox.warning(self, "Wrong installation", "This file is outside the selected WoW installation. Choose its WoW folder first.")
+            return False
         try:
             mtime = os.stat(path).st_mtime
-            self.scan = data_loader.load_scan_data(path)
+            scan = data_loader.load_scan_data(path)
         except Exception as e:
             if not silent:
                 QMessageBox.critical(self, "Could not load data", str(e))
             return False
+        key = self.install_key() or str(source)
+        excluded = set(self.excluded_characters().get(key, []))
+        scan.characters = {name: value for name, value in scan.characters.items() if name not in excluded}
+        self.scan = scan
         self.path = path
         self.loaded_mtime = mtime
         self.ref = self.base_ref.with_observed(self.scan)
@@ -744,6 +855,11 @@ class MainWindow(QMainWindow):
 
     def refresh(self):
         if not self.scan or not self.scan.scans:
+            self.results, self.shown = [], []
+            self.table.setRowCount(0)
+            self.detail.clear()
+            self.calc_out.clear()
+            self.suggest.clear()
             self.statusBar().showMessage(self.scan.price_note if self.scan and self.scan.price_note else "No Auctionator prices found.")
             return
         exits = tuple(n for n, b in self.exit_boxes.items() if b.isChecked())

@@ -4,6 +4,8 @@ Open items only; finished work is removed. Release notes are hand-written in `re
 
 ## Open items
 
+- Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
+
 - Confirm batch statistics in game: confirmed vendor/AH purchases, macro vendor-sale bag/gold matching, raw conversions, multi-output averages, uncertain/reloaded sales and purchase reconciliation. Resend priced plans, check frozen estimates, AddOn Settings link, chart layout, history rollover and manual-entry undo. Cash-flow trends are not a causal income-improvement baseline; companion history charts and automatic AH-proceeds attribution remain follow-ups.
 
 - Confirm same-process source companion refresh during real disk updates: dialog deferral, selected shuffle/calculator state and addon version display, virtual desktop/screen placement and minimized/maximized state. Lua/data edits refresh the existing UI; Python refresh preserves the native outer window. Offscreen tests cover stable-file polling, state restoration and reload failure rollback; packaged builds continue using the self-updater.
