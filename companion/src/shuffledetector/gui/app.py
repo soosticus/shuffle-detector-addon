@@ -13,7 +13,7 @@ from PySide6.QtCore import QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QMainWindow, QMessageBox, QProgressDialog, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
+    QLayout, QMainWindow, QMessageBox, QProgressDialog, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
     QTextBrowser, QVBoxLayout, QWidget, QAbstractItemView, QHeaderView,
 )
 
@@ -913,6 +913,7 @@ def main(argv=None):
     win = MainWindow(argv[1] if len(argv) > 1 else None)
     # Keep the native window alive: desktop/workspace placement belongs to it, not saveGeometry().
     shell = CompanionWindow()
+    shell.layout().setSizeConstraint(QLayout.SetNoConstraint)
     shell.setWindowTitle(win.windowTitle())
     shell.resize(win.size())
     win.setWindowFlags(Qt.Widget)

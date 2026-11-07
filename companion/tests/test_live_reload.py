@@ -246,7 +246,14 @@ def refresh():
     shell.layout().activate()
     native_id, geometry, screen = shell.winId(), shell.geometry(), shell.screen()
     path = Path(gui.__file__)
-    path.write_text(path.read_text() + "\nMainWindow.disk_marker = 'updated'\n")
+    path.write_text(path.read_text() + """
+MainWindow.disk_marker = 'updated'
+original_restore = MainWindow.restore_session
+def restore_with_larger_minimum(self, state):
+    original_restore(self, state)
+    self.setMinimumWidth(1800)
+MainWindow.restore_session = restore_with_larger_minimum
+""")
     old.check_source_changes()
     old.check_source_changes()
     QTimer.singleShot(0, verify)
