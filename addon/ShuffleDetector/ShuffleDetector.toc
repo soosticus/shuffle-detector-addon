@@ -9,6 +9,7 @@
 
 ShuffleDetector.lua
 Diagnostics.lua
+Observations.lua
 Disenchant.lua
 Plan.lua
 ItemList.lua

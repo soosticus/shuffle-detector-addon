@@ -2,7 +2,6 @@ local ADDON, ns = ...
 
 local DISENCHANT_ID = 13262
 local TARGET_WINDOW, RESULT_WINDOW = 3, 3
-local MAX_SAMPLES = 500
 local targeted, casting, pending
 
 local function itemIdFromLink(link)
@@ -87,14 +86,12 @@ local function capture(token)
         end
     end
     client.project = WOW_PROJECT_ID
+    client.realm = ns.realmKey and ns.realmKey()
     local sample = { item = target.item, quality = target.quality, ilvl = target.ilvl, class = target.class,
                      loot = loot, time = token.when, complete = true,
                      capture = { version = 2, target = target.method, client = client } }
-    AHSnapshotDB.disenchants = AHSnapshotDB.disenchants or {}
-    local log = AHSnapshotDB.disenchants
-    log[#log + 1] = sample
-    while #log > MAX_SAMPLES do table.remove(log, 1) end
     pending = nil
+    ns.RecordDisenchantSample(sample)
     ns.RecordItem(target.item)
     for _, material in ipairs(loot) do ns.RecordItem(material.item) end
 end

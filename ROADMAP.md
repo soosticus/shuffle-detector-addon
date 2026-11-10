@@ -60,9 +60,12 @@ The collector now binds targets to cast start (including an explicit shuffle-but
 target), checks one-item consumption, retries delayed complete loot, skips partial
 results and records capture/client metadata without rewriting old samples. Lua
 stub checks cover these paths; actual event ordering/manual and secure targets
-still need confirmation. Raw history remains capped at 500. Versioned aggregates
-and replacing the companion's immediate sparse-sample override are still pending
-in the addon-only migration; capture metadata alone does not establish accuracy.
+still need confirmation. Raw history remains capped at 500; separate build/realm/item
+aggregates now retain complete identified samples, whole outcomes and cross moments
+beyond rollover, without relabeling legacy evidence. Their migration/reload/isolation
+paths have Lua stub checks, not real-client confirmation. Replacing the companion's
+immediate sparse-sample override is still pending in the addon-only migration;
+capture metadata and sample counts alone do not establish accuracy.
 
 To confirm: `/shuffledetector yields`, `/reload`, check that items in `AHSnapshotDB.items` have `class`/`quality`/`ilvl` and that the companion shows "Auctionator disenchant table" for crafted armor. Also disenchant a few items (check that `SpellTargetItem` fires for a disenchant driven by the shuffle button's `target-item` attribute) and check `AHSnapshotDB.disenchants`.
 

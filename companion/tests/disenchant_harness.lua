@@ -36,7 +36,9 @@ local function setup(manual)
         log = function(text) logs[#logs + 1] = text end,
         RecordItem = function() end,
         BatchStatsDisenchanted = function(item) stats[#stats + 1] = item end,
+        realmKey = function() return "TestRealm-Alliance" end,
     }
+    assert(loadfile("addon/ShuffleDetector/Observations.lua"))("ShuffleDetector", ns)
     assert(loadfile("addon/ShuffleDetector/Disenchant.lua"))("ShuffleDetector", ns)
 end
 
@@ -188,5 +190,75 @@ succeed()
 counts[20] = 0
 event("LOOT_OPENED")
 eq(sampleCount(), 0, "a stale target is not reused by a later cast")
+
+local function observed(materials, build, realm, ilvl)
+    return { item = 20, class = 4, quality = 2, ilvl = ilvl or 15, complete = true, loot = materials,
+             capture = { version = 2, target = "shuffle", client = { version = "test-version",
+                 build = build or "test-build", realm = realm or "TestRealm-Alliance", interface = 16001, project = 99 } } }
+end
+
+local function onlyGroup()
+    local _, client = next(AHSnapshotDB.disenchantStats.clients)
+    local _, group = next(client.items)
+    return group
+end
+
+setup()
+ns.RecordDisenchantSample(observed({ { item = 30, qty = 2 } }))
+ns.RecordDisenchantSample(observed({ { item = 40, qty = 1 } }))
+ns.RecordDisenchantSample(observed({ { item = 40, qty = 2 }, { item = 30, qty = 1 } }))
+local group = onlyGroup()
+eq(group.samples, 3)
+eq(group.sums[30], 3)
+eq(group.sums[40], 3)
+eq(group.products[30][30], 5, "second moments preserve measured dispersion")
+eq(group.products[40][40], 5)
+eq(group.products[30][40], 2, "cross moments preserve within-cast covariance")
+eq(group.products[40][30], 2)
+eq(group.outcomes["30:1,40:2"], 1, "whole-cast outcomes use a stable material order")
+eq(group.sums[50], nil, "unseen rare materials are not declared impossible")
+
+setup()
+local old = { item = 20, loot = { { item = 30, qty = 99 } } }
+AHSnapshotDB.disenchants = { old, observed({ { item = 30, qty = 2 } }) }
+ns.RecordDisenchantSample(observed({ { item = 40, qty = 1 } }))
+eq(AHSnapshotDB.disenchantStats.seeded, 1, "only fully identified retained samples seed the aggregate")
+eq(AHSnapshotDB.disenchantStats.unversioned, 1)
+eq(onlyGroup().samples, 2)
+eq(old.capture, nil, "migration cannot relabel old records with the current client")
+assert(loadfile("addon/ShuffleDetector/Observations.lua"))("ShuffleDetector", ns)
+ns.RecordDisenchantSample(observed({ { item = 30, qty = 1 } }))
+eq(onlyGroup().samples, 3, "reloading does not seed retained records twice")
+
+setup()
+for i = 1, 501 do ns.RecordDisenchantSample(observed({ { item = 30, qty = 2 } })) end
+eq(sampleCount(), 500, "raw evidence stays bounded")
+eq(onlyGroup().samples, 501, "aggregate counts survive raw history rollover")
+eq(onlyGroup().sums[30], 1002)
+ns.RecordDisenchantSample(observed({ { item = 30, qty = 1 } }, "other-build"))
+ns.RecordDisenchantSample(observed({ { item = 30, qty = 1 } }, nil, "OtherRealm-Alliance"))
+local clients = 0
+for _ in pairs(AHSnapshotDB.disenchantStats.clients) do clients = clients + 1 end
+eq(clients, 3, "builds and realms are never pooled without applicability evidence")
+ns.RecordDisenchantSample(observed({ { item = 30, qty = 1 } }, nil, nil, 25))
+local itemGroups = 0
+for _, client in pairs(AHSnapshotDB.disenchantStats.clients) do
+    for _ in pairs(client.items) do itemGroups = itemGroups + 1 end
+end
+eq(itemGroups, 4, "different item-level identities keep separate moments")
+
+setup()
+local newer = { version = 2, private = "preserved" }
+AHSnapshotDB.disenchantStats = newer
+ns.RecordDisenchantSample(observed({ { item = 30, qty = 2 } }))
+eq(AHSnapshotDB.disenchantStats, newer, "unsupported future aggregates are preserved")
+eq(sampleCount(), 1, "raw capture survives an explicitly reported aggregate incompatibility")
+assert(logs[#logs]:find("unsupported or invalid", 1, true))
+local incomplete = observed({})
+eq(ns.RecordDisenchantSample(incomplete), false, "new incomplete captures cannot enter raw averages")
+eq(sampleCount(), 1)
+AHSnapshotDB.disenchants = "invalid-but-preserved"
+eq(ns.RecordDisenchantSample(observed({ { item = 30, qty = 2 } })), false)
+eq(AHSnapshotDB.disenchants, "invalid-but-preserved", "malformed data is never destructively reset")
 
 print("disenchant checks passed")

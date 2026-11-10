@@ -34,7 +34,8 @@ AHSnapshotDB = {
     { item = <id disenchanted>, quality = <item quality>, ilvl = <item level>, class = <item class>,
       loot = { { item = <id>, qty = <n> }, ... }, time = <unix>, complete = true,
       capture = { version = 2, target = "shuffle" | "SpellTargetItem",
-                  client = { version = <client version>, build = <build>, interface = <interface>, project = <project id> } } },
+                  client = { version = <client version>, build = <build>, interface = <interface>,
+                             project = <project id>, realm = <realm-faction key> } } },
   },
 }
 ```
@@ -71,7 +72,8 @@ New records have `complete = true` and a `capture` block with method and availab
 client identity. These describe capture evidence, **not** verified baseline
 accuracy. Older entries remain unchanged and have unknown capture/client
 identity; do not infer their build from the current login. Raw history is still
-capped at 500; lifetime/versioned aggregates remain future migration work. The
+capped at 500; versioned aggregates described below retain compatible complete
+observations beyond that rollover. The
 companion averages the loot per disenchant by the disenchanted item id (`data_loader.observed_yields`)
 and, once any samples exist, uses that average and the sample count (`recipe["yield_samples"]`) in place
 of a recipe's bundled `yields` for its crafted item.
@@ -86,6 +88,52 @@ over the entry matching the item's level. The companion uses it (`ScanData.aucti
 the bundled `yields` and marks the recipe `yield_source = "Auctionator"`. Precedence: observed disenchants,
 then Auctionator, then the bundled seed. Entries recorded by older versions get these fields after
 `/shuffledetector yields` (or the next login) and a `/reload`.
+
+## Disenchant observation aggregates
+
+`Observations.lua` stores `AHSnapshotDB.disenchantStats` separately from the raw
+history and never changes the legacy samples' identity:
+
+```
+{
+  version = 1, seeded = n, unversioned = n,
+  clients = {
+    [scopeKey] = {
+      client = {version, build, interface, project, realm},
+      items = {
+        [itemIdentity] = {
+          item, class, quality, ilvl, samples = n,
+          sums = { [materialID] = <total quantity> },
+          products = { [materialID] = { [otherMaterialID] = <sum of per-cast quantity products> } },
+          outcomes = { ["materialID:qty,materialID:qty,..."] = <cast count> },
+        },
+      },
+    },
+  },
+}
+```
+
+The scope uses the recorded client version/build/interface/project and realm/faction;
+item identity uses item/class/quality/item level. Builds/realms and item-level
+variants are not pooled. Sums, second/cross moments and whole-cast outcome counts
+preserve measured dispersion and covariance without assuming independent Poisson
+materials. Unseen rare outcomes remain unknown, not proven impossible.
+
+On the first new capture, a missing aggregate namespace is initialized once from
+fully identified, complete retained version-2 captures only (`seeded`); other
+retained samples are left untouched and counted in `unversioned`. Subsequent
+captures update the aggregate before the raw history rolls over. Reloading does
+not reseed it. Counts predate neither this initialization nor the retained
+compatible samples, so they are not lifetime totals for all historical casts.
+Unique scope/item/outcome groups accumulate with observations even though raw
+history is bounded.
+
+Unknown newer/malformed aggregate formats are preserved with a diagnostic while
+raw capture continues; malformed raw-history values are preserved and recording
+fails explicitly. Incomplete new outcomes are never appended. The companion
+still consumes raw observations only and ignores this aggregate namespace.
+Neither completeness nor a large count automatically promotes observations into
+a trusted baseline; the future evaluator must apply its separate evidence policy.
 
 The addon also stores UI state
 (`shuffleTracker`, `shuffleTrackerShown`, `logEcho`) and a diagnostic ring buffer `log` (up to 300
