@@ -1,4 +1,5 @@
 local ns, bags, calls, now, balance, commodity, items, merchants, ready, frames
+local unpack = table.unpack or unpack
 local function eq(actual, expected, label)
     assert(actual == expected, (label or "value") .. ": expected " .. tostring(expected) .. ", got " .. tostring(actual))
 end
@@ -14,7 +15,7 @@ local function frame()
     function f:SetParent(parent) self.parent = parent end
     function f:ClearAllPoints() self.point = nil end
     function f:SetPoint(...) self.point = { ... } end
-    function f:GetPoint() return table.unpack(self.point or { "CENTER", UIParent, "CENTER", 0, 0 }) end
+    function f:GetPoint() return unpack(self.point or { "CENTER", UIParent, "CENTER", 0, 0 }) end
     function f:SetSize(width, height) self.width, self.height = width, height end
     function f:SetHeight(height) self.height = height end
     function f:CreateFontString()
@@ -1371,5 +1372,85 @@ eq(#calls, 0, "vendor bolts above derived ceiling rejected")
 merchants[1].price = 60
 ns.SnatchBuyVendor(2996)
 eq(calls[1][1], "vendor", "vendor bolts at exact raw-derived ceiling allowed")
+
+do
+    s = setup()
+    s.awaiting[2589] = 3
+    s.inFlight = { item = 2589, qty = 2, kind = "uncertain" }
+    local oldPlan, oldPurchase = ns.plan, s.inFlight
+    assert(loadfile("addon/ShuffleDetector/ShuffleDetector.lua"))("ShuffleDetector", ns)
+    assert(loadfile("addon/ShuffleDetector/Diagnostics.lua"))("ShuffleDetector", ns)
+    local notices, reads = {}, {}
+    ns.say = function(text) notices[#notices + 1] = text end
+    GetBuildInfo = function() return "1.60.1", "12345", "date", 16001 end
+    WOW_PROJECT_ID = 99
+    C_AddOns = {
+        GetAddOnMetadata = function(addon, key) return addon .. "-" .. key end,
+        IsAddOnLoaded = function(addon) return addon == "Auctionator" end,
+    }
+    Auctionator = { API = { v1 = {
+        GetAuctionPriceByItemID = function(caller, id)
+            eq(caller, "ShuffleDetector")
+            reads[#reads + 1] = id
+            if id == 2589 then return 123 end
+            if id == 7054 then return 0 end
+        end,
+        GetAuctionAgeByItemID = function() return 4 end,
+        GetAuctionPriceByItemLink = function(caller, link)
+            eq(caller, "ShuffleDetector")
+            eq(link, "item:7054:variant", "link probe retains variant rather than collapsing to item ID")
+            return 500
+        end,
+    } } }
+    C_Item.GetItemInfo = function(id)
+        if id == 7054 then return "Robe", "item:7054:variant", 2, 35 end
+    end
+    local function logged(text)
+        for _, line in ipairs(AHSnapshotDB.log or {}) do
+            if line:find(text, 1, true) then return true end
+        end
+        return false
+    end
+    SlashCmdList.SHUFFLEDETECTOR("prices")
+    eq(#reads, 3, "default probe checks all three sample items")
+    assert(logged("client=1.60.1 build=12345 interface=16001 project=99"))
+    assert(logged("item 2589 price by ID: 123 (number)"))
+    assert(logged("item 2996 price by ID: nil (nil)"), "absent quotes are not converted to zero")
+    assert(logged("item 7054 price by ID: 0 (number)"), "zero is reported raw, not accepted as a free item")
+    assert(logged("item 7054 price by link: 500 (number)"))
+    assert(logged("age (raw; units unverified): 4"))
+    eq(ns.plan, oldPlan, "diagnostics never replace the active plan")
+    eq(s.inFlight, oldPurchase, "diagnostics never resolve a purchase")
+    eq(s.awaiting[2589], 3, "diagnostics preserve the mail ledger")
+    eq(#calls, 0, "diagnostics perform no AH searches or purchase actions")
+
+    AHSnapshotDB.log = {}
+    Auctionator = nil
+    SlashCmdList.SHUFFLEDETECTOR("prices 2589")
+    assert(logged("Auctionator.API.v1: unavailable"), "missing API is an explicit compatibility gap")
+    eq(#reads, 3, "missing API does not try another price source")
+
+    AHSnapshotDB.log = {}
+    C_AddOns = nil
+    GetAddOnMetadata = function() return "legacy-version" end
+    IsAddOnLoaded = function() return true end
+    Auctionator = { API = { v1 = {
+        GetAuctionPriceByItemID = function() error("price API not ready") end,
+    } } }
+    C_Item.GetItemInfo = function() error("item data unavailable") end
+    SlashCmdList.SHUFFLEDETECTOR("prices 7054")
+    assert(logged("Auctionator version: legacy-version"), "legacy metadata API still supported")
+    assert(logged("price API not ready"), "price error is recorded instead of a zero fallback")
+    assert(logged("item data unavailable"), "item metadata failure is explicit")
+    assert(logged("age (raw; units unverified): unavailable"))
+    assert(notices[#notices]:find("Price diagnostic saved", 1, true), "probe remains readable after API failures")
+
+    for _, invalid in ipairs({ "-1", "0", "1e2", "10000001", "1 2 3 4 5 6 7 8 9" }) do
+        AHSnapshotDB.log = {}
+        SlashCmdList.SHUFFLEDETECTOR("prices " .. invalid)
+        eq(#AHSnapshotDB.log, 0, "invalid IDs are rejected before probing")
+        assert(notices[#notices]:find("usage:", 1, true))
+    end
+end
 
 print("snatcher checks passed")

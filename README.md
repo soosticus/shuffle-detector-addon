@@ -88,6 +88,19 @@ Packaged builds use their existing self-updater, not source reload. An already-r
 companion that predates this feature needs one initial relaunch to acquire the watcher.
 Reloading source does not install the changed addon into WoW.
 
+## Auctionator compatibility diagnostic
+
+`/shuffledetector prices` records a read-only probe of the client/build, Auctionator
+version and candidate public price APIs in the diagnostic log. Optional item IDs
+(up to eight) choose the comparisons, for example `/shuffledetector prices 2589 2996 7054`.
+Use `/shuffledetector log 80` to read the results before and after an Auctionator
+scan, and compare them with Auctionator's displayed prices on the current realm.
+Missing quotes and errors do not mean zero prices; API units, price age and item
+variant behavior still need verification on the installed client.
+
+This diagnostic does not change the loaded plan, buy anything, or replace the
+companion price reader. The addon-only migration is not yet a complete workflow.
+
 ## In-game shuffle
 
 Select a shuffle in the companion and choose Addon > "Send selected shuffle to game" (or the "Send to game" button; CLI: `--send-plan "Recipe Name"`), then `/reload` in game. One window shows batch target/price controls, batch progress, the live shuffle steps, craftable count and crafted pieces in your bags. The next action includes purchase prices and waiting states. Drag the window to move it; its position and visibility are remembered.

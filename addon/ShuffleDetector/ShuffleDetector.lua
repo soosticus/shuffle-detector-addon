@@ -441,6 +441,8 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
         ns.PrintPlan()
     elseif msg == "log" or msg:find("^log ") then
         ns.ShowLog(msg:match("^log%s*(.-)%s*$"))
+    elseif msg == "prices" or msg:find("^prices ") then
+        ns.DebugPrices(msg:match("^prices%s*(.-)%s*$"))
     elseif msg == "disenchant" then
         ns.DebugDisenchant()
     elseif msg == "items" then
@@ -448,7 +450,7 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
     elseif msg == "yields" then
         ns.RefreshItemDetails()
     else
-        say("usage: /shuffledetector items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | shuffle or snatch (toggle batch and shuffle window) | stats (batch analytics) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
+        say("usage: /shuffledetector items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | prices [item IDs] (Auctionator API diagnostic) | shuffle or snatch (toggle batch and shuffle window) | stats (batch analytics) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
     end
 end
 
