@@ -1374,6 +1374,24 @@ ns.SnatchBuyVendor(2996)
 eq(calls[1][1], "vendor", "vendor bolts at exact raw-derived ceiling allowed")
 
 do
+    s, batchPress = batchSetup("Disenchant")
+    bags[20], contents[1] = 1, { itemID = 20, stackCount = 1 }
+    local targets = {}
+    ns.NoteDisenchantTarget = function(bag, slot, method)
+        targets[#targets + 1] = { bag, slot, method }
+    end
+    ns.RefreshShuffleTracker()
+    eq(#targets, 0, "passive tracker refresh cannot mark a disenchant target")
+    batchPress()
+    eq(#targets, 1, "hardware press records a secure-button target without relying on SpellTargetItem")
+    eq(targets[1][1], 0)
+    eq(targets[1][2], 1)
+    eq(targets[1][3], "shuffle")
+    batchPress()
+    eq(#targets, 1, "busy presses do not record another target")
+end
+
+do
     s = setup()
     s.awaiting[2589] = 3
     s.inFlight = { item = 2589, qty = 2, kind = "uncertain" }

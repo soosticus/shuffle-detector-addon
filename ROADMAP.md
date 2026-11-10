@@ -56,6 +56,14 @@ Done and confirmed in game: step 1 (the addon records known recipes with reagent
 
 Two sources, no site involved. The companion reads Auctionator's disenchant table from the installed addon's files (`deyields.py`; the game does not load it on this client, so it cannot be read in game) and the addon records each item's class, quality and item level in `AHSnapshotDB.items`. `Disenchant.lua` logs each real disenchant to `AHSnapshotDB.disenchants`, and once an item has samples the companion's average of those wins (`data_loader.observed_yields`). Precedence: observed, then Auctionator, then the seed `yields`.
 
+The collector now binds targets to cast start (including an explicit shuffle-button
+target), checks one-item consumption, retries delayed complete loot, skips partial
+results and records capture/client metadata without rewriting old samples. Lua
+stub checks cover these paths; actual event ordering/manual and secure targets
+still need confirmation. Raw history remains capped at 500. Versioned aggregates
+and replacing the companion's immediate sparse-sample override are still pending
+in the addon-only migration; capture metadata alone does not establish accuracy.
+
 To confirm: `/shuffledetector yields`, `/reload`, check that items in `AHSnapshotDB.items` have `class`/`quality`/`ilvl` and that the companion shows "Auctionator disenchant table" for crafted armor. Also disenchant a few items (check that `SpellTargetItem` fires for a disenchant driven by the shuffle button's `target-item` attribute) and check `AHSnapshotDB.disenchants`.
 
 ## Planned: faster and automatic reference data builds

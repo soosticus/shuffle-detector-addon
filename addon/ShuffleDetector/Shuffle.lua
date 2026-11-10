@@ -257,6 +257,7 @@ local function clearAction()
     btn.craftRecipe = nil
     btn.craftQuantity = nil
     btn.sellSlot = nil
+    btn.disenchantSlot = nil
     btn.purchase = nil
 end
 
@@ -293,6 +294,7 @@ local function apply()
         elseif step.kind == "sell" then
             btn.sellSlot = { step.bag, step.slot }
         elseif step.kind == "disenchant" then
+            btn.disenchantSlot = { step.bag, step.slot }
             btn:SetAttribute("type", "spell")
             btn:SetAttribute("spell", spellName(DISENCHANT_ID, "Disenchant"))
             btn:SetAttribute("target-item", ns.plan.itemName or ns.plan.recipe)
@@ -347,7 +349,12 @@ local function create()
             self:SetAttribute("useOnKeyDown", self.lastDown)
             -- Choose the action as the click happens, so it matches the bags and cast state right now.
             local now = GetTime()
-            if not lastClick or now - lastClick >= 0.2 then apply() end
+            if not lastClick or now - lastClick >= 0.2 then
+                apply()
+                if self.disenchantSlot and ns.NoteDisenchantTarget then
+                    ns.NoteDisenchantTarget(self.disenchantSlot[1], self.disenchantSlot[2], "shuffle")
+                end
+            end
         end
     end)
     btn:HookScript("PostClick", function(self)

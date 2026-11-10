@@ -31,3 +31,4 @@ jobs:
       # WoW uses Lua 5.1: this catches 5.3+ syntax such as the // operator.
       - run: for f in addon/ShuffleDetector/*.lua; do luac5.1 -p "$f"; done
       - run: lua5.1 companion/tests/snatch_harness.lua
+      - run: lua5.1 companion/tests/disenchant_harness.lua

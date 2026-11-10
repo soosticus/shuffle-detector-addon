@@ -31,8 +31,10 @@ AHSnapshotDB = {
                          class = <item class id>, quality = <rarity id>, ilvl = <base item level> } },  -- from GetItemInfo
   vendor = { [itemID] = <copper to buy one from a vendor> },  -- from the merchant window, gold-only items
   disenchants = {   -- one entry per successful Disenchant cast, oldest first, capped at 500
-    { item = <id disenchanted>, quality = <item quality>, ilvl = <item level>,
-      loot = { { item = <id>, qty = <n> }, ... }, time = <unix> },
+    { item = <id disenchanted>, quality = <item quality>, ilvl = <item level>, class = <item class>,
+      loot = { { item = <id>, qty = <n> }, ... }, time = <unix>, complete = true,
+      capture = { version = 2, target = "shuffle" | "SpellTargetItem",
+                  client = { version = <client version>, build = <build>, interface = <interface>, project = <project id> } } },
   },
 }
 ```
@@ -53,8 +55,23 @@ are included in what the game shows) and replaces the bundled vendor buy price. 
 listings count (as in Auctionator): a limited-stock listing is not recorded, and drops an existing
 entry for that item. The game has no bulk query for buy prices, so they fill in as vendors are visited.
 
-`disenchants` is recorded whenever a Disenchant cast succeeds and a loot window follows within a few
-seconds (`Disenchant.lua`, which hooks `SpellTargetItem` to see what item the cast targeted). The
+`disenchants` is recorded only when a matched player Disenchant cast succeeds,
+exactly one captured target item disappears from bags, and the complete loot
+snapshot is available within three seconds after success. The target is bound
+at cast start, not expired by the duration of the cast. `Disenchant.lua` records
+the secure shuffle button's target on its hardware press and also hooks
+`SpellTargetItem` for manual targeting. Late hook delivery during the cast is
+supported. Missing links/quantities and delayed bag updates are retried while the
+window remains intact; clearing/closing partial loot or reaching the timeout
+skips the sample and writes a diagnostic instead of recording zeroes or partial
+outcomes. Repeated cast/loot notifications cannot count the same result twice.
+Real client event ordering still needs in-game confirmation.
+
+New records have `complete = true` and a `capture` block with method and available
+client identity. These describe capture evidence, **not** verified baseline
+accuracy. Older entries remain unchanged and have unknown capture/client
+identity; do not infer their build from the current login. Raw history is still
+capped at 500; lifetime/versioned aggregates remain future migration work. The
 companion averages the loot per disenchant by the disenchanted item id (`data_loader.observed_yields`)
 and, once any samples exist, uses that average and the sample count (`recipe["yield_samples"]`) in place
 of a recipe's bundled `yields` for its crafted item.
