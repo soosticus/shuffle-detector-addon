@@ -14,6 +14,11 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   not remove any companion dependency. Developer-only `shuffledetector.bundle`
   validates provenance/client declarations, outcomes and deterministic Lua output;
   it supplies no production dataset and is not loaded by the addon yet (FORMAT.md).
+  One user run on Forever 1.60.1/build 70862/interface 16001/project 18 with
+  Auctionator 344 confirms ID/link reads agree for cached 2589 (25) and 2996 (49);
+  7054 was unpriced/uncached. Scan position/UI correspondence, units, age units and
+  live refresh are still unknown. Exactness and DE valuation functions are exposed;
+  the local v2 diagnostic probes them without assuming correct yields or fees.
 
 - Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
 

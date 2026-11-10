@@ -29,7 +29,7 @@ function ns.DebugPrices(arg)
     end
     if #ids == 0 then ids = { 2589, 2996, 7054 } end
 
-    report("begin; read-only capability probe, not a verified price adapter")
+    report("begin; read-only capability probe v2, not a verified price adapter")
     if type(GetBuildInfo) == "function" then
         local ok, version, build, _, interface = pcall(GetBuildInfo)
         if ok then
@@ -64,6 +64,8 @@ function ns.DebugPrices(arg)
             local label = "item " .. id
             probe(label .. " price by ID", v1.GetAuctionPriceByItemID, ADDON, id)
             probe(label .. " age (raw; units unverified)", v1.GetAuctionAgeByItemID, ADDON, id)
+            probe(label .. " exactness by ID (raw)", v1.IsAuctionDataExactByItemID, ADDON, id)
+            probe(label .. " DE value by ID (raw; model unverified)", v1.GetDisenchantPriceByItemID, ADDON, id)
             local info = (C_Item and C_Item.GetItemInfo) or GetItemInfo
             if type(info) == "function" then
                 local ok, name, link, quality, ilvl = pcall(info, id)
@@ -72,6 +74,9 @@ function ns.DebugPrices(arg)
                 elseif type(link) == "string" then
                     report(("%s cached quality=%s ilvl=%s"):format(label, tostring(quality), tostring(ilvl)))
                     probe(label .. " price by link", v1.GetAuctionPriceByItemLink, ADDON, link)
+                    probe(label .. " age by link (raw; units unverified)", v1.GetAuctionAgeByItemLink, ADDON, link)
+                    probe(label .. " exactness by link (raw)", v1.IsAuctionDataExactByItemLink, ADDON, link)
+                    probe(label .. " DE value by link (raw; model unverified)", v1.GetDisenchantPriceByItemLink, ADDON, link)
                 else
                     report(label .. " link comparison: item not cached")
                 end
@@ -81,6 +86,7 @@ function ns.DebugPrices(arg)
         end
     end
     report("nil/zero/errors are not free items; age, stock depth and variant semantics remain unverified")
+    report("DE values are opaque estimates, not loot distributions or verified Forever yields; fees are unverified")
     report("end")
     ns.say("Price diagnostic saved. /shuffledetector log 80 shows results; compare before/after an Auctionator scan.")
 end

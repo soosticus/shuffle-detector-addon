@@ -98,6 +98,11 @@ scan, and compare them with Auctionator's displayed prices on the current realm.
 Missing quotes and errors do not mean zero prices; API units, price age and item
 variant behavior still need verification on the installed client.
 
+The local v2 probe also records the public API's raw exactness flags and DE
+valuations, where available. DE values are opaque estimates: they do not supply a
+loot distribution, establish correct Forever yields, or identify included fees.
+Missing optional functions are logged without preventing the other comparisons.
+
 This diagnostic does not change the loaded plan, buy anything, or replace the
 companion price reader. The addon-only migration is not yet a complete workflow.
 

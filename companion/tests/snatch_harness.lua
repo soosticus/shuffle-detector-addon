@@ -1419,6 +1419,25 @@ do
             eq(link, "item:7054:variant", "link probe retains variant rather than collapsing to item ID")
             return 500
         end,
+        IsAuctionDataExactByItemID = function(caller, id)
+            eq(caller, "ShuffleDetector")
+            return id == 2589
+        end,
+        GetDisenchantPriceByItemID = function(caller, id)
+            eq(caller, "ShuffleDetector")
+            if id == 7054 then error("DE table unavailable") end
+        end,
+        GetAuctionAgeByItemLink = function(caller, link)
+            eq(caller, "ShuffleDetector")
+            eq(link, "item:7054:variant")
+            return 7
+        end,
+        IsAuctionDataExactByItemLink = function() return false end,
+        GetDisenchantPriceByItemLink = function(caller, link)
+            eq(caller, "ShuffleDetector")
+            eq(link, "item:7054:variant")
+            return 750
+        end,
     } } }
     C_Item.GetItemInfo = function(id)
         if id == 7054 then return "Robe", "item:7054:variant", 2, 35 end
@@ -1437,6 +1456,13 @@ do
     assert(logged("item 7054 price by ID: 0 (number)"), "zero is reported raw, not accepted as a free item")
     assert(logged("item 7054 price by link: 500 (number)"))
     assert(logged("age (raw; units unverified): 4"))
+    assert(logged("item 2589 exactness by ID (raw): true (boolean)"))
+    assert(logged("item 2996 exactness by ID (raw): false (boolean)"), "false exactness is not a missing value")
+    assert(logged("DE table unavailable"), "DE valuation errors cannot abort price diagnostics")
+    assert(logged("item 7054 age by link (raw; units unverified): 7"))
+    assert(logged("item 7054 exactness by link (raw): false (boolean)"))
+    assert(logged("item 7054 DE value by link (raw; model unverified): 750 (number)"), "opaque DE values are reported without applying fees")
+    assert(logged("not loot distributions or verified Forever yields"), "a scalar valuation is not a yield table")
     eq(ns.plan, oldPlan, "diagnostics never replace the active plan")
     eq(s.inFlight, oldPurchase, "diagnostics never resolve a purchase")
     eq(s.awaiting[2589], 3, "diagnostics preserve the mail ledger")
@@ -1461,6 +1487,8 @@ do
     assert(logged("price API not ready"), "price error is recorded instead of a zero fallback")
     assert(logged("item data unavailable"), "item metadata failure is explicit")
     assert(logged("age (raw; units unverified): unavailable"))
+    assert(logged("exactness by ID (raw): unavailable"))
+    assert(logged("DE value by ID (raw; model unverified): unavailable"))
     assert(notices[#notices]:find("Price diagnostic saved", 1, true), "probe remains readable after API failures")
 
     for _, invalid in ipairs({ "-1", "0", "1e2", "10000001", "1 2 3 4 5 6 7 8 9" }) do
