@@ -17,6 +17,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install Lua test runtime
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
       - run: python -m pip install -e "companion[dev]"
       - run: python -m pytest companion/tests
 

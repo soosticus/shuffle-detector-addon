@@ -198,3 +198,53 @@ when the selected result has finite values for both. Old plans omit it and still
 `common/data/reference.json` holds item names, vendor prices, recipes (reagents, plus optional `profession` (default Tailoring) and `makes`, the pieces one craft produces), `refined` (bolt or bar item -> raw item and quantity per piece) and average
 disenchant yields. The bundled values are unverified seed data; edit them or pass an extra file
 that overrides recipes by name.
+
+# Build-time reference bundle contract
+
+`shuffledetector.bundle` is developer tooling for the addon-only migration:
+
+```
+PYTHONPATH=companion/src python -m shuffledetector.bundle reviewed-input.json Data.lua
+```
+
+It currently supplies a validator/generator only: **no production dataset or
+disenchant baseline is provided, and generated files are not yet loaded by the
+addon**. The companion workflow above remains unchanged. Do not feed the
+unverified `reference.json` seeds into a trusted bundle.
+
+Schema 1 input is a JSON object with exactly these fields:
+
+| Field | Contract |
+| --- | --- |
+| `schema`, `revision` | Integer `1` and a nonempty dataset revision. No generation timestamp is added, so identical inputs generate identical Lua. |
+| `client` | `{flavor, interface, build}`: explicit client flavor, positive interface integer and exact build identifier. Interface alone is not evidence that another client shares the data. |
+| `coverage` | Nonempty description of what is covered, missing, or uncertain. Empty model arrays mean no data, never an implicit zero yield. |
+| `sources` | Array of `{id, revision, sha256, license, permission, redistributable}`. SHA256 is the lowercase 64-digit hash of reviewed source input; `permission` points to the redistribution evidence, and `redistributable` must be boolean `true`, even for exploratory data. |
+| `recipes` | Array of `{spell, item, profession, makes, reagents, source, status}`. Profession is a stable ID; reagents are `{item, qty}`. Optional `name`, `skill`, `craft_seconds` and `verification`; unknown skills remain absent. These are item-producing recipes, not productless enchants. |
+| `disenchant` | Array of `{class, quality, low, high, source, status}` plus exactly one of `expected` or `outcomes`, and optional `verification`. Classes 2/4, qualities 2/3/4, inclusive positive item-level bounds. |
+| `exclusions` | Array of `{item, reason, source, status}` and optional `verification` for item-specific eligibility exceptions. These carry provenance too; they are not inferred from class alone. |
+
+Every recipe, DE model and exclusion uses a declared source ID and a `status` of
+`trusted` or `exploratory`. A trusted record additionally requires nonempty
+`verification` describing client-specific evidence. These fields are reviewed
+declarations: **the validator cannot establish redistribution rights or game
+accuracy**. Neither an installed file nor a filled-in license string grants
+permission. A production source must still pass the human provenance/client
+review; no data is fetched automatically.
+
+`expected` is an array of `{item, avg}` with positive finite average quantities;
+it contains no invented distribution or numeric confidence interval.
+`outcomes` is an array of `{probability, loot}`, with `loot = [{item, qty}, ...]`.
+Each probability is positive and at most one; the sum must be one within 1e-9
+roundoff, without normalization. Whole-cast loot vectors preserve correlations.
+An explicit empty loot vector can represent a documented no-drop outcome, but a
+model must contain some material output. Duplicate material/outcome identities,
+reversed/overlapping bands within a trust level, nonfinite numbers and integers
+not exactly representable in Lua are rejected. Trusted and exploratory bands can
+coexist but must remain distinct in future evaluation/UI.
+
+The generator canonicalizes row order, emits `ns.bundle`, adds a canonical-input
+`content_sha256`, and derives sorted `wanted_items` from all referenced products,
+reagents, DE materials and exclusions. Invalid input never replaces an existing
+output file. Synthetic fixtures in `tests/test_bundle.py` exercise the contract
+and generated Lua; they are not real game evidence or a distributable baseline.

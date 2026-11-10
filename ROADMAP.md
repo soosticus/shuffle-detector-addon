@@ -11,7 +11,9 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   Then move rankings, calculation and safe selection into WoW, migrate user state,
   and complete in-game acceptance before retiring the desktop runtime. Keep reusable
   developer generators/tests and all SavedVariables. The new diagnostic alone does
-  not remove any companion dependency.
+  not remove any companion dependency. Developer-only `shuffledetector.bundle`
+  validates provenance/client declarations, outcomes and deterministic Lua output;
+  it supplies no production dataset and is not loaded by the addon yet (FORMAT.md).
 
 - Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
 
