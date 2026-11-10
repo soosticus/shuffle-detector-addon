@@ -16,9 +16,16 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   it supplies no production dataset and is not loaded by the addon yet (FORMAT.md).
   One user run on Forever 1.60.1/build 70862/interface 16001/project 18 with
   Auctionator 344 confirms ID/link reads agree for cached 2589 (25) and 2996 (49);
-  7054 was unpriced/uncached. Scan position/UI correspondence, units, age units and
-  live refresh are still unknown. Exactness and DE valuation functions are exposed;
-  the local v2 diagnostic probes them without assuming correct yields or fees.
+  7054 was unpriced/uncached (persisted prices after `/reload`, no scan that day).
+  After a full summary scan without reload, ID reads refreshed (2589 25 -> 20, ages
+  1 -> 0) even with 2589's item info uncached, so ID lookups must not wait for
+  `GetItemInfo`. Still unknown: currency units versus Auctionator's displayed
+  prices, age units, `RegisterForDBUpdate`, exactness/gear variants and depth.
+  Exactness and DE valuation functions are exposed; the local v2 diagnostic probes
+  them without assuming correct yields or fees. `Evaluate.lua` is a pure,
+  harness-tested evaluation core (injected providers; partial DE and missing data
+  stay unknown, multi-output DE scales value and time, exploratory models only in an
+  opt-in view). It is not in the `.toc` and has no price adapter or UI yet.
 
 - Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
 

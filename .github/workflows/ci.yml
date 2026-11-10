@@ -32,3 +32,4 @@ jobs:
       - run: for f in addon/ShuffleDetector/*.lua; do luac5.1 -p "$f"; done
       - run: lua5.1 companion/tests/snatch_harness.lua
       - run: lua5.1 companion/tests/disenchant_harness.lua
+      - run: lua5.1 companion/tests/evaluate_harness.lua

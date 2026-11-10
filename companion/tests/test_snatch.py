@@ -10,6 +10,7 @@ import pytest
 @pytest.mark.parametrize("harness, marker", [
     ("snatch_harness.lua", "snatcher checks passed"),
     ("disenchant_harness.lua", "disenchant checks passed"),
+    ("evaluate_harness.lua", "evaluate checks passed"),
 ])
 def test_addon_lua_harness(harness, marker):
     lua = shutil.which("lua")
