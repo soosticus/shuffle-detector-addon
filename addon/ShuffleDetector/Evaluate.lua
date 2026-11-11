@@ -1,6 +1,4 @@
--- Pure shuffle evaluation core for the addon-only migration. It is not loaded by the
--- .toc yet: prices come from an injected provider whose units the caller must have
--- verified, so nothing here reads Auctionator or assumes a currency unit.
+-- Pure shuffle evaluation core; price/vendor providers are injected by Planner.lua.
 local _, ns = ...
 
 local DEFAULTS = { ahCut = 0.05, craftSeconds = 30, disenchantSeconds = 3, exploratory = false }
@@ -74,10 +72,11 @@ local function reagentLine(r, ctx)
     if refined then
         local need = refined.per * r.qty
         local rawAh, rawVendor = call(ctx.price, refined.raw), call(ctx.vendorBuy, refined.raw)
-        local best = rawAh and rawAh * need
-        if rawVendor and (not best or rawVendor * need < best) then best = rawVendor * need end
+        local best, rawSource = rawAh and rawAh * need, "AH"
+        if rawVendor and (not best or rawVendor * need < best) then best, rawSource = rawVendor * need, "Vendor" end
         if best then
-            line.rawItem, line.rawUnit = refined.raw, best / r.qty
+            line.rawItem, line.rawUnit, line.rawQty = refined.raw, best / r.qty, refined.per
+            line.rawSource = rawSource
             options[#options + 1] = { total = best, source = "Craft from raw" }
         end
     end

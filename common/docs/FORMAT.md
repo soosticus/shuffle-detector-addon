@@ -316,7 +316,7 @@ and generated Lua; they are not real game evidence or a distributable baseline.
 
 ## In-game price-provider contract (migration work)
 
-`Prices.lua` is not loaded by the `.toc` yet. Its
+`Prices.lua` is loaded for the read-only `/shuffledetector browse` preview. Its
 `ns.AuctionatorQuote(itemID, "commodity")` reads the public v1 ID API on demand,
 without item-info caching, disk access, refresh callbacks or synthetic stock.
 The caller must establish commodity identity; gear or unspecified identity
@@ -336,3 +336,24 @@ Optional `rawAge` retains the raw nonnegative number, without converting it to
 days or asserting freshness. Age failures leave the price estimate intact with
 `ageReason`. No callback, availability quantity, gear variant resolution,
 disenchant model or guaranteed execution price is implied.
+
+`Planner.lua` copies the current character's recorded item-producing recipes into
+evaluation inputs, without modifying their stored tables. It exposes learned and
+unlearned status separately and excludes records missing complete reagents/products.
+Only recorded class-7 trade goods enter the commodity provider; gear/unknown
+classes stay unavailable. Each explicit refresh takes a fresh per-item quote
+snapshot; there is no per-frame evaluation or assumed callback signature.
+Vendor observations are economic estimates with the existing location/discount
+limitations, not a proof of current merchant access. Single-reagent preparation
+alternatives require a recorded learned recipe; conflicting alternatives are not
+silently chosen.
+
+`Calculator.lua` scales a selected evaluation into shopping requirements and
+expected output, or floors the number of crafts affordable within a whole-copper
+budget. Unknown cost blocks budget calculation but does not prevent showing
+requirements for an explicit craft count. The 100000-craft cap is explicit;
+finished output over the execution limit of 100000 is flagged without clamping.
+No AH quantity/stock, independent-Poisson range or DE baseline is fabricated.
+`Browser.lua` keeps only transient preview state: it neither writes planner
+SavedVariables nor replaces `ns.plan` or any snatcher/statistics state. Durable
+selection and the centralized safe execution transition remain future work.

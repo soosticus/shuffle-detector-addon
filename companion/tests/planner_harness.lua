@@ -1,0 +1,209 @@
+local function eq(actual, expected, message)
+    assert(actual == expected, (message or "value") .. ": expected " .. tostring(expected) .. ", got " .. tostring(actual))
+end
+local widgets = {}
+local function widget(parent)
+    local w = { parent = parent, scripts = {}, shown = true }
+    widgets[#widgets + 1] = w
+    for _, method in ipairs({
+        "SetPoint", "SetMovable", "EnableMouse", "RegisterForDrag", "StartMoving",
+        "StopMovingOrSizing", "SetJustifyH", "SetWordWrap", "SetAutoFocus",
+        "SetMaxLetters", "ClearFocus", "RegisterEvent",
+    }) do w[method] = function() end end
+    function w:SetScript(event, fn) self.scripts[event] = fn end
+    function w:SetSize(width, height) self.width, self.height = width, height end
+    function w:SetHeight(height) self.height = height end
+    function w:SetWidth(width) self.width = width end
+    function w:SetText(value) self.text = value end
+    function w:GetText() return self.text end
+    function w:GetParent() return self.parent end
+    function w:GetStringHeight() return #self.text end
+    function w:SetScrollChild(child) self.child = child end
+    function w:Show() self.shown = true end
+    function w:Hide() self.shown = false end
+    function w:IsShown() return self.shown end
+    function w:CreateFontString() return widget(self) end
+    return w
+end
+UIParent = widget()
+CreateFrame = function(_, name, parent, template)
+    local w = widget(parent)
+    w.name, w.template = name, template
+    if template == "BasicFrameTemplateWithInset" then w.TitleText = widget(w) end
+    return w
+end
+SlashCmdList = {}
+date = function() return "12:00:00" end
+UnitName = function() return "Test" end
+GetRealmName = function() return "Realm" end
+UnitFactionGroup = function() return "Alliance" end
+local ns = {}
+assert(loadfile("addon/ShuffleDetector/ShuffleDetector.lua"))("ShuffleDetector", ns)
+
+-- Synthetic records; no production data or DE baseline.
+local function recipe(name, item, reagent, qty, spell, makes)
+    return { name = name, item = item, reagents = { { item = reagent, qty = qty } }, spell = spell, makes = makes }
+end
+AHSnapshotDB.characters = {
+    ["Test-Realm-Alliance"] = { professions = {
+        Tailoring = {
+            recipes = {
+                recipe("Bolt", 11, 10, 2, 1),
+                recipe("Piece", 20, 11, 3, 2, 2),
+                { name = "Incomplete", item = 50 },
+            },
+            available = { recipe("Unlearned", 21, 11, 4, 3) },
+        },
+        Enchanting = { recipes = { { name = "Productless enchant" } } },
+    } },
+    ["Other-Realm-Alliance"] = { professions = { Alchemy = {
+        recipes = { recipe("Other character", 22, 10, 1, 4) },
+    } } },
+}
+AHSnapshotDB.items = {
+    [10] = { name = "Raw", class = 7 },
+    [11] = { name = "Bolt", class = 7, sell = 1 },
+    [20] = { name = "Piece", class = 4, sell = 100 },
+    [21] = { name = "Unlearned", class = 4, sell = 50 },
+}
+AHSnapshotDB.vendor = { [10] = 4 }
+AHSnapshotDB.planSelection = { preserve = true }
+ns.plan = { item = 900, private = "legacy-plan" }
+local prices = { [10] = 5, [11] = 20, [20] = 99999 }
+local reads = {}
+GetBuildInfo = function() return "1.60.1", "70888", "date", 16001 end
+WOW_PROJECT_ID = 18
+C_AddOns = { GetAddOnMetadata = function() return "344" end }
+GetItemInfo = function() error("ID read must not require cached item info") end
+Auctionator = { API = { v1 = {
+    GetAuctionPriceByItemID = function(addon, id)
+        eq(addon, "ShuffleDetector")
+        reads[id] = (reads[id] or 0) + 1
+        return prices[id]
+    end,
+    GetAuctionAgeByItemID = function() return 0 end,
+} } }
+for _, module in ipairs({ "Prices", "Evaluate", "Calculator", "Planner", "Browser" }) do
+    assert(loadfile("addon/ShuffleDetector/" .. module .. ".lua"))("ShuffleDetector", ns)
+end
+local function find(results, name)
+    for _, r in ipairs(results) do if r.recipe.name == name then return r end end
+end
+local results, err, info = ns.PlannerResults({ knownOnly = true })
+eq(err, nil)
+eq(#results, 2, "current character's learned item-producing recipes only")
+eq(info.skipped, 2, "incomplete records reported")
+eq(reads[10], 1, "one quote per item per refresh")
+eq(reads[20], nil, "gear AH quotes must remain gated even with a numeric API price")
+eq(info.quotes[20].reason, "unsupported-item-identity")
+local piece = find(results, "Piece")
+eq(piece.cost, 24, "raw preparation uses a learned recipe and cheaper vendor raw")
+eq(piece.exit, "Vendor")
+eq(piece.net, 200, "multi-output vendor value")
+eq(piece.profit, 176)
+eq(piece.recipe.known, true)
+eq(piece.recipe.disenchant, nil, "no seed or sparse observation is promoted")
+eq(ns.plan.item, 900, "preview never replaces the loaded plan")
+eq(AHSnapshotDB.planSelection.preserve, true)
+local batch = assert(ns.CalculateBatch(piece, "crafts", 10))
+eq(batch.crafts, 10)
+eq(batch.items, 20)
+eq(batch.cost, 240)
+eq(batch.revenue, 2000)
+eq(batch.purchases[1].item, 10, "raw preparation produces a raw shopping requirement")
+eq(batch.purchases[1].qty, 60)
+eq(batch.purchases[1].total, 240)
+eq(batch.purchases[1].source, "Vendor")
+eq(batch.purchases[1].prepare, true)
+eq(batch.marketDepth, "unknown")
+eq(batch.outputs[1].expected, 20)
+batch = assert(ns.CalculateBatch(piece, "budget", 239))
+eq(batch.crafts, 9, "budget must not exceed the actual input")
+assert(batch.cost <= 239)
+eq(assert(ns.CalculateBatch(piece, "budget", 240)).crafts, 10)
+eq(assert(ns.CalculateBatch(piece, "crafts", 0)).cost, 0)
+local free = ns.Evaluate({ item = 11, makes = 1, reagents = { { item = 10, qty = 2 } } }, {
+    vendorBuy = function() return 0 end,
+    vendorSell = function() return 1 end,
+})
+local freeBatch = assert(ns.CalculateBatch(free, "budget", 0))
+eq(freeBatch.crafts, 100000, "valid zero economic costs use the budget search cap")
+eq(freeBatch.cost, 0)
+eq(freeBatch.capped, true)
+for _, invalid in ipairs({ -1, 100001, 1.5, math.huge, 0 / 0 }) do
+    local bad, reason = ns.CalculateBatch(piece, "crafts", invalid)
+    eq(bad, nil)
+    assert(reason)
+end
+batch = assert(ns.CalculateBatch(piece, "crafts", 100000))
+eq(batch.crafts, 100000)
+eq(batch.items, 200000, "calculator never silently clamps finished item output")
+assert(batch.transferReason:find("100000", 1, true))
+batch = assert(ns.CalculateBatch(piece, "budget", 100000000000))
+eq(batch.crafts, 100000)
+eq(batch.capped, true)
+
+results = assert(ns.PlannerResults({ profession = "Tailoring", search = "unlearned" }))
+eq(#results, 1)
+eq(results[1].recipe.known, false)
+eq(#assert(ns.PlannerResults({ profession = "Enchanting" })), 0)
+results = assert(ns.PlannerResults({ search = "Piece", exit = "Sell on AH" }))
+eq(results[1].net, nil, "an unverified gear exit does not inherit the vendor exit")
+piece = results[1]
+prices[11], prices[10], AHSnapshotDB.vendor[10] = nil, nil, nil
+piece = find(assert(ns.PlannerResults()), "Piece")
+eq(piece.cost, nil, "missing prices stay unknown")
+local unknownBatch, budgetError = ns.CalculateBatch(piece, "budget", 1000)
+eq(unknownBatch, nil)
+assert(budgetError:find("every reagent", 1, true))
+eq(assert(ns.CalculateBatch(piece, "crafts", 2)).cost, nil)
+prices[11], prices[10] = 20, 5
+reads = {}
+results = assert(ns.PlannerResults())
+eq(find(results, "Piece").cost, 30, "next refresh sees changed vendor/market data")
+eq(reads[10], 1)
+
+local function click(label)
+    for _, w in ipairs(widgets) do
+        if w.text == label and w.scripts.OnClick then w.scripts.OnClick(w); return end
+    end
+    error("missing button " .. label)
+end
+SlashCmdList.SHUFFLEDETECTOR("browse")
+local browser
+for _, w in ipairs(widgets) do if w.name == "ShuffleDetectorBrowser" then browser = w end end
+assert(browser and browser.shown, "slash command opens the real browser")
+click("Calculate")
+click("Crafts")
+click("Calculate")
+click("Next >")
+click("< Previous")
+click("All professions")
+click("Learned only")
+click("Best exit")
+click("Refresh / search")
+SlashCmdList.SHUFFLEDETECTOR("browse")
+eq(browser.shown, false)
+SlashCmdList.SHUFFLEDETECTOR("browse")
+eq(browser.shown, true)
+eq(ns.plan.item, 900, "all UI actions leave the active execution plan intact")
+eq(AHSnapshotDB.planSelection.preserve, true)
+
+local saved = AHSnapshotDB.characters
+AHSnapshotDB.characters = nil
+local empty, reason = ns.PlannerResults()
+eq(empty, nil)
+assert(reason:find("No recorded", 1, true))
+AHSnapshotDB.characters = saved
+local learned = saved["Test-Realm-Alliance"].professions.Tailoring.recipes
+learned[#learned + 1] = {
+    name = "Malformed reagents", item = 50, makes = 1,
+    reagents = { [1] = { item = 10, qty = 1 }, [3] = { item = 11, qty = 1 } },
+}
+local malformed = recipe("Malformed makes", 50, 10, 1, 50)
+malformed.makes = false
+learned[#learned + 1] = malformed
+local checked, _, checkedInfo = ns.PlannerResults({ knownOnly = true })
+eq(#checked, 2, "malformed records never become free or partially costed recipes")
+eq(checkedInfo.skipped, 4)
+print("planner workflow checks passed")

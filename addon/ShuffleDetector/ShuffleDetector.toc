@@ -9,6 +9,11 @@
 
 ShuffleDetector.lua
 Diagnostics.lua
+Prices.lua
+Evaluate.lua
+Calculator.lua
+Planner.lua
+Browser.lua
 Observations.lua
 Disenchant.lua
 Plan.lua

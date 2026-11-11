@@ -95,8 +95,9 @@ version and candidate public price APIs in the diagnostic log. Optional item IDs
 (up to eight) choose the comparisons, for example `/shuffledetector prices 2589 2996 7054`.
 Use `/shuffledetector log 80` to read the results before and after an Auctionator
 scan, and compare them with Auctionator's displayed prices on the current realm.
-Missing quotes and errors do not mean zero prices; API units, price age and item
-variant behavior still need verification on the installed client.
+Missing quotes and errors do not mean zero prices. The user-tested Forever
+1.60.1/Auctionator 344 combination returns copper, with changed commodity quotes
+after a scan without reload. Age units and item variant behavior remain unverified.
 
 The local v2 probe also records the public API's raw exactness flags and DE
 valuations, where available. DE values are opaque estimates: they do not supply a
@@ -105,6 +106,43 @@ Missing optional functions are logged without preventing the other comparisons.
 
 This diagnostic does not change the loaded plan, buy anything, or replace the
 companion price reader. The addon-only migration is not yet a complete workflow.
+
+## In-game rankings and calculator preview
+
+`/shuffledetector browse` opens a **read-only in-game preview**, without running the
+companion. Open each profession window to record your recipes and visit vendors
+to record their buy prices. After recording or scanning with Auctionator, click
+**Refresh / search** in the preview; no `/reload` is needed for price refresh.
+
+The browser ranks the current character's recorded item-producing recipes by
+estimated profit. Cycle the profession, learned/unlearned and exit buttons to
+filter; enter a recipe name and press Enter to search. Select a row for reagent
+costs, exit values, missing-price reasons and casting-only profit/hour. The batch
+calculator accepts **craft counts** or a **budget in whole copper**; it shows
+shopping requirements, finished output and estimated cost/net/profit.
+
+This slice deliberately has limits:
+
+- AH prices are on-demand, shallow estimates for recorded trade goods only.
+  The provider supports Forever 1.60.1 builds 70862/70888, interface 16001/project
+  18, Auctionator 344. Other combinations report unsupported instead of assuming
+  compatibility. Gear/unknown item identities have no AH valuation.
+- Unknown inputs or yields stay unknown, never free or zero. No trusted DE
+  baseline is loaded, so disenchant rankings remain unavailable.
+- Recorded vendor quotes may be stale or specific to another character's
+  location/discounts. AH sales assume a 5% fee, without deposits or failed listings.
+  Quantities are requirements, **not available auction stock**. Age units, depth,
+  exactness and large-batch price impact remain unknown.
+- Learned single-reagent preparation recipes can supply cheaper raw-material
+  alternatives; their extra craft time is not included in casting-only profit/hour.
+  The calculator caps at 100000 crafts and flags more than 100000 finished items;
+  it does not invent a numeric DE outcome range.
+
+Preview selections and calculations are session-only. They **do not replace your
+active plan, reset batch progress, change purchase caps, or buy/craft anything**.
+Sending an in-game selection to the execution window, persistent planner settings,
+custom material costs and the complete addon-only workflow remain migration work.
+The existing companion and its generated plans continue to work unchanged.
 
 ## In-game shuffle
 

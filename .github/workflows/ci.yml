@@ -34,3 +34,4 @@ jobs:
       - run: lua5.1 companion/tests/disenchant_harness.lua
       - run: lua5.1 companion/tests/evaluate_harness.lua
       - run: lua5.1 companion/tests/prices_harness.lua
+      - run: lua5.1 companion/tests/planner_harness.lua

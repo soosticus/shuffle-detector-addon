@@ -30,8 +30,12 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   stay unknown, multi-output DE scales value and time, exploratory models only in an
   opt-in view). `Prices.lua` provides on-demand commodity-only copper estimates
   for the tested client/provider versions, with explicit unknown/error reasons;
-  it does not assert stock, exactness or age units. Neither module is in the
-  `.toc` yet; provider-to-evaluator wiring and UI integration remain open.
+  it does not assert stock, exactness or age units. `/shuffledetector browse`
+  now loads the provider/evaluator and a read-only in-game recipe browser with
+  current-character filters, breakdowns, and craft-count/budget estimates.
+  Unknown DE data stays unavailable, and previews never change the active plan.
+  Safe selection-to-execution, persistent settings/custom costs, full migration
+  and in-game acceptance remain open; the companion is unchanged.
 
 - Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
 

@@ -1,5 +1,5 @@
 -- ShuffleDetector core: shared namespace, profession/recipe snapshot, slash commands.
--- Prices are not collected here: the companion reads Auctionator's saved price database directly.
+-- Prices.lua reads Auctionator in game; the companion also reads its saved price database.
 -- Data is written by the game to WTF/Account/<acct>/SavedVariables/ShuffleDetector.lua
 
 local ADDON, ns = ...
@@ -427,6 +427,8 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
     msg = (msg or ""):lower()
     if msg == "recipes" then
         ns.DebugRecipes()
+    elseif msg == "browse" then
+        ns.TogglePlanner()
     elseif msg == "shuffle" then
         ns.ToggleShuffleTracker()
     elseif msg == "snatch" then
@@ -450,7 +452,7 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
     elseif msg == "yields" then
         ns.RefreshItemDetails()
     else
-        say("usage: /shuffledetector items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | prices [item IDs] (Auctionator API diagnostic) | shuffle or snatch (toggle batch and shuffle window) | stats (batch analytics) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
+        say("usage: /shuffledetector browse (in-game ranking and calculator preview) | items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | prices [item IDs] (Auctionator API diagnostic) | shuffle or snatch (toggle batch and shuffle window) | stats (batch analytics) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
     end
 end
 
