@@ -60,11 +60,28 @@ Auctionator.API.v1 = nil
 eq(quote().reason, "unavailable")
 Auctionator.API.v1 = api
 provider = "345"
-eq(quote().reason, "unsupported-provider-version")
-assert(quote().detail:find('"345" (string)', 1, true), "show the actual rejected metadata, not just an error code")
+eq(quote().reason, "untested-provider-version", "a newer release is reported as untested")
+eq(quote().unit, nil, "untested provider prices are off by default")
+assert(quote().detail:find("345", 1, true), "show the actual detected version")
+eq(ns.PriceProviderStatus().untestedVersion, "345")
 local logCount = #logs
 quote()
 eq(#logs, logCount, "a rejected version is logged once, not once per recipe")
+ns.SetUntestedProviderAllowed(true)
+q = quote()
+eq(q.unit, 26, "explicit opt-in previews untested prices")
+eq(q.provisional, true, "opted-in quotes stay labeled untested")
+eq(ns.PriceProviderStatus().provisional, true)
+eq(#logs, logCount, "opting in does not repeat the rejection log")
+provider = "343"
+eq(quote().reason, "unsupported-provider-version", "opt-in never covers an older release")
+provider = "345.1"
+eq(quote().reason, "unsupported-provider-version", "opt-in never covers a non-release version string")
+provider = "344"
+eq(quote().provisional, nil, "the tested release is never labeled untested")
+ns.SetUntestedProviderAllowed(false)
+provider = "345"
+eq(quote().unit, nil, "turning the preview off restores the gate")
 provider = 344
 eq(quote().unit, 26, "numeric metadata is supported")
 provider = "344"

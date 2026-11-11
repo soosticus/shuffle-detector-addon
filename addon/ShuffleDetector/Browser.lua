@@ -1,5 +1,6 @@
 local _, ns = ...
 local panel, detail, scroll, summary, providerLabel, countLabel, professionMenu, exitMenu, recipeMenu, amount, searchBox
+local untestedButton, previewUntested
 local rows, results, info, selected, batch, calculationError = {}, {}, {}, nil, nil, nil
 local options, page, mode = { knownOnly = true }, 1, "crafts"
 local PAGE_SIZE = 10
@@ -30,6 +31,7 @@ local function quoteReason(quote)
     local reasons = {
         ["unsupported-item-identity"] = "AH value not verified for this item type",
         ["unsupported-provider-version"] = "AH provider version not verified (see banner)",
+        ["untested-provider-version"] = "Newer Auctionator not yet tested (see banner)",
         ["unsupported-client"] = "Client version not verified (see banner)",
         ["unavailable"] = "Auctionator price API unavailable",
         ["no-price"] = "No Auctionator quote; scan and Refresh",
@@ -45,6 +47,11 @@ local function blocked(result)
     if result.net == nil then return "No priced exit for this filter - see breakdown" end
 end
 
+local function untested()
+    local provider = info.provider
+    return provider and provider.provisional and provider.normalizedVersion
+end
+
 local function details()
     local result = current()
     if not result then
@@ -57,10 +64,13 @@ local function details()
             recipe.known and "Preview a shuffle you can craft; this row does not start it."
                 or "Pattern to learn later. This character cannot craft it yet; acquisition requirements are not verified.",
             ("Makes %d per craft; 30s assumed craft time."):format(recipe.makes),
-            "",
-            heading("Estimate per craft"),
-            "Materials: " .. money(result.cost),
         }
+        if untested() then
+            lines[#lines + 1] = ("|cffffaa33AH values come from untested Auctionator %s.|r"):format(untested())
+        end
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = heading("Estimate per craft")
+        lines[#lines + 1] = "Materials: " .. money(result.cost)
         if result.net ~= nil then
             lines[#lines + 1] = (result.exit or "Exit") .. " returns: " .. money(result.net)
         else
@@ -93,7 +103,7 @@ local function details()
         for _, exit in ipairs(result.exits) do
             local reason
             if exit.label == "Disenchant" then
-                reason = "Unavailable: no trusted yield baseline yet"
+                reason = "Not estimated: no verified disenchant yield table ships for this client yet"
             elseif exit.reason == "no price" then
                 local quote = info.quotes and info.quotes[recipe.item]
                 reason = quote and quoteReason(quote) or "No Auctionator quote"
@@ -106,7 +116,8 @@ local function details()
             end
             lines[#lines + 1] = exit.label .. ": " .. (exit.net ~= nil and money(exit.net) or reason or "Not priced")
         end
-        lines[#lines + 1] = "AH sales assume 5% fee. Gear AH values and DE yields remain gated."
+        lines[#lines + 1] = "AH sales assume a 5% fee. Only trade goods get AH values; crafted gear has none yet."
+        lines[#lines + 1] = "Disenchanting is never valued from guesses; your recorded disenchants are kept for a future verified table."
         if calculationError then
             lines[#lines + 1] = "\n" .. heading("Calculator") .. "\n" .. calculationError
         elseif batch then
@@ -139,6 +150,7 @@ render = function()
             if not subtitle then
                 local color = result.profit >= 0 and "|cff33ff99" or "|cffff7777"
                 subtitle = color .. money(result.profit) .. " profit/craft|r - " .. result.exit
+                if untested() then subtitle = subtitle .. " |cffffaa33(untested AH)|r" end
             end
             button.valueText:SetText(subtitle)
             button:Show()
@@ -153,8 +165,15 @@ end
 
 local function providerText(provider)
     if not provider then return "No provider status available." end
+    if provider.ready and provider.provisional then
+        return ("|cffffaa33Previewing UNTESTED Auctionator %s prices this session|r (tested: 344). Confirm with /shuffledetector prices before and after a scan."):format(
+            provider.normalizedVersion)
+    end
     if provider.ready then
         return "Auctionator " .. provider.normalizedVersion .. ": copper commodity estimates. Stock and age units unverified."
+    end
+    if provider.reason == "untested-provider-version" then
+        return "|cffffaa33AH prices off:|r " .. provider.detail
     end
     return "|cffff7777AH prices unavailable:|r " .. (provider.detail or quoteReason(provider))
 end
@@ -171,6 +190,13 @@ refresh = function()
             or "All recipes: learned shuffles and unlearned patterns; select a row for details.")
     summary:SetText(err or (ns.charKey() .. " - " .. meaning))
     providerLabel:SetText(providerText(info.provider))
+    local newer = info.provider and info.provider.untestedVersion
+    if newer then
+        untestedButton:SetText((previewUntested and "Hide " or "Preview ") .. newer .. " prices")
+        untestedButton:Show()
+    else
+        untestedButton:Hide()
+    end
     professionMenu:SetText((options.profession or "All professions") .. " v")
     recipeMenu:SetText((options.knownOnly and "Learned recipes" or (options.unlearnedOnly and "Unlearned patterns" or "All recipes")) .. " v")
     exitMenu:SetText((options.exit or "Best available exit") .. " v")
@@ -300,7 +326,13 @@ function ns.TogglePlanner()
     searchBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     button(panel, "Refresh / search", 825, -60, 140, refresh)
     summary = text(panel, "", 15, -98, 940)
-    providerLabel = text(panel, "", 15, -124, 940)
+    providerLabel = text(panel, "", 15, -124, 800)
+    untestedButton = button(panel, "", 825, -120, 140, function()
+        previewUntested = not previewUntested
+        ns.SetUntestedProviderAllowed(previewUntested)
+        refresh()
+    end)
+    untestedButton:Hide()
     text(panel, "Recipe / estimated profit per craft", 15, -172, 375, "GameFontNormal")
     text(panel, "Recipe breakdown (scroll for exits and batch results)", 410, -172, 530, "GameFontNormal")
     for i = 1, PAGE_SIZE do

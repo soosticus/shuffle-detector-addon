@@ -1,5 +1,12 @@
 local ADDON, ns = ...
 local lastRejection
+local TESTED_PROVIDER = 344
+-- Session-only: a newer, untested Auctionator release is never used by default.
+local allowUntested = false
+
+function ns.SetUntestedProviderAllowed(allowed)
+    allowUntested = allowed and true or false
+end
 
 local function finite(value)
     return type(value) == "number" and value == value and math.abs(value) < math.huge
@@ -41,15 +48,24 @@ function ns.PriceProviderStatus()
     if metadataError then status.reason = metadataError; return status end
     local normalized = (type(providerVersion) == "string" or type(providerVersion) == "number")
         and tostring(providerVersion):match("^%s*(.-)%s*$")
-    if normalized ~= "344" then
-        status.reason = "unsupported-provider-version"
-        status.detail = ("Detected Auctionator Version %q (%s); tested: 344. Run /shuffledetector prices to capture the installed API."):format(
-            tostring(providerVersion), type(providerVersion))
+    local release = normalized and normalized:match("^%d+$") and tonumber(normalized)
+    if release ~= TESTED_PROVIDER then
+        if release and release > TESTED_PROVIDER then
+            status.reason = "untested-provider-version"
+            status.untestedVersion = normalized
+            status.detail = ("Auctionator %s is newer than the tested %d; its prices are off unless you choose to preview them, labeled untested."):format(
+                normalized, TESTED_PROVIDER)
+        else
+            status.reason = "unsupported-provider-version"
+            status.detail = ("Detected Auctionator Version %q (%s); tested: %d. Run /shuffledetector prices to capture the installed API."):format(
+                tostring(providerVersion), type(providerVersion), TESTED_PROVIDER)
+        end
         if lastRejection ~= status.detail then
             ns.log("prices: " .. status.detail)
             lastRejection = status.detail
         end
-        return status
+        if status.reason ~= "untested-provider-version" or not allowUntested then return status end
+        status.provisional = true
     end
     status.normalizedVersion = normalized
     local api = type(Auctionator) == "table" and Auctionator.API
@@ -58,7 +74,8 @@ function ns.PriceProviderStatus()
         status.reason = "unavailable"
         return status
     end
-    lastRejection = nil
+    if not status.provisional then lastRejection = nil end
+    status.reason = nil
     status.ready = true
     return status
 end
@@ -81,6 +98,7 @@ function ns.AuctionatorQuote(itemID, kind)
     end
     local provider = ns.PriceProviderStatus()
     quote.client, quote.providerVersion = provider.client, provider.providerVersion
+    quote.provisional = provider.provisional
     if not provider.ready then
         quote.reason, quote.detail = provider.reason, provider.detail
         return quote

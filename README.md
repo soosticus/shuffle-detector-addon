@@ -129,9 +129,12 @@ This slice deliberately has limits:
 - AH prices are on-demand, shallow estimates for recorded trade goods only.
   The provider supports Forever 1.60.1 builds 70862/70888, interface 16001/project
   18, Auctionator 344. Other combinations report unsupported instead of assuming
-  compatibility. Gear/unknown item identities have no AH valuation.
-- Unknown inputs or yields stay unknown, never free or zero. No trusted DE
-  baseline is loaded, so disenchant rankings remain unavailable.
+  compatibility. A newer Auctionator (for example 345) turns AH prices off with an
+  explanation; **Preview 345 prices** next to the banner uses them for this session
+  only, with every affected value labeled *untested AH*. Gear/unknown item
+  identities have no AH valuation.
+- Unknown inputs or yields stay unknown, never free or zero. No verified
+  disenchant yield table ships yet, so disenchant values are not estimated.
 - Recorded vendor quotes may be stale or specific to another character's
   location/discounts. AH sales assume a 5% fee, without deposits or failed listings.
   Quantities are requirements, **not available auction stock**. Age units, depth,

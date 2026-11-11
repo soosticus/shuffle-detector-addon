@@ -324,7 +324,13 @@ returns unknown. Support is restricted to the tested Forever 1.60.1 builds
 70862/70888, interface 16001, project 18, with Auctionator 344. User confirmation
 establishes copper units for this combination; build 70888 logs establish changed
 API prices after a scan without reload. Other clients/providers remain unsupported
-until verified, not silently assumed compatible.
+until verified, not silently assumed compatible. A newer whole-number Auctionator
+release (for example 345) reports `untested-provider-version` with
+`untestedVersion`; its prices stay off unless the browser's session-only
+**Preview N prices** switch calls `ns.SetUntestedProviderAllowed(true)`. Then the
+status has `provisional = true`, quotes carry `provisional = true`, and the browser
+labels every affected banner, row and breakdown as untested. The switch is never
+saved and does not cover older releases or non-numeric versions.
 
 `ns.PriceProviderStatus()` exposes readiness, exact detected `providerVersion`,
 client identity, and a readable `detail` for version/client rejections.

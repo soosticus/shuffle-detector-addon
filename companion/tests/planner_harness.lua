@@ -231,6 +231,25 @@ for _, w in ipairs(widgets) do
 end
 assert(showsActualVersion, "surface the exact installed version in one visible banner")
 eq(repeatsUnknown, false, "incomplete rows say why instead of repeated unknown values")
+local function visible(fragment)
+    for _, w in ipairs(widgets) do
+        if w:IsShown() and w.text and w.text:find(fragment, 1, true) then return w end
+    end
+end
+eq(visible("Preview 3"), nil, "no untested-price switch for an unsupported version")
+C_AddOns.GetAddOnMetadata = function() return "345" end
+click("Refresh / search")
+assert(visible("AH prices off:"), "a newer Auctionator explains why prices are off")
+assert(visible("Missing reagent prices"), "untested prices are not used by default")
+click("Preview 345 prices")
+assert(visible("UNTESTED Auctionator 345"), "opt-in banner names the untested version")
+assert(visible("(untested AH)"), "ranked rows from untested prices are labeled")
+assert(visible("AH values come from untested Auctionator 345"), "breakdown is labeled")
+eq(ns.plan.item, 900, "previewing untested prices leaves the active plan intact")
+click("Hide 345 prices")
+assert(visible("AH prices off:"), "hiding restores the gate")
+eq(visible("(untested AH)"), nil)
+assert(visible("no verified disenchant yield table"), "explain why disenchant is not estimated")
 C_AddOns.GetAddOnMetadata = metadata
 click("Refresh / search")
 click("Best available exit v")

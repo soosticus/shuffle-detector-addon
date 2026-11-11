@@ -39,9 +39,15 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   The first dev-47d2ecc client test opened the browser, but reported unreadable
   cycling filters and `unsupported-provider-version` for AH inputs. Revised
   dropdowns and readable missing-data reasons are built; the provider now shows
-  exact detected metadata and tolerates surrounding version whitespace. Numeric
-  and string 344 both pass regression tests; the client's rejection cause is not
-  yet established. Do not waive version or DE gates to hide missing data.
+  exact detected metadata and tolerates surrounding version whitespace. Diagnosis:
+  the installed Auctionator `.toc` now says `## Version: 345` (checked on the
+  second machine's Forever install), while the provider accepted only 344, so
+  every AH quote, and therefore most rows, was unknown. 344 remains the only
+  trusted release; newer whole-number releases now report `untested-provider-version`
+  and can be previewed for one session, labeled untested. Next: run
+  `/shuffledetector prices` before/after a scan on 345; if IDs, copper units and
+  scan updates match 344, add 345 to the tested release. Do not waive version or DE
+  gates to hide missing data.
 
 - Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
 
