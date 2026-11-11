@@ -1499,4 +1499,43 @@ do
     end
 end
 
+s = setup()
+s.target = 4
+assert(ns.PrepareShufflePlanChange(), "plan change is allowed with no outstanding actions")
+eq(s.target, 0, "plan change clears the previous batch target")
+ns.plan = { version = 1, spell = 11, item = 21, recipe = "New shuffle",
+    reagents = { { item = 2, qty = 3 } } }
+assert(ns.SetSnatchTarget(6), "validated batch target is saved")
+eq(s.target, 6)
+eq(s.completed, 0)
+eq(#calls, 0, "setting an active plan and target never buys or crafts")
+for _, invalid in ipairs({ 0, -1, 100001, 1.5, math.huge, 0 / 0 }) do
+    local ok = ns.SetSnatchTarget(invalid)
+    eq(ok, nil, "invalid batch targets are rejected")
+end
+s.inFlight = { item = 2, qty = 3 }
+local allowed, blocked = ns.PrepareShufflePlanChange()
+eq(allowed, nil, "pending purchases block active-plan changes")
+assert(blocked:find("pending purchase", 1, true))
+allowed, blocked = ns.SetSnatchTarget(8)
+eq(allowed, nil, "pending purchases block target changes")
+assert(blocked:find("pending purchase", 1, true))
+
+s = setup()
+local activePlan = { version = 1, recipe = "In-game choice", selectedAt = 200 }
+AHSnapshotDB.activePlan = activePlan
+ns.plan = { version = 1, recipe = "Older companion plan", generated = 199 }
+ns.ValidateActivePlan = function(candidate) return candidate == activePlan end
+assert(loadfile("addon/ShuffleDetector/Shuffle.lua"))("ShuffleDetector", ns)
+eq(ns.plan, activePlan, "newer in-game selections supersede preserved Plan.lua files")
+
+s = setup()
+activePlan = { version = 1, recipe = "Older in-game choice", selectedAt = 200 }
+AHSnapshotDB.activePlan = activePlan
+ns.plan = { version = 1, recipe = "New companion plan", generated = 201 }
+ns.ValidateActivePlan = function(candidate) return candidate == activePlan end
+assert(loadfile("addon/ShuffleDetector/Shuffle.lua"))("ShuffleDetector", ns)
+eq(ns.plan.recipe, "New companion plan", "newer companion plans retain precedence")
+eq(AHSnapshotDB.activePlan, nil, "superseded in-game selections are cleared")
+
 print("snatcher checks passed")

@@ -43,10 +43,14 @@ CreateFrame = function(_, name, parent, template)
 end
 SlashCmdList = {}
 date = function() return "12:00:00" end
+time = function() return 1700000000 end
 UnitName = function() return "Test" end
 GetRealmName = function() return "Realm" end
 UnitFactionGroup = function() return "Alliance" end
 local ns = {}
+local selectedTarget
+ns.PrepareShufflePlanChange = function() return true end
+ns.SetSnatchTarget = function(target) selectedTarget = target; return true end
 assert(loadfile("addon/ShuffleDetector/ShuffleDetector.lua"))("ShuffleDetector", ns)
 
 -- Synthetic records; no production data or DE baseline.
@@ -112,6 +116,8 @@ eq(piece.net, 200, "multi-output vendor value")
 eq(piece.profit, 176)
 eq(piece.recipe.known, true)
 eq(piece.recipe.disenchant, nil, "no seed or sparse observation is promoted")
+eq(ns.CanActivatePlannerResult({ recipe = { known = false } }, {}), nil,
+    "unlearned recipes cannot become the active shuffle")
 eq(ns.plan.item, 900, "preview never replaces the loaded plan")
 eq(AHSnapshotDB.planSelection.preserve, true)
 local batch = assert(ns.CalculateBatch(piece, "crafts", 10))
@@ -252,6 +258,21 @@ eq(visible("(untested AH)"), nil)
 assert(visible("no verified disenchant yield table"), "explain why disenchant is not estimated")
 C_AddOns.GetAddOnMetadata = metadata
 click("Refresh / search")
+for _, w in ipairs(widgets) do
+    if w.nameText and w.nameText.text and w.nameText.text:find("Piece", 1, true) and w.scripts.OnClick then
+        w.scripts.OnClick(w)
+        break
+    end
+end
+click("Budget (copper)")
+click("Calculate")
+click("Set active shuffle")
+eq(ns.plan.item, 20, "explicit browser action replaces the active plan")
+eq(AHSnapshotDB.activePlan.spell, 2, "the selected plan is saved in addon SavedVariables")
+eq(AHSnapshotDB.activePlan.exit, "Vendor")
+eq(AHSnapshotDB.activePlan.selectedAt, 1700000000, "selection timestamp is saved for companion precedence")
+eq(selectedTarget, 2, "batch calculator target is set in finished items")
+assert(visible("No purchases or crafts were started"), "activation never starts a protected action")
 click("Best available exit v")
 local cover
 for _, w in ipairs(widgets) do
@@ -266,8 +287,16 @@ eq(browser.shown, false)
 eq(cover:IsShown(), false, "closing the browser closes its dropdown")
 SlashCmdList.SHUFFLEDETECTOR("browse")
 eq(browser.shown, true)
-eq(ns.plan.item, 900, "all UI actions leave the active execution plan intact")
+eq(ns.plan.item, 20, "browsing after activation preserves the selected execution plan")
 eq(AHSnapshotDB.planSelection.preserve, true)
+local savedActivePlan = AHSnapshotDB.activePlan
+ns.plan = nil
+AHSnapshotDB.activePlan = { version = 1, selectedAt = 1700000000, recipe = "Invalid" }
+assert(loadfile("addon/ShuffleDetector/Plan.lua"))("ShuffleDetector", ns)
+eq(ns.plan, nil, "malformed saved selections are ignored")
+AHSnapshotDB.activePlan = savedActivePlan
+assert(loadfile("addon/ShuffleDetector/Plan.lua"))("ShuffleDetector", ns)
+eq(ns.plan.item, 20, "the in-game selection restores from SavedVariables after reload")
 
 local saved = AHSnapshotDB.characters
 AHSnapshotDB.characters = nil

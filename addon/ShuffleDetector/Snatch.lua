@@ -113,6 +113,35 @@ local function state()
     return s, p
 end
 
+function ns.PrepareShufflePlanChange()
+    local s = state()
+    if pending or (s and s.inFlight) then
+        return nil, "Resolve the pending purchase before changing the active shuffle."
+    end
+    if s and ns.BatchStatsClose and not ns.BatchStatsClose(s) then
+        return nil, "Confirm or resolve the pending sale before changing the active shuffle."
+    end
+    if s then
+        s.recipe, s.target, s.completed, s.statsId = nil, 0, 0, nil
+    end
+    return true
+end
+
+function ns.SetSnatchTarget(target)
+    if not integer(target, 1, MAX_TARGET) then
+        return nil, "The batch target must be 1 to 100000 finished items."
+    end
+    local s = state()
+    if not s then return nil, "No valid active shuffle is loaded." end
+    if pending or s.inFlight then
+        return nil, "Resolve the pending purchase before changing the batch target."
+    end
+    s.target, s.completed = target, 0
+    if ns.BatchStatsEnsure then ns.BatchStatsEnsure(ns.plan, s) end
+    if refresh then refresh() end
+    return true
+end
+
 local function syncBags(s)
     for id, qty in pairs(s.awaiting) do
         local now = count(id)
@@ -772,6 +801,10 @@ refresh = function()
     panel.buy:SetEnabled(ahOpen and not InCombatLockdown() and
         ((pending and pending.kind == "quoted") or (not pending and offer ~= nil)) or false)
     pollButton:SetText(running and "Stop AH polling" or "Start AH polling")
+end
+
+ns.RefreshSnatcher = function()
+    if refresh then refresh() end
 end
 
 populate = function()

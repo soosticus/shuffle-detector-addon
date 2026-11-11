@@ -11,6 +11,16 @@ local DISENCHANT_ID = 13262
 local PLAN_VERSION = 1
 local MACRO = "/click " .. BUTTON_NAME
 
+local savedPlan = type(AHSnapshotDB) == "table" and AHSnapshotDB.activePlan
+if ns.ValidateActivePlan and ns.ValidateActivePlan(savedPlan) then
+    local generated = type(ns.plan) == "table" and ns.plan.generated
+    if type(generated) ~= "number" or savedPlan.selectedAt >= generated then
+        ns.plan = savedPlan
+    else
+        AHSnapshotDB.activePlan = nil
+    end
+end
+
 BINDING_HEADER_SHUFFLEDETECTOR = "ShuffleDetector"
 _G["BINDING_NAME_CLICK " .. BUTTON_NAME .. ":LeftButton"] = "Next shuffle step"
 

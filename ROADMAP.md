@@ -33,9 +33,14 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   it does not assert stock, exactness or age units. `/shuffledetector browse`
   now loads the provider/evaluator and a read-only in-game recipe browser with
   current-character filters, breakdowns, and craft-count/budget estimates.
-  Unknown DE data stays unavailable, and previews never change the active plan.
-  Safe selection-to-execution, persistent settings/custom costs, full migration
-  and in-game acceptance remain open; the companion is unchanged.
+  Unknown DE data stays unavailable. An explicit **Set active shuffle** action now
+  transfers only learned recipes with complete, non-provisional pricing and a
+  calculated batch; it persists the selected plan and item target in SavedVariables.
+  It does not purchase or craft, and unresolved purchases/sales block plan changes.
+  Lua harnesses cover activation, validation, target persistence and no-action
+  behavior. In-game acceptance remains open: verify the selected recipe/exit/target,
+  reload restoration, and that only a later macro press crafts. Persistent browser
+  filters/custom costs, full migration and retirement of the companion remain open.
   The first dev-47d2ecc client test opened the browser, but reported unreadable
   cycling filters and `unsupported-provider-version` for AH inputs. Revised
   dropdowns and readable missing-data reasons are built; the provider now shows

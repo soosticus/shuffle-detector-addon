@@ -1,7 +1,7 @@
 local _, ns = ...
-local panel, detail, scroll, summary, providerLabel, countLabel, professionMenu, exitMenu, recipeMenu, amount, searchBox
+local panel, detail, scroll, summary, providerLabel, countLabel, professionMenu, exitMenu, recipeMenu, amount, searchBox, useButton
 local untestedButton, previewUntested
-local rows, results, info, selected, batch, calculationError = {}, {}, {}, nil, nil, nil
+local rows, results, info, selected, batch, calculationError, activationNotice = {}, {}, {}, nil, nil, nil, nil
 local options, page, mode = { knownOnly = true }, 1, "crafts"
 local PAGE_SIZE = 10
 local refresh, render, menuCover
@@ -47,6 +47,12 @@ local function blocked(result)
     if result.net == nil then return "No priced exit for this filter - see breakdown" end
 end
 
+local function updateUseButton()
+    if not useButton then return end
+    local allowed = ns.CanActivatePlannerResult and ns.CanActivatePlannerResult(current(), batch)
+    if allowed then useButton:Enable() else useButton:Disable() end
+end
+
 local function untested()
     local provider = info.provider
     return provider and provider.provisional and provider.normalizedVersion
@@ -68,6 +74,7 @@ local function details()
         if untested() then
             lines[#lines + 1] = ("|cffffaa33AH values come from untested Auctionator %s.|r"):format(untested())
         end
+        if activationNotice then lines[#lines + 1] = "\n" .. activationNotice end
         lines[#lines + 1] = ""
         lines[#lines + 1] = heading("Estimate per craft")
         lines[#lines + 1] = "Materials: " .. money(result.cost)
@@ -133,9 +140,15 @@ local function details()
             end
             lines[#lines + 1] = "Required quantities, not confirmed auction stock."
         end
+        local canActivate, activationReason = ns.CanActivatePlannerResult(result, batch)
+        if not canActivate then
+            lines[#lines + 1] = "\n" .. heading("Set active shuffle")
+            lines[#lines + 1] = activationReason
+        end
         detail:SetText(table.concat(lines, "\n"))
     end
     detail:GetParent():SetHeight(math.max(400, detail:GetStringHeight() + 16))
+    updateUseButton()
 end
 
 render = function()
@@ -183,7 +196,7 @@ refresh = function()
     local err
     results, err, info = ns.PlannerResults(options)
     info, results = info or {}, results or {}
-    batch, calculationError = nil, nil
+    batch, calculationError, activationNotice = nil, nil, nil
     if not current() then selected = results[1] and results[1].recipe.key end
     local meaning = options.knownOnly and "Learned recipes: shuffle previews, not action buttons."
         or (options.unlearnedOnly and "Unlearned patterns: compare recipes to learn later; not craftable yet."
@@ -344,6 +357,7 @@ function ns.TogglePlanner()
         rows[i].valueText = text(rows[i], "", 5, -21, 365, "GameFontHighlightSmall")
         rows[i]:SetScript("OnClick", function(self)
             selected, batch, calculationError = self.key, nil, nil
+            activationNotice = nil
             scroll:SetVerticalScroll(0)
             render()
         end)
@@ -375,9 +389,21 @@ function ns.TogglePlanner()
     button(panel, "Calculate", 680, -636, 120, function()
         amount:ClearFocus()
         batch, calculationError = ns.CalculateBatch(current(), mode, tonumber(amount:GetText()))
+        activationNotice = nil
         details()
         scroll:SetVerticalScroll(math.max(0, detail:GetStringHeight() - 380))
     end)
+    useButton = button(panel, "Set active shuffle", 810, -636, 155, function()
+        local ok, reason = ns.ActivatePlannerResult(current(), batch)
+        if not ok then
+            calculationError, activationNotice = reason, nil
+        else
+            calculationError = nil
+            activationNotice = ("Active shuffle set for %d finished items. This only changes the plan; use your shuffle macro to craft. No purchases or crafts were started."):format(batch.items)
+        end
+        details()
+    end)
+    useButton:Disable()
     button(panel, "< Previous", 15, -636, 120, function() page = page - 1; render() end)
     button(panel, "Next >", 145, -636, 120, function() page = page + 1; render() end)
     countLabel = text(panel, "", 15, -684, 940, "GameFontHighlightSmall")

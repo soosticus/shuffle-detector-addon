@@ -119,10 +119,19 @@ estimated profit. Use the **Profession**, **Recipes** and **Sell crafted item vi
 dropdowns to filter; enter a recipe name and press Enter to search. **Learned recipes**
 are shuffle previews for this character; **Unlearned patterns** compare recipes to
 learn later, not actions that can craft them now. Selecting any row only shows its
-breakdown. Select a row for reagent
-costs, exit values, missing-price reasons and casting-only profit/hour. The batch
-calculator accepts **craft counts** or a **budget in whole copper**; it shows
-shopping requirements, finished output and estimated cost/net/profit.
+breakdown. Select a row for reagent costs, exit values, missing-price reasons and
+casting-only profit/hour. The batch calculator accepts **craft counts** or a
+**budget in whole copper**; it shows shopping requirements, finished output and
+estimated cost/net/profit.
+
+After calculating a fully priced batch for a learned recipe, **Set active shuffle**
+stores that recipe and its finished-item target in the addon. Incomplete prices,
+unlearned recipes and the opt-in untested Auctionator preview cannot be activated.
+This explicit button changes the active plan but does not buy or craft anything.
+Purchases still require configured limits and a later shuffle-macro press; Auction
+House commodity quotes and confirmations remain separate steps. Crafting still
+requires its own shuffle-macro press. The active selection and batch target persist
+in SavedVariables.
 
 This slice deliberately has limits:
 

@@ -14,6 +14,11 @@ saved a copy in a `scans` table; the addon deletes it on load and the companion 
 ```lua
 AHSnapshotDB = {
   version = 1,
+  activePlan = { version = 1, selectedAt = <unix time>, recipe = "...", spell = <id>, item = <id>, itemName = "...",
+                 makes = <n>, exit = "Vendor" | "Sell on AH",
+                 reagents = { { item = <id>, qty = <n>, raw = { item = <id>, qty = <n> } }, ... },
+                 estimate = { cost = <copper per craft>, income = <copper per craft> } }, -- optional
+  snatcher = { [playerGUID] = { target = <finished items>, completed = <crafts>, ... } },
   characters = {
     ["Name-Realm-Faction"] = {
       professions = { Tailoring = { skill = n, max = n, recipes = {
@@ -39,6 +44,18 @@ AHSnapshotDB = {
   },
 }
 ```
+
+`activePlan` is written only when the user explicitly chooses **Set active shuffle**
+in the in-game browser after calculating a fully priced batch for a learned recipe.
+Unknown or provisional prices cannot be activated. The selected recipe and its
+finished-item batch target persist separately in `activePlan` and the character's
+`snatcher` state. Loading the bundled `Plan.lua` restores `activePlan` when no
+companion-generated plan assigned one. The later-loaded shuffle runtime compares
+timestamps so a newer in-game choice supersedes an older generated plan, while a
+newer companion-generated plan supersedes and clears the stale in-game choice.
+Selecting a plan does not buy or craft: purchases still need configured limits and
+a later shuffle-macro press; Auction House commodity quotes and confirmations are
+separate steps. Crafting requires its own shuffle-macro press.
 
 Recipes are recorded for the professions a character has, as the game's profession window reports
 them; `reagents` (basic reagents only, no optional or finishing slots), `item`, `makes` and `spell`
