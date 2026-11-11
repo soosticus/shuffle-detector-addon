@@ -313,3 +313,26 @@ The generator canonicalizes row order, emits `ns.bundle`, adds a canonical-input
 reagents, DE materials and exclusions. Invalid input never replaces an existing
 output file. Synthetic fixtures in `tests/test_bundle.py` exercise the contract
 and generated Lua; they are not real game evidence or a distributable baseline.
+
+## In-game price-provider contract (migration work)
+
+`Prices.lua` is not loaded by the `.toc` yet. Its
+`ns.AuctionatorQuote(itemID, "commodity")` reads the public v1 ID API on demand,
+without item-info caching, disk access, refresh callbacks or synthetic stock.
+The caller must establish commodity identity; gear or unspecified identity
+returns unknown. Support is restricted to the tested Forever 1.60.1 builds
+70862/70888, interface 16001, project 18, with Auctionator 344. User confirmation
+establishes copper units for this combination; build 70888 logs establish changed
+API prices after a scan without reload. Other clients/providers remain unsupported
+until verified, not silently assumed compatible.
+
+Every quote has `status`, `source`, `currency`, `item`, `identity`, and explicit
+unknown `depth`, `exactness` and `ageUnits`. Supported quotes include client,
+provider version and current realm/faction `scope`. A usable positive integer
+copper price has `status = "estimate"` and `unit`; unknown quotes have `reason`
+and no `unit`. Missing, zero, negative, fractional or nonfinite prices cannot
+become free inputs. API failures are logged and returned as explicit reasons.
+Optional `rawAge` retains the raw nonnegative number, without converting it to
+days or asserting freshness. Age failures leave the price estimate intact with
+`ageReason`. No callback, availability quantity, gear variant resolution,
+disenchant model or guaranteed execution price is implied.

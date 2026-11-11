@@ -21,14 +21,17 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   change 2 -> 0. ID reads therefore observe changed scan data without reload for
   these items. After the scan, 2589 has a valid ID quote but no cached item link:
   ID lookups must not wait for `GetItemInfo`. This is separate evidence from the
-  earlier retracted post-scan claims. Currency units versus Auctionator's displayed
-  prices, age units, `RegisterForDBUpdate`, exactness/gear variants, depth and DE
-  applicability remain unverified.
+  earlier retracted post-scan claims. The user explicitly confirms copper units
+  for the tested Forever/Auctionator 344 API. Age units, `RegisterForDBUpdate`,
+  exactness/gear variants, depth and DE applicability remain unverified.
   Exactness and DE valuation functions are exposed; the local v2 diagnostic probes
   them without assuming correct yields or fees. `Evaluate.lua` is a pure,
   harness-tested evaluation core (injected providers; partial DE and missing data
   stay unknown, multi-output DE scales value and time, exploratory models only in an
-  opt-in view). It is not in the `.toc` and has no price adapter or UI yet.
+  opt-in view). `Prices.lua` provides on-demand commodity-only copper estimates
+  for the tested client/provider versions, with explicit unknown/error reasons;
+  it does not assert stock, exactness or age units. Neither module is in the
+  `.toc` yet; provider-to-evaluator wiring and UI integration remain open.
 
 - Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
 
