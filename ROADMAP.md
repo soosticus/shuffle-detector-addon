@@ -16,10 +16,14 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   it supplies no production dataset and is not loaded by the addon yet (FORMAT.md).
   One user run on Forever 1.60.1/build 70862/interface 16001/project 18 with
   Auctionator 344 confirms ID/link reads agree for cached 2589 (25) and 2996 (49);
-  7054 was unpriced/uncached. No direct post-scan run has been supplied, so live
-  refresh, scan position, currency units versus Auctionator's displayed prices, age
-  units, `RegisterForDBUpdate`, exactness/gear variants and depth are unverified.
-  ID lookups should not be gated on `GetItemInfo` by design, but that is untested.
+  7054 was unpriced/uncached. New before/after-scan logs on build 70888 explicitly
+  without reload show 2589 changing 20 -> 26 and 2996 changing 49 -> 56; raw ages
+  change 2 -> 0. ID reads therefore observe changed scan data without reload for
+  these items. After the scan, 2589 has a valid ID quote but no cached item link:
+  ID lookups must not wait for `GetItemInfo`. This is separate evidence from the
+  earlier retracted post-scan claims. Currency units versus Auctionator's displayed
+  prices, age units, `RegisterForDBUpdate`, exactness/gear variants, depth and DE
+  applicability remain unverified.
   Exactness and DE valuation functions are exposed; the local v2 diagnostic probes
   them without assuming correct yields or fees. `Evaluate.lua` is a pure,
   harness-tested evaluation core (injected providers; partial DE and missing data
