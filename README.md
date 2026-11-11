@@ -156,24 +156,25 @@ This slice deliberately has limits:
   The calculator caps at 100000 crafts and flags more than 100000 finished items;
   it does not invent a numeric DE outcome range.
 
-Preview selections and calculations are session-only. They **do not replace your
-active plan, reset batch progress, change purchase caps, or buy/craft anything**.
-Sending an in-game selection to the execution window, persistent planner settings,
-custom material costs and the complete addon-only workflow remain migration work.
-The existing companion and its generated plans continue to work unchanged.
+Selecting a row or calculating a preview is session-only: neither replaces your
+active plan, resets batch progress, changes purchase caps, or buys/crafts anything.
+Within the browser, only **Set active shuffle** changes the plan and target.
+Persistent planner settings, custom material costs and the complete addon-only
+workflow remain migration work. The existing companion and its generated plans
+continue to work unchanged.
 
 The provider banner reports the installed Auctionator version. If it is rejected,
 the banner and diagnostic log show the exact detected metadata and tested version,
-not just `unsupported-provider-version`. String and numeric `344`, including
-surrounding TOC whitespace, use the same verified contract; other releases stay
-gated rather than silently assumed equivalent. A rejected provider can still
-leave valid recorded vendor alternatives visible. Unpriced rows explain the
+not just `unsupported-provider-version`. Numeric and string release metadata,
+including surrounding TOC whitespace, use the same version checks; releases
+not verified for the current client require an opt-in preview. A rejected provider
+can still leave valid recorded vendor alternatives visible. Unpriced rows explain the
 missing input/exit instead of repeating `unknown`, and Disenchant is disabled in
 the exit dropdown until a trusted model is available.
 
 ## In-game shuffle
 
-Select a shuffle in the companion and choose Addon > "Send selected shuffle to game" (or the "Send to game" button; CLI: `--send-plan "Recipe Name"`), then `/reload` in game. One window shows batch target/price controls, batch progress, the live shuffle steps, craftable count and crafted pieces in your bags. The next action includes purchase prices and waiting states. Drag the window to move it; its position and visibility are remembered.
+Select and activate a fully priced shuffle and target in the addon browser, or select a shuffle in the companion and choose Addon > "Send selected shuffle to game" (or the "Send to game" button; CLI: `--send-plan "Recipe Name"`), then `/reload` for the companion-generated plan. One window shows batch target/price controls, batch progress, the live shuffle steps, craftable count and crafted pieces in your bags. The next action includes purchase prices and waiting states. Drag the window to move it; its position and visibility are remembered.
 
 Use `/shuffledetector shuffle` to toggle this combined window; `/shuffledetector snatch` is an alias, not a separate shopping window. You can put the toggle in its own macro:
 
