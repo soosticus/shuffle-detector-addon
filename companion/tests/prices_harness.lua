@@ -61,11 +61,31 @@ eq(quote().reason, "unavailable")
 Auctionator.API.v1 = api
 provider = "345"
 eq(quote().reason, "unsupported-provider-version")
+assert(quote().detail:find('"345" (string)', 1, true), "show the actual rejected metadata, not just an error code")
+local logCount = #logs
+quote()
+eq(#logs, logCount, "a rejected version is logged once, not once per recipe")
+provider = 344
+eq(quote().unit, 26, "numeric metadata is supported")
+provider = "344"
+eq(quote().unit, 26, "string metadata is supported")
+provider = " \t344\r\n"
+eq(quote().unit, 26, "TOC whitespace is not a different Auctionator version")
+provider = "344.1"
+eq(quote().reason, "unsupported-provider-version", "do not broaden support to a different release")
+provider = nil
+eq(quote().reason, "unsupported-provider-version")
+assert(quote().detail:find('"nil" (nil)', 1, true))
 provider, build = "344", "99999"
 eq(quote().reason, "unsupported-client")
 build = "70862"
 eq(quote().unit, 26, "baseline supported build shares confirmed copper contract")
 build = "70888"
+local metadata = C_AddOns.GetAddOnMetadata
+C_AddOns = nil
+GetAddOnMetadata = metadata
+eq(quote().unit, 26, "legacy metadata API uses the same contract")
+C_AddOns = { GetAddOnMetadata = metadata }
 api.GetAuctionAgeByItemID = nil
 q = quote()
 eq(q.unit, 26, "unknown age does not erase the price estimate")

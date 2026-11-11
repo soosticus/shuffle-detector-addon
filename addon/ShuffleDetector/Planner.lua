@@ -101,9 +101,12 @@ function ns.PlannerResults(options)
     for _, recipe in ipairs(recipes) do
         if (not options.profession or recipe.profession == options.profession)
             and (not options.knownOnly or recipe.known)
+            and (not options.unlearnedOnly or not recipe.known)
             and (search == "" or recipe.name:lower():find(search, 1, true)) then
             results[#results + 1] = ns.Evaluate(recipe, ctx)
         end
     end
-    return ns.RankEvaluations(results), nil, { quotes = quotes, skipped = skipped, professions = professions }
+    return ns.RankEvaluations(results), nil, {
+        quotes = quotes, skipped = skipped, professions = professions, provider = ns.PriceProviderStatus(),
+    }
 end

@@ -36,6 +36,12 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   Unknown DE data stays unavailable, and previews never change the active plan.
   Safe selection-to-execution, persistent settings/custom costs, full migration
   and in-game acceptance remain open; the companion is unchanged.
+  The first dev-47d2ecc client test opened the browser, but reported unreadable
+  cycling filters and `unsupported-provider-version` for AH inputs. Revised
+  dropdowns and readable missing-data reasons are built; the provider now shows
+  exact detected metadata and tolerates surrounding version whitespace. Numeric
+  and string 344 both pass regression tests; the client's rejection cause is not
+  yet established. Do not waive version or DE gates to hide missing data.
 
 - Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
 

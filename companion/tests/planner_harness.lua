@@ -9,6 +9,8 @@ local function widget(parent)
         "SetPoint", "SetMovable", "EnableMouse", "RegisterForDrag", "StartMoving",
         "StopMovingOrSizing", "SetJustifyH", "SetWordWrap", "SetAutoFocus",
         "SetMaxLetters", "ClearFocus", "RegisterEvent",
+        "SetSpacing", "SetAllPoints", "SetFrameStrata", "SetColorTexture",
+        "SetClampedToScreen", "SetHighlightTexture",
     }) do w[method] = function() end end
     function w:SetScript(event, fn) self.scripts[event] = fn end
     function w:SetSize(width, height) self.width, self.height = width, height end
@@ -19,10 +21,17 @@ local function widget(parent)
     function w:GetParent() return self.parent end
     function w:GetStringHeight() return #self.text end
     function w:SetScrollChild(child) self.child = child end
+    function w:SetVerticalScroll(value) self.scroll = value end
     function w:Show() self.shown = true end
-    function w:Hide() self.shown = false end
-    function w:IsShown() return self.shown end
+    function w:Hide()
+        self.shown = false
+        if self.scripts.OnHide then self.scripts.OnHide(self) end
+    end
+    function w:IsShown() return self.shown and (not self.parent or self.parent:IsShown()) end
+    function w:Disable() self.disabled = true end
+    function w:Enable() self.disabled = false end
     function w:CreateFontString() return widget(self) end
+    function w:CreateTexture() return widget(self) end
     return w
 end
 UIParent = widget()
@@ -146,6 +155,7 @@ eq(batch.capped, true)
 results = assert(ns.PlannerResults({ profession = "Tailoring", search = "unlearned" }))
 eq(#results, 1)
 eq(results[1].recipe.known, false)
+eq(#assert(ns.PlannerResults({ unlearnedOnly = true })), 1, "patterns filter excludes learned shuffles")
 eq(#assert(ns.PlannerResults({ profession = "Enchanting" })), 0)
 results = assert(ns.PlannerResults({ search = "Piece", exit = "Sell on AH" }))
 eq(results[1].net, nil, "an unverified gear exit does not inherit the vendor exit")
@@ -165,7 +175,11 @@ eq(reads[10], 1)
 
 local function click(label)
     for _, w in ipairs(widgets) do
-        if w.text == label and w.scripts.OnClick then w.scripts.OnClick(w); return end
+        if w.text == label and w.scripts.OnClick and w:IsShown() then
+            assert(not w.disabled, "disabled choice must not be selectable")
+            w.scripts.OnClick(w)
+            return w
+        end
     end
     error("missing button " .. label)
 end
@@ -178,12 +192,59 @@ click("Crafts")
 click("Calculate")
 click("Next >")
 click("< Previous")
-click("All professions")
-click("Learned only")
-click("Best exit")
+click("All professions v")
+click("Tailoring")
+click("Learned recipes v")
+click("Unlearned patterns (learn later)")
+local patternShown = false
+for _, w in ipairs(widgets) do
+    if w.text and w.text:find("Pattern to learn later", 1, true) then patternShown = true end
+end
+assert(patternShown, "explain that patterns are previews to learn, not action buttons")
+click("Unlearned patterns v")
+click("Learned recipes (shuffle previews)")
+click("Best available exit v")
+local disabledDE
+for _, w in ipairs(widgets) do
+    if w.text == "Disenchant - no trusted yield data" then disabledDE = w end
+end
+assert(disabledDE and disabledDE.disabled, "do not invite selecting an exit with no model")
+click("Vendor")
+click("Vendor v")
+click("Best available exit")
+local widgetCount = #widgets
+for _ = 1, 3 do
+    click("Best available exit v")
+    click("Best available exit")
+end
+eq(#widgets, widgetCount, "reopening a dropdown reuses its frames")
 click("Refresh / search")
+local metadata = C_AddOns.GetAddOnMetadata
+C_AddOns.GetAddOnMetadata = function() return "unexpected-version" end
+click("Refresh / search")
+local showsActualVersion, repeatsUnknown = false, false
+for _, w in ipairs(widgets) do
+    if w:IsShown() and w.text then
+        if w.text:find('"unexpected-version" (string)', 1, true) then showsActualVersion = true end
+        if w.text:find("unknown / craft - unknown", 1, true) then repeatsUnknown = true end
+    end
+end
+assert(showsActualVersion, "surface the exact installed version in one visible banner")
+eq(repeatsUnknown, false, "incomplete rows say why instead of repeated unknown values")
+C_AddOns.GetAddOnMetadata = metadata
+click("Refresh / search")
+click("Best available exit v")
+local cover
+for _, w in ipairs(widgets) do
+    if w.scripts.OnMouseDown and w:IsShown() then cover = w end
+end
+assert(cover, "dropdown has an outside-click dismissal layer")
+cover.scripts.OnMouseDown(cover)
+eq(cover:IsShown(), false)
+click("Best available exit v")
 SlashCmdList.SHUFFLEDETECTOR("browse")
 eq(browser.shown, false)
+eq(cover:IsShown(), false, "closing the browser closes its dropdown")
 SlashCmdList.SHUFFLEDETECTOR("browse")
 eq(browser.shown, true)
 eq(ns.plan.item, 900, "all UI actions leave the active execution plan intact")

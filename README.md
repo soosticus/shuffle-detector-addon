@@ -115,8 +115,11 @@ to record their buy prices. After recording or scanning with Auctionator, click
 **Refresh / search** in the preview; no `/reload` is needed for price refresh.
 
 The browser ranks the current character's recorded item-producing recipes by
-estimated profit. Cycle the profession, learned/unlearned and exit buttons to
-filter; enter a recipe name and press Enter to search. Select a row for reagent
+estimated profit. Use the **Profession**, **Recipes** and **Sell crafted item via**
+dropdowns to filter; enter a recipe name and press Enter to search. **Learned recipes**
+are shuffle previews for this character; **Unlearned patterns** compare recipes to
+learn later, not actions that can craft them now. Selecting any row only shows its
+breakdown. Select a row for reagent
 costs, exit values, missing-price reasons and casting-only profit/hour. The batch
 calculator accepts **craft counts** or a **budget in whole copper**; it shows
 shopping requirements, finished output and estimated cost/net/profit.
@@ -143,6 +146,15 @@ active plan, reset batch progress, change purchase caps, or buy/craft anything**
 Sending an in-game selection to the execution window, persistent planner settings,
 custom material costs and the complete addon-only workflow remain migration work.
 The existing companion and its generated plans continue to work unchanged.
+
+The provider banner reports the installed Auctionator version. If it is rejected,
+the banner and diagnostic log show the exact detected metadata and tested version,
+not just `unsupported-provider-version`. String and numeric `344`, including
+surrounding TOC whitespace, use the same verified contract; other releases stay
+gated rather than silently assumed equivalent. A rejected provider can still
+leave valid recorded vendor alternatives visible. Unpriced rows explain the
+missing input/exit instead of repeating `unknown`, and Disenchant is disabled in
+the exit dropdown until a trusted model is available.
 
 ## In-game shuffle
 

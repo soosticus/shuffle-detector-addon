@@ -1,4 +1,5 @@
 local ADDON, ns = ...
+local lastRejection
 
 local function finite(value)
     return type(value) == "number" and value == value and math.abs(value) < math.huge
@@ -12,6 +13,54 @@ local function read(fn, ...)
         return nil, "provider-error"
     end
     return result
+end
+
+function ns.PriceProviderStatus()
+    local status = { source = "Auctionator.API.v1", currency = "copper" }
+    local version, build, interface
+    if type(GetBuildInfo) == "function" then
+        local ok, v, b, _, i = pcall(GetBuildInfo)
+        if not ok then
+            ns.log("prices: client identity error: " .. tostring(v))
+            status.reason = "client-identity-error"
+            return status
+        end
+        version, build, interface = v, b, i
+    end
+    status.client = { version = version, build = build, interface = interface, project = WOW_PROJECT_ID }
+    if version ~= "1.60.1" or (tostring(build) ~= "70862" and tostring(build) ~= "70888")
+        or interface ~= 16001 or WOW_PROJECT_ID ~= 18 then
+        status.reason = "unsupported-client"
+        status.detail = ("Detected %s build %s / interface %s / project %s; tested: Forever 1.60.1 builds 70862/70888, interface 16001, project 18."):format(
+            tostring(version), tostring(build), tostring(interface), tostring(WOW_PROJECT_ID))
+        return status
+    end
+    local metadata = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+    local providerVersion, metadataError = read(metadata, "Auctionator", "Version")
+    status.providerVersion = providerVersion
+    if metadataError then status.reason = metadataError; return status end
+    local normalized = (type(providerVersion) == "string" or type(providerVersion) == "number")
+        and tostring(providerVersion):match("^%s*(.-)%s*$")
+    if normalized ~= "344" then
+        status.reason = "unsupported-provider-version"
+        status.detail = ("Detected Auctionator Version %q (%s); tested: 344. Run /shuffledetector prices to capture the installed API."):format(
+            tostring(providerVersion), type(providerVersion))
+        if lastRejection ~= status.detail then
+            ns.log("prices: " .. status.detail)
+            lastRejection = status.detail
+        end
+        return status
+    end
+    status.normalizedVersion = normalized
+    local api = type(Auctionator) == "table" and Auctionator.API
+    api = type(api) == "table" and api.v1
+    if type(api) ~= "table" or type(api.GetAuctionPriceByItemID) ~= "function" then
+        status.reason = "unavailable"
+        return status
+    end
+    lastRejection = nil
+    status.ready = true
+    return status
 end
 
 -- Callers must establish commodity identity separately; an item ID alone does not
@@ -30,33 +79,13 @@ function ns.AuctionatorQuote(itemID, kind)
         quote.reason = "unsupported-item-identity"
         return quote
     end
-    local version, build, interface
-    if type(GetBuildInfo) == "function" then
-        local ok, v, b, _, i = pcall(GetBuildInfo)
-        if not ok then
-            ns.log("prices: client identity error: " .. tostring(v))
-            quote.reason = "client-identity-error"
-            return quote
-        end
-        version, build, interface = v, b, i
-    end
-    quote.client = { version = version, build = build, interface = interface, project = WOW_PROJECT_ID }
-    if version ~= "1.60.1" or (tostring(build) ~= "70862" and tostring(build) ~= "70888")
-        or interface ~= 16001 or WOW_PROJECT_ID ~= 18 then
-        quote.reason = "unsupported-client"
+    local provider = ns.PriceProviderStatus()
+    quote.client, quote.providerVersion = provider.client, provider.providerVersion
+    if not provider.ready then
+        quote.reason, quote.detail = provider.reason, provider.detail
         return quote
     end
-    local metadata = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
-    local providerVersion, metadataError = read(metadata, "Auctionator", "Version")
-    quote.providerVersion = providerVersion
-    if metadataError then quote.reason = metadataError; return quote end
-    if tostring(providerVersion) ~= "344" then
-        quote.reason = "unsupported-provider-version"
-        return quote
-    end
-    local api = type(Auctionator) == "table" and Auctionator.API
-    api = type(api) == "table" and api.v1
-    if type(api) ~= "table" then quote.reason = "unavailable"; return quote end
+    local api = Auctionator.API.v1
     quote.scope = ns.realmKey()
     local price, priceError = read(api.GetAuctionPriceByItemID, ADDON, itemID)
     if priceError then quote.reason = priceError; return quote end

@@ -326,6 +326,12 @@ establishes copper units for this combination; build 70888 logs establish change
 API prices after a scan without reload. Other clients/providers remain unsupported
 until verified, not silently assumed compatible.
 
+`ns.PriceProviderStatus()` exposes readiness, exact detected `providerVersion`,
+client identity, and a readable `detail` for version/client rejections.
+Version comparisons accept only numeric/string `344` after trimming surrounding
+whitespace; this does not accept a version prefix such as `344.1`. Metadata/version
+errors stay visible and rejection details are logged once per distinct mismatch.
+
 Every quote has `status`, `source`, `currency`, `item`, `identity`, and explicit
 unknown `depth`, `exactness` and `ageUnits`. Supported quotes include client,
 provider version and current realm/faction `scope`. A usable positive integer
@@ -357,3 +363,7 @@ No AH quantity/stock, independent-Poisson range or DE baseline is fabricated.
 `Browser.lua` keeps only transient preview state: it neither writes planner
 SavedVariables nor replaces `ns.plan` or any snatcher/statistics state. Durable
 selection and the centralized safe execution transition remain future work.
+The preview's recipe filter distinguishes learned shuffles from unlearned patterns;
+both are read-only recipe details, never action buttons. Dropdown filters keep
+the no-baseline Disenchant choice disabled. Row subtitles describe why profit
+cannot be calculated, while the provider banner identifies version mismatches.
