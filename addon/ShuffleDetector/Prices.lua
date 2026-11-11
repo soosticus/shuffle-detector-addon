@@ -1,6 +1,10 @@
 local ADDON, ns = ...
 local lastRejection
-local TESTED_PROVIDER = 344
+local MINIMUM_PROVIDER = 344
+local TESTED_PROVIDERS = {
+    ["70862"] = { [344] = true, label = "344" },
+    ["70888"] = { [344] = true, [345] = true, label = "344/345" },
+}
 -- Session-only: a newer, untested Auctionator release is never used by default.
 local allowUntested = false
 
@@ -35,13 +39,14 @@ function ns.PriceProviderStatus()
         version, build, interface = v, b, i
     end
     status.client = { version = version, build = build, interface = interface, project = WOW_PROJECT_ID }
-    if version ~= "1.60.1" or (tostring(build) ~= "70862" and tostring(build) ~= "70888")
-        or interface ~= 16001 or WOW_PROJECT_ID ~= 18 then
+    local tested = TESTED_PROVIDERS[tostring(build)]
+    if version ~= "1.60.1" or not tested or interface ~= 16001 or WOW_PROJECT_ID ~= 18 then
         status.reason = "unsupported-client"
         status.detail = ("Detected %s build %s / interface %s / project %s; tested: Forever 1.60.1 builds 70862/70888, interface 16001, project 18."):format(
             tostring(version), tostring(build), tostring(interface), tostring(WOW_PROJECT_ID))
         return status
     end
+    status.minimumVersion, status.testedVersions = MINIMUM_PROVIDER, tested.label
     local metadata = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
     local providerVersion, metadataError = read(metadata, "Auctionator", "Version")
     status.providerVersion = providerVersion
@@ -49,17 +54,17 @@ function ns.PriceProviderStatus()
     local normalized = (type(providerVersion) == "string" or type(providerVersion) == "number")
         and tostring(providerVersion):match("^%s*(.-)%s*$")
     local release = normalized and normalized:match("^%d+$") and tonumber(normalized)
-    if release ~= TESTED_PROVIDER then
-        if release and release > TESTED_PROVIDER then
-            status.reason = "untested-provider-version"
-            status.untestedVersion = normalized
-            status.detail = ("Auctionator %s is newer than the tested %d; its prices are off unless you choose to preview them, labeled untested."):format(
-                normalized, TESTED_PROVIDER)
-        else
-            status.reason = "unsupported-provider-version"
-            status.detail = ("Detected Auctionator Version %q (%s); tested: %d. Run /shuffledetector prices to capture the installed API."):format(
-                tostring(providerVersion), type(providerVersion), TESTED_PROVIDER)
-        end
+    if not finite(release) or release < MINIMUM_PROVIDER then
+        status.reason = "unsupported-provider-version"
+        status.detail = ("Detected Auctionator Version %q (%s); requires a whole-number release of at least %d (tested on build %s: %s). Run /shuffledetector prices to capture the installed API."):format(
+            tostring(providerVersion), type(providerVersion), MINIMUM_PROVIDER, tostring(build), tested.label)
+    elseif not tested[release] then
+        status.reason = "untested-provider-version"
+        status.untestedVersion = normalized
+        status.detail = ("Auctionator %s meets the minimum %d but is unverified on client build %s (tested: %s); its prices are off unless you choose to preview them, labeled untested."):format(
+            normalized, MINIMUM_PROVIDER, tostring(build), tested.label)
+    end
+    if status.reason then
         if lastRejection ~= status.detail then
             ns.log("prices: " .. status.detail)
             lastRejection = status.detail

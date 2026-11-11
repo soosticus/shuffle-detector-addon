@@ -45,14 +45,17 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   cycling filters and `unsupported-provider-version` for AH inputs. Revised
   dropdowns and readable missing-data reasons are built; the provider now shows
   exact detected metadata and tolerates surrounding version whitespace. Diagnosis:
-  the installed Auctionator `.toc` now says `## Version: 345` (checked on the
-  second machine's Forever install), while the provider accepted only 344, so
-  every AH quote, and therefore most rows, was unknown. 344 remains the only
-  trusted release; newer whole-number releases now report `untested-provider-version`
-  and can be previewed for one session, labeled untested. Next: run
-  `/shuffledetector prices` before/after a scan on 345; if IDs, copper units and
-  scan updates match 344, add 345 to the tested release. Do not waive version or DE
-  gates to hide missing data.
+  the installed Auctionator `.toc` says `## Version: 345`, while the provider
+  accepted only 344, so most rows had unknown reagent prices. On build 70888,
+  two 345 probes four seconds apart returned 2589: 26 -> 24 and 2996: 59 -> 56;
+  24 and 56 match the subsequently saved Auctionator copper price database. A
+  replay of the actual saved scan and recipes through the Lua planner changed
+  0/46 to 43/46 priced Tailoring costs (42/46 have both cost and exit). Auctionator 345
+  is now accepted on build 70888, 344 on either tested build; the minimum eligible
+  whole-number release is 344. Other eligible but unverified releases remain
+  session-only, labeled previews. Confirm whether 345 updates without reload;
+  verify potion/other commodity identity and gear variants before broadening AH
+  coverage. Do not waive DE gates to hide missing data.
 
 - Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
 

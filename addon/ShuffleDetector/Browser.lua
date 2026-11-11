@@ -179,8 +179,8 @@ end
 local function providerText(provider)
     if not provider then return "No provider status available." end
     if provider.ready and provider.provisional then
-        return ("|cffffaa33Previewing UNTESTED Auctionator %s prices this session|r (tested: 344). Confirm with /shuffledetector prices before and after a scan."):format(
-            provider.normalizedVersion)
+        return ("|cffffaa33Previewing UNTESTED Auctionator %s prices this session|r (tested for this client: %s). Confirm with /shuffledetector prices before and after a scan."):format(
+            provider.normalizedVersion, provider.testedVersions)
     end
     if provider.ready then
         return "Auctionator " .. provider.normalizedVersion .. ": copper commodity estimates. Stock and age units unverified."

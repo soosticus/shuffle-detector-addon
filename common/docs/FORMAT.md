@@ -338,22 +338,26 @@ and generated Lua; they are not real game evidence or a distributable baseline.
 without item-info caching, disk access, refresh callbacks or synthetic stock.
 The caller must establish commodity identity; gear or unspecified identity
 returns unknown. Support is restricted to the tested Forever 1.60.1 builds
-70862/70888, interface 16001, project 18, with Auctionator 344. User confirmation
-establishes copper units for this combination; build 70888 logs establish changed
-API prices after a scan without reload. Other clients/providers remain unsupported
-until verified, not silently assumed compatible. A newer whole-number Auctionator
-release (for example 345) reports `untested-provider-version` with
+70862/70888, interface 16001, project 18, with Auctionator 344 on either build
+and 345 on build 70888. User confirmation establishes copper units for 344;
+build 70888 logs establish changed 344 API prices after a scan without reload.
+For 345 on build 70888, two API values match the subsequently saved price database;
+whether a reload occurred between those probes remains unconfirmed. Auctionator
+344 is the minimum eligible whole-number release. An eligible but unverified
+release on the current client reports `untested-provider-version` with
 `untestedVersion`; its prices stay off unless the browser's session-only
 **Preview N prices** switch calls `ns.SetUntestedProviderAllowed(true)`. Then the
 status has `provisional = true`, quotes carry `provisional = true`, and the browser
 labels every affected banner, row and breakdown as untested. The switch is never
-saved and does not cover older releases or non-numeric versions.
+saved and does not cover releases below the minimum or non-whole version strings.
+Other client versions remain unsupported.
 
 `ns.PriceProviderStatus()` exposes readiness, exact detected `providerVersion`,
-client identity, and a readable `detail` for version/client rejections.
-Version comparisons accept only numeric/string `344` after trimming surrounding
-whitespace; this does not accept a version prefix such as `344.1`. Metadata/version
-errors stay visible and rejection details are logged once per distinct mismatch.
+client identity, `minimumVersion`, `testedVersions`, and a readable `detail` for
+version/client rejections. Whole-number versions may be numeric or strings with
+surrounding whitespace; a version prefix such as `344.1` is not accepted.
+Metadata/version errors stay visible and rejection details are logged once per
+distinct mismatch.
 
 Every quote has `status`, `source`, `currency`, `item`, `identity`, and explicit
 unknown `depth`, `exactness` and `ageUnits`. Supported quotes include client,

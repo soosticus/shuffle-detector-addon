@@ -245,18 +245,28 @@ end
 eq(visible("Preview 3"), nil, "no untested-price switch for an unsupported version")
 C_AddOns.GetAddOnMetadata = function() return "345" end
 click("Refresh / search")
+assert(visible("Auctionator 345: copper commodity estimates"), "verified 345 prices work by default")
+eq(visible("Preview 345 prices"), nil, "verified 345 needs no preview opt-in")
+eq(visible("Missing reagent prices"), nil, "verified 345 prices reach the recipe browser")
+C_AddOns.GetAddOnMetadata = function() return "346" end
+click("Refresh / search")
 assert(visible("AH prices off:"), "a newer Auctionator explains why prices are off")
 assert(visible("Missing reagent prices"), "untested prices are not used by default")
-click("Preview 345 prices")
-assert(visible("UNTESTED Auctionator 345"), "opt-in banner names the untested version")
+click("Preview 346 prices")
+assert(visible("UNTESTED Auctionator 346"), "opt-in banner names the untested version")
+assert(visible("tested for this client: 344/345"), "preview banner lists the tested versions")
 assert(visible("(untested AH)"), "ranked rows from untested prices are labeled")
-assert(visible("AH values come from untested Auctionator 345"), "breakdown is labeled")
+assert(visible("AH values come from untested Auctionator 346"), "breakdown is labeled")
+local provisionalPiece = find(assert(ns.PlannerResults({ knownOnly = true })), "Piece")
+local provisionalBatch = assert(ns.CalculateBatch(provisionalPiece, "crafts", 1))
+eq(ns.CanActivatePlannerResult(provisionalPiece, provisionalBatch), nil,
+    "an opted-in unverified provider cannot activate a plan")
 eq(ns.plan.item, 900, "previewing untested prices leaves the active plan intact")
-click("Hide 345 prices")
+click("Hide 346 prices")
 assert(visible("AH prices off:"), "hiding restores the gate")
 eq(visible("(untested AH)"), nil)
 assert(visible("no verified disenchant yield table"), "explain why disenchant is not estimated")
-C_AddOns.GetAddOnMetadata = metadata
+C_AddOns.GetAddOnMetadata = function() return "345" end
 click("Refresh / search")
 for _, w in ipairs(widgets) do
     if w.nameText and w.nameText.text and w.nameText.text:find("Piece", 1, true) and w.scripts.OnClick then
@@ -272,7 +282,8 @@ eq(AHSnapshotDB.activePlan.spell, 2, "the selected plan is saved in addon SavedV
 eq(AHSnapshotDB.activePlan.exit, "Vendor")
 eq(AHSnapshotDB.activePlan.selectedAt, 1700000000, "selection timestamp is saved for companion precedence")
 eq(selectedTarget, 2, "batch calculator target is set in finished items")
-assert(visible("No purchases or crafts were started"), "activation never starts a protected action")
+assert(visible("No purchases or crafts were started"), "345 activation never starts a protected action")
+C_AddOns.GetAddOnMetadata = metadata
 click("Best available exit v")
 local cover
 for _, w in ipairs(widgets) do

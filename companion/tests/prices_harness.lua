@@ -60,10 +60,29 @@ Auctionator.API.v1 = nil
 eq(quote().reason, "unavailable")
 Auctionator.API.v1 = api
 provider = "345"
+q = quote()
+eq(q.unit, 26, "the verified 345/build 70888 combination is supported without an opt-in")
+eq(q.status, "estimate")
+eq(q.provisional, nil)
+eq(ns.PriceProviderStatus().minimumVersion, 344)
+eq(ns.PriceProviderStatus().testedVersions, "344/345")
+prices[2589] = nil
+eq(quote().reason, "no-price", "a missing 345 price is not free")
+prices[2589] = 0
+eq(quote().reason, "invalid-price", "an invalid 345 price is not free")
+prices[2589] = 24
+eq(quote().unit, 24)
+prices[2589] = 26
+eq(quote().unit, 26, "345 prices are read on demand")
+provider = 345
+eq(quote().unit, 26, "numeric 345 metadata is supported")
+provider = " \t345\r\n"
+eq(quote().unit, 26, "345 metadata may contain surrounding whitespace")
+provider = "346"
 eq(quote().reason, "untested-provider-version", "a newer release is reported as untested")
 eq(quote().unit, nil, "untested provider prices are off by default")
-assert(quote().detail:find("345", 1, true), "show the actual detected version")
-eq(ns.PriceProviderStatus().untestedVersion, "345")
+assert(quote().detail:find("346", 1, true), "show the actual detected version")
+eq(ns.PriceProviderStatus().untestedVersion, "346")
 local logCount = #logs
 quote()
 eq(#logs, logCount, "a rejected version is logged once, not once per recipe")
@@ -80,7 +99,7 @@ eq(quote().reason, "unsupported-provider-version", "opt-in never covers a non-re
 provider = "344"
 eq(quote().provisional, nil, "the tested release is never labeled untested")
 ns.SetUntestedProviderAllowed(false)
-provider = "345"
+provider = "346"
 eq(quote().unit, nil, "turning the preview off restores the gate")
 provider = 344
 eq(quote().unit, 26, "numeric metadata is supported")
@@ -97,6 +116,13 @@ provider, build = "344", "99999"
 eq(quote().reason, "unsupported-client")
 build = "70862"
 eq(quote().unit, 26, "baseline supported build shares confirmed copper contract")
+provider = "345"
+eq(quote().reason, "untested-provider-version", "345 is not yet verified on build 70862")
+eq(ns.PriceProviderStatus().testedVersions, "344")
+ns.SetUntestedProviderAllowed(true)
+eq(quote().provisional, true, "345/build 70862 remains an explicit untested preview")
+ns.SetUntestedProviderAllowed(false)
+provider = "344"
 build = "70888"
 local metadata = C_AddOns.GetAddOnMetadata
 C_AddOns = nil

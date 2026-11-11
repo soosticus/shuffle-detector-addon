@@ -97,7 +97,9 @@ Use `/shuffledetector log 80` to read the results before and after an Auctionato
 scan, and compare them with Auctionator's displayed prices on the current realm.
 Missing quotes and errors do not mean zero prices. The user-tested Forever
 1.60.1/Auctionator 344 combination returns copper, with changed commodity quotes
-after a scan without reload. Age units and item variant behavior remain unverified.
+after a scan without reload. On build 70888, Auctionator 345 returned 24c for 2589
+and 56c for 2996, matching the subsequently saved price database. Whether the 345
+probe changed without a reload, age units, and item variant behavior remain unverified.
 
 The local v2 probe also records the public API's raw exactness flags and DE
 valuations, where available. DE values are opaque estimates: they do not supply a
@@ -137,11 +139,12 @@ This slice deliberately has limits:
 
 - AH prices are on-demand, shallow estimates for recorded trade goods only.
   The provider supports Forever 1.60.1 builds 70862/70888, interface 16001/project
-  18, Auctionator 344. Other combinations report unsupported instead of assuming
-  compatibility. A newer Auctionator (for example 345) turns AH prices off with an
-  explanation; **Preview 345 prices** next to the banner uses them for this session
-  only, with every affected value labeled *untested AH*. Gear/unknown item
-  identities have no AH valuation.
+  18, with Auctionator 344 on either build and 345 on build 70888. The minimum
+  eligible whole-number Auctionator release is 344; an eligible but unverified
+  release turns AH prices off with an explanation. **Preview N prices** next to
+  the banner uses them for this session only, with every affected value labeled
+  *untested AH*. Gear, potions and other unverified item identities have no AH
+  valuation.
 - Unknown inputs or yields stay unknown, never free or zero. No verified
   disenchant yield table ships yet, so disenchant values are not estimated.
 - Recorded vendor quotes may be stale or specific to another character's
