@@ -265,9 +265,12 @@ require matching output loss and gold gain and are limited to this batch's recor
 Disenchanting removes finished stock but **does not count unsold loot as income**. Ordinary
 AH sales, unrelated merchant sales and general gold changes are not automatically attributed.
 
-Resend a shuffle from the updated companion to include its **per-craft estimated cost and
-net exit value**. These prices are frozen when a statistics batch starts, and the window
-shows estimated cost, value and profit for successful crafts separately from actual cash.
+A shuffle set in the browser (or sent from the companion) carries its **per-craft estimated
+cost and net exit value**, frozen when a statistics batch starts. The window shows, separately
+from actual cash, the estimate for the **whole batch target**: reagents costed at your saved
+price limits (the most the snatcher pays, so cost is "up to" and profit "at least"; a refined
+reagent such as a bolt is costed at its raw material's limit), or at the frozen market cost
+while any reagent has no limit, and the exit value times the batch's crafts.
 These are scan-based estimates, including the companion's chosen AH fees; not realized sales.
 Existing materials are not free economically, but their historical purchase cost is unknown.
 Actual cash net charges the full confirmed purchase (including leftovers), so it is not

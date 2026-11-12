@@ -233,6 +233,24 @@ local function need(id)
     for _, r in ipairs(ns.SnatchNeeds()) do if r.item == id then return r end end
 end
 
+-- Most one craft's reagents cost at the saved price limits (a refined reagent at its raw-derived limit),
+-- or nil and the first reagent without a limit.
+function ns.SnatchLimitCostPerCraft()
+    local s, p = state()
+    if not s then return end
+    local caps = {}
+    for _, r in ipairs(ns.SnatchNeeds()) do
+        if not r.parent then caps[r.item] = r.cap end
+    end
+    local total = 0
+    for _, r in ipairs(p.reagents) do
+        local cap = caps[r.item]
+        if not cap or cap <= 0 then return nil, r.item end
+        total = total + cap * r.qty
+    end
+    return total
+end
+
 function ns.SnatchTargetReached()
     local s, p = state()
     return s and s.target > 0 and s.completed >= math.ceil(s.target / (p.makes or 1))

@@ -800,6 +800,13 @@ do
 end
 
 s = linen()
+s.prices[2589] = 24
+eq(ns.SnatchLimitCostPerCraft(), 144, "bolts are costed at twice the linen limit")
+s.prices[2589] = nil
+local _, unpriced = ns.SnatchLimitCostPerCraft()
+eq(unpriced, 2996, "a reagent without a limit gives no limit cost")
+
+s = linen()
 bags[2589] = 20
 C_Item.GetItemInfo = function(id)
     return "Item " .. id, nil, nil, nil, nil, nil, nil, 20
@@ -1382,7 +1389,14 @@ end
 local statsEvents, stat
 s, statsEvents, stat = statisticsSetup()
 eq(stat.crafts, 0)
-assert(ns.BatchStatsText(s):find("Estimated profit 0g 0s 0c"), "estimate safe before first craft")
+local estimate = ns.BatchStatsText(s)
+assert(estimate:find("Batch of 2 crafts, market prices", 1, true), estimate)
+assert(estimate:find("cost 0g 2s 0c | value 0g 3s 60c", 1, true), "estimate covers the whole batch before any craft")
+s.prices[1] = 30
+estimate = ns.BatchStatsText(s)
+assert(estimate:find("reagents at your limits: cost up to 0g 1s 20c | value 0g 3s 60c", 1, true), estimate)
+assert(estimate:find("Estimated profit at least 0g 2s 40c (0g 1s 20c/item)", 1, true), estimate)
+s.prices[1] = nil
 ns.plan.estimate.income = 999
 eq(stat.estimate.income, 180, "price estimates frozen at batch start")
 ns.SnatchCraftCompleted(10, "stat1")

@@ -137,10 +137,16 @@ function ns.BatchStatsText(state)
     local text = ("Spent %s | Income %s\nCash net %s | Avg/item %s"):format(
         money(cost), money(income), money(net), average and money(average) or "n/a")
     if batch.estimate then
-        local profit = batch.estimate.income - batch.estimate.cost
-        text = text .. ("\nEstimated cost %s | Value %s\nEstimated profit %s (%s/item)"):format(
-            money(batch.estimate.cost * batch.crafts), money(batch.estimate.income * batch.crafts),
-            money(profit * batch.crafts), money(profit / batch.makes))
+        -- The whole batch target, with reagents at the saved price limits (the most the snatcher pays).
+        local crafts = math.max(batch.crafts, math.ceil(batch.target / batch.makes))
+        local plan = ns.plan
+        local limitCost = plan and plan.item == batch.item and ns.SnatchLimitCostPerCraft and ns.SnatchLimitCostPerCraft()
+        local cost = limitCost or batch.estimate.cost
+        local profit = batch.estimate.income - cost
+        text = text .. ("\nBatch of %d crafts, %s: cost %s%s | value %s\nEstimated profit %s%s (%s/item)"):format(
+            crafts, limitCost and "reagents at your limits" or "market prices (set every limit to use them)",
+            limitCost and "up to " or "", money(cost * crafts), money(batch.estimate.income * crafts),
+            limitCost and "at least " or "", money(profit * crafts), money(profit / batch.makes))
     else
         text = text .. "\nEstimated profit: resend a priced plan."
     end
