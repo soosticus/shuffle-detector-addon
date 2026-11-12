@@ -254,17 +254,24 @@ local function refreshTracker(step)
         local c = active and GREEN or GREY
         fs:SetTextColor(c[1], c[2], c[3])
     end
+    local foot
     if busy then
-        tracker.foot:SetText("Working...")
+        foot = "Working..."
     elseif InCombatLockdown() then
-        tracker.foot:SetText("In combat - the next step is set when it ends")
+        foot = "In combat - the next step is set when it ends"
     elseif step.kind == "idle" then
-        tracker.foot:SetText(step.label)
+        foot = step.label
     elseif step.recipe or step.purchase or (step.quantity and step.quantity > 1) then
-        tracker.foot:SetText(step.label .. " - press your shuffle macro")
+        foot = step.label .. " - press your shuffle macro"
     else
-        tracker.foot:SetText("Run your shuffle macro")
+        foot = "Run your shuffle macro"
     end
+    -- While a craft casts, shopping continues: show the AH status and any purchase a press would make.
+    local side = step.side
+    if side and side.label then
+        foot = foot .. "\n" .. side.label .. (side.kind == "purchase" and " - press your shuffle macro" or "")
+    end
+    tracker.foot:SetText(foot)
 end
 
 local dirty = false -- a refresh was requested during combat
@@ -318,6 +325,15 @@ local function apply()
             btn:SetAttribute("type", "spell")
             btn:SetAttribute("spell", spellName(DISENCHANT_ID, "Disenchant"))
             btn:SetAttribute("target-item", ns.plan.itemName or ns.plan.recipe)
+        end
+    end
+    -- Purchases are addon calls, not casts, so a press can make one while a craft is casting.
+    if (busy or isCasting()) and ns.NextSnatchPurchase then
+        btn.purchase = nil
+        local shopping = ns.NextSnatchPurchase()
+        if shopping then
+            step.side = shopping
+            if not InCombatLockdown() and shopping.kind == "purchase" then btn.purchase = shopping end
         end
     end
     refreshTracker(step)
@@ -381,13 +397,8 @@ local function create()
         local now = GetTime()
         if lastClick and now - lastClick < 0.2 then return end -- down + up of one press
         lastClick = now
-        if busy then return end
         if InCombatLockdown() then
             log("click ignored: in combat")
-            return
-        end
-        if isCasting() then
-            log("click ignored: still casting")
             return
         end
         if self.purchase then
@@ -396,6 +407,11 @@ local function create()
             log("click: purchase " .. purchase.action .. " " .. tostring(purchase.item))
             ns.SnatchPurchaseStep(purchase)
             apply()
+            return
+        end
+        if busy then return end
+        if isCasting() then
+            log("click ignored: still casting")
             return
         end
         local sellSlot = self.sellSlot
@@ -423,6 +439,8 @@ local function create()
             if not ok then
                 say("craft failed: " .. tostring(err))
                 acted = false
+            elseif ns.SnatchAutoPoll then
+                ns.SnatchAutoPoll()
             end
         elseif self:GetAttribute("type") == "spell" and SpellIsTargeting and SpellIsTargeting() then
             -- The cast was accepted but the item was never picked as its target; clear it so the next press starts clean.

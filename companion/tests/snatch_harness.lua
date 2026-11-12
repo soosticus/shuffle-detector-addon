@@ -765,6 +765,40 @@ eq(ns.NextShuffleStep().spell, 2963, "prepare next bag's bolts without shopping 
 s.completed = 2
 eq(ns.NextShuffleStep().label, "Craft target reached", "no excess conversion after batch target")
 
+do
+    s = linen()
+    bags[2589] = 4
+    casting = false
+    event("AUCTION_HOUSE_SHOW")
+    assert(loadfile("addon/ShuffleDetector/Shuffle.lua"))("ShuffleDetector", ns)
+    local craftEvents = frames[#frames]
+    press()
+    eq(calls[1][1], "craft", "first press crafts bolts from the cloth in bags")
+    eq(calls[2][1], "search", "starting a craft starts AH polling for the rest of the batch")
+    eq(calls[2][2], 2996)
+    commodity[2996] = { { quantity = 40, unitPrice = 500 } }
+    commodity[2589] = { { quantity = 40, unitPrice = 50 } }
+    result(2996)
+    advance(3)
+    eq(calls[#calls][1], "search", "polling continues during the craft")
+    eq(calls[#calls][2], 2589)
+    result(2589)
+    assert(ns.NextSnatchPurchase().label:find("Quote", 1, true), "an offer is ready while casting")
+    ns.RefreshShuffleTracker()
+    local foot = ShuffleDetectorTracker.foot:GetText()
+    assert(foot:find("Working...", 1, true) and foot:find("Quote", 1, true), foot)
+    local n = #calls
+    press()
+    eq(calls[#calls][1], "quote", "a press during the craft cast quotes the AH offer")
+    eq(#calls, n + 1, "the press does not repeat the craft")
+    event("COMMODITY_PRICE_UPDATED", 50, calls[#calls][3] * 50)
+    press()
+    eq(calls[#calls][1], "confirm", "and the next press buys it, still while casting")
+    eq(casting, true)
+    casting = false
+    craftEvents.scripts.OnEvent(craftEvents, "UNIT_SPELLCAST_SUCCEEDED", "player", "bolt-ah", 2963)
+end
+
 s = linen()
 bags[2589] = 20
 C_Item.GetItemInfo = function(id)

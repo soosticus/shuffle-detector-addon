@@ -612,6 +612,22 @@ function ns.SnatchPoll()
     stop("No materials need buying at an enabled price. Check bags and awaiting mail.")
 end
 
+-- Called when a craft starts: keep searching the AH for the materials still missing while the craft casts.
+function ns.SnatchAutoPoll()
+    if running or not ahOpen or pending or InCombatLockdown() then return end
+    local s = state()
+    if not s or s.target == 0 or ns.SnatchTargetReached() then return end
+    for _, r in ipairs(ns.SnatchNeeds()) do
+        if r.missing > 0 and r.cap > 0 then
+            running = true
+            ns.log("snatch poll: started while crafting")
+            ns.SnatchPoll()
+            if refresh then refresh() end
+            return true
+        end
+    end
+end
+
 function ns.SnatchBuyAH()
     if not ahOpen or InCombatLockdown() then message("Open the AH and leave combat first."); return end
     if pending then

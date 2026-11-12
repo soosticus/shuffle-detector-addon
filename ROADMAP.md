@@ -4,7 +4,10 @@ Open items only; finished work is removed. Release notes are hand-written in `re
 
 ## Open items
 
-- Recipe catalog: confirm in game that `/shuffledetector catalog` finds recipes of
+- Confirm in game that AH polling started by a craft press, and quote/confirm presses during
+  a craft cast, work without interrupting the craft queue.
+
+- Recipe catalog: confirm in game that the browser's automatic scan (or `/shuffledetector catalog`) finds recipes of
   professions no character has (the scan's check line should report most recorded
   Tailoring/Enchanting/Cooking recipes as found), how long the 1-500000 scan takes,
   and that the profession names match `GetProfessionInfo`'s. If the client only
