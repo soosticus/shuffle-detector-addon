@@ -94,27 +94,7 @@ end
 -- Ask the game for every item in ns.wantedItems (ItemList.lua, written by the companion) that is not recorded
 -- yet. Requests go out in small batches; answers arrive on GET_ITEM_INFO_RECEIVED and are recorded by recordItem.
 local BATCH, BATCH_DELAY = 40, 1
-function ns.LoadWantedItems(quiet)
-    -- Ids the game never answered for on an earlier run are skipped at login; /shuffledetector items retries them.
-    local unanswered = AHSnapshotDB.unanswered or {}
-    local list = ns.wantedItems
-    if type(list) ~= "table" or #list == 0 then
-        if not quiet then say("no item list; send items from the companion app, then /reload") end
-        return
-    end
-    local known = AHSnapshotDB.items or {}
-    local todo = {}
-    for _, id in ipairs(list) do
-        if not known[id] and (not quiet or not unanswered[id]) then
-            todo[#todo + 1] = id
-            awaiting[id] = nil
-        end
-    end
-    if #todo == 0 then
-        if not quiet then say(("all %d listed items are already recorded"):format(#list)) end
-        return
-    end
-    say(("requesting %d of %d listed items from the game"):format(#todo, #list))
+local function requestItems(todo)
     local i = 1
     local function step()
         for _ = 1, BATCH do
@@ -142,6 +122,44 @@ function ns.LoadWantedItems(quiet)
         end
     end
     step()
+end
+
+-- Request names, sell prices and classes for item IDs not recorded yet.
+function ns.RequestItems(ids)
+    local known, todo, queued = AHSnapshotDB.items or {}, {}, {}
+    for _, id in ipairs(ids) do
+        if not known[id] and not queued[id] then
+            queued[id] = true
+            todo[#todo + 1] = id
+            awaiting[id] = nil
+        end
+    end
+    if #todo > 0 then requestItems(todo) end
+    return #todo
+end
+
+function ns.LoadWantedItems(quiet)
+    -- Ids the game never answered for on an earlier run are skipped at login; /shuffledetector items retries them.
+    local unanswered = AHSnapshotDB.unanswered or {}
+    local list = ns.wantedItems
+    if type(list) ~= "table" or #list == 0 then
+        if not quiet then say("no item list; send items from the companion app, then /reload") end
+        return
+    end
+    local known = AHSnapshotDB.items or {}
+    local todo = {}
+    for _, id in ipairs(list) do
+        if not known[id] and (not quiet or not unanswered[id]) then
+            todo[#todo + 1] = id
+            awaiting[id] = nil
+        end
+    end
+    if #todo == 0 then
+        if not quiet then say(("all %d listed items are already recorded"):format(#list)) end
+        return
+    end
+    say(("requesting %d of %d listed items from the game"):format(#todo, #list))
+    requestItems(todo)
 end
 
 -- Professions: skill levels and known recipes, recorded for every profession.
@@ -191,8 +209,9 @@ local function modernDetails(T, id)
             reagents[#reagents + 1] = { item = first.itemID, qty = slot.quantityRequired or 1 }
         end
     end
-    return reagents, s.outputItemID, s.quantityMin
+    return reagents, s.outputItemID, s.quantityMin, s.name
 end
+ns.RecipeSchematic = modernDetails
 
 -- Modern profession UI (C_TradeSkillUI recipe IDs).
 local function readModern()
@@ -451,8 +470,10 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
         ns.LoadWantedItems()
     elseif msg == "yields" then
         ns.RefreshItemDetails()
+    elseif msg == "catalog" or msg:find("^catalog ") then
+        ns.ScanRecipeCatalog(msg:match("^catalog%s*(.-)%s*$"))
     else
-        say("usage: /shuffledetector browse (in-game ranking and calculator preview) | items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | prices [item IDs] (Auctionator API diagnostic) | shuffle or snatch (toggle batch and shuffle window) | stats (batch analytics) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
+        say("usage: /shuffledetector browse (in-game ranking and calculator preview) | items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | prices [item IDs] (Auctionator API diagnostic) | catalog [highest spell ID] (read recipes of professions none of your characters has from the game client) | shuffle or snatch (toggle batch and shuffle window) | stats (batch analytics) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
     end
 end
 

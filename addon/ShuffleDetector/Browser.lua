@@ -25,7 +25,7 @@ local function validState(state)
         and boundedText(state.profession, 100, true)
         and boundedText(state.search, 100)
         and boundedText(state.selected, 300, true)
-        and (state.recipes == "learned" or state.recipes == "unlearned" or state.recipes == "all")
+        and (state.recipes == "learned" or state.recipes == "unlearned" or state.recipes == "new" or state.recipes == "all")
         and (state.exit == nil or state.exit == "Vendor" or state.exit == "Sell on AH")
         and (state.mode == "crafts" or state.mode == "budget")
         and boundedText(state.amount, 12)
@@ -49,6 +49,7 @@ local function restoreState()
     options = {
         knownOnly = not state or state.recipes == "learned",
         unlearnedOnly = state and state.recipes == "unlearned",
+        newOnly = state and state.recipes == "new",
         profession = state and state.profession,
         exit = state and state.exit,
         search = state and state.search or "",
@@ -63,7 +64,8 @@ local function saveState()
     if not stateReady then return end
     savedStates()[ns.charKey()] = {
         version = 1, profession = options.profession, search = searchBox:GetText(),
-        recipes = options.knownOnly and "learned" or (options.unlearnedOnly and "unlearned" or "all"),
+        recipes = options.knownOnly and "learned" or options.unlearnedOnly and "unlearned"
+            or options.newOnly and "new" or "all",
         exit = options.exit, selected = selected, mode = mode, amount = amount:GetText(),
         materialCosts = materialCosts,
     }
@@ -129,13 +131,21 @@ end
 local function details()
     local result = current()
     if not result then
-        detail:SetText("No matching item-producing recipes.\n\nOpen your profession windows to record recipes, then click Refresh. Try another profession or recipe filter. Records without a product or complete reagents cannot be ranked.")
+        detail:SetText("No matching item-producing recipes.\n\nOpen your profession windows to record recipes, then click Refresh. Try another profession or recipe filter. Records without a product or complete reagents cannot be ranked. For professions none of your characters has, run /shuffledetector catalog.")
     else
         local recipe = result.recipe
         local lines = {
             heading(recipe.name),
-            recipe.profession .. " / " .. (recipe.known and "Learned recipe" or "Unlearned pattern"),
+            recipe.profession .. " / " .. (recipe.known and "Learned recipe"
+                or not recipe.professionKnown and "Profession not learned" or "Unlearned pattern"),
             recipe.known and "Preview a shuffle you can craft; this row does not start it."
+                or recipe.catalog and ("From the game's recipe data: none of your characters has " .. recipe.profession
+                    .. ". Skill requirement and where to learn it are not verified.")
+                or recipe.learnedBy and not recipe.professionKnown and ("Learned by " .. recipe.learnedBy
+                    .. "; this character does not have " .. recipe.profession .. ".")
+                or recipe.learnedBy and ("Learned by " .. recipe.learnedBy .. "; this character cannot craft it yet.")
+                or not recipe.professionKnown and ("Recorded by another character; this character does not have "
+                    .. recipe.profession .. ".")
                 or "Pattern to learn later. This character cannot craft it yet; acquisition requirements are not verified.",
             ("Makes %d per craft; 30s assumed craft time."):format(recipe.makes),
         }
@@ -276,12 +286,14 @@ refresh = function()
     end
     saveState()
     local meaning = options.knownOnly and "Learned recipes: shuffle previews, not action buttons."
-        or (options.unlearnedOnly and "Unlearned patterns: compare recipes to learn later; not craftable yet."
-            or "All recipes: learned shuffles and unlearned patterns; select a row for details.")
+        or options.unlearnedOnly and "Unlearned patterns, including other characters' and new professions; not craftable yet."
+        or options.newOnly and "Professions to learn: recipes from professions this character does not have."
+        or "All recipes: learned shuffles and unlearned patterns; select a row for details."
     summary:SetText(err or (ns.charKey() .. " - " .. meaning))
     providerLabel:SetText(providerText(info.provider))
     professionMenu:SetText((options.profession or "All professions") .. " v")
-    recipeMenu:SetText((options.knownOnly and "Learned recipes" or (options.unlearnedOnly and "Unlearned patterns" or "All recipes")) .. " v")
+    recipeMenu:SetText((options.knownOnly and "Learned recipes" or options.unlearnedOnly and "Unlearned patterns"
+        or options.newOnly and "Professions to learn" or "All recipes") .. " v")
     exitMenu:SetText((options.exit or "Best available exit") .. " v")
     scroll:SetVerticalScroll(0)
     render()
@@ -465,9 +477,10 @@ function ns.TogglePlanner()
     end)
     recipeMenu = dropdown(200, 180, function()
         return {
-            { text = "Learned recipes (shuffle previews)", choose = function() options.knownOnly, options.unlearnedOnly = true, nil end },
-            { text = "Unlearned patterns (learn later)", choose = function() options.knownOnly, options.unlearnedOnly = nil, true end },
-            { text = "All recipes", choose = function() options.knownOnly, options.unlearnedOnly = nil, nil end },
+            { text = "Learned recipes (shuffle previews)", choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = true, nil, nil end },
+            { text = "Unlearned patterns (learn later)", choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = nil, true, nil end },
+            { text = "Professions to learn", choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = nil, nil, true end },
+            { text = "All recipes", choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = nil, nil, nil end },
         }
     end)
     exitMenu = dropdown(390, 195, function()

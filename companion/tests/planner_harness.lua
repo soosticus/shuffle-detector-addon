@@ -167,7 +167,35 @@ eq(batch.capped, true)
 results = assert(ns.PlannerResults({ profession = "Tailoring", search = "unlearned" }))
 eq(#results, 1)
 eq(results[1].recipe.known, false)
-eq(#assert(ns.PlannerResults({ unlearnedOnly = true })), 1, "patterns filter excludes learned shuffles")
+results = assert(ns.PlannerResults({ unlearnedOnly = true }))
+eq(#results, 2, "patterns filter excludes learned shuffles and includes other characters' professions")
+local alt = find(results, "Other character")
+eq(alt.recipe.profession, "Alchemy")
+eq(alt.recipe.known, false, "another character's recipe is never craftable here")
+eq(alt.recipe.learnedBy, "Other")
+eq(alt.recipe.professionKnown, false)
+eq(find(results, "Unlearned").recipe.professionKnown, true)
+eq(ns.CanActivatePlannerResult(alt, {}), nil, "another character's recipe cannot become the active shuffle")
+eq(#assert(ns.PlannerResults({ knownOnly = true })), 2, "learned filter stays this character's crafts")
+results = assert(ns.PlannerResults({ newOnly = true }))
+eq(#results, 1, "new-profession filter lists only professions this character lacks")
+eq(results[1].recipe.name, "Other character")
+AHSnapshotDB.catalog = { version = 1, professions = {
+    Engineering = { recipes = { recipe("Gadget", 23, 10, 2, 5), { name = "Broken" } } },
+    Alchemy = { recipes = { recipe("Catalog alchemy", 24, 10, 1, 6) } },
+    Tailoring = { recipes = { recipe("Catalog tailoring", 25, 10, 1, 7) } },
+} }
+results, err, info = ns.PlannerResults({ newOnly = true })
+eq(#results, 2, "catalog adds only professions no recorded character has")
+local gadget = find(results, "Gadget")
+eq(gadget.recipe.catalog, true)
+eq(gadget.recipe.known, false)
+eq(gadget.recipe.profession, "Engineering")
+eq(find(results, "Catalog alchemy"), nil, "a profession an alt has comes from the alt, not the catalog")
+local listedProfessions = table.concat(info.professions, ",")
+eq(listedProfessions, "Alchemy,Enchanting,Engineering,Tailoring", "profession filter lists every source")
+eq(#assert(ns.PlannerResults({ profession = "Engineering" })), 1)
+AHSnapshotDB.catalog = nil
 eq(#assert(ns.PlannerResults({ profession = "Enchanting" })), 0)
 results = assert(ns.PlannerResults({ search = "Piece", exit = "Sell on AH" }))
 eq(results[1].net, nil, "an unverified gear exit does not inherit the vendor exit")
@@ -214,6 +242,25 @@ for _, w in ipairs(widgets) do
 end
 assert(patternShown, "explain that patterns are previews to learn, not action buttons")
 click("Unlearned patterns v")
+click("Professions to learn")
+click("Tailoring v")
+click("All professions")
+local altRow
+for _, w in ipairs(widgets) do
+    if w:IsShown() and w.nameText and w.nameText.text and w.nameText.text:find("Other character", 1, true)
+        and w.scripts.OnClick then altRow = w end
+end
+assert(altRow, "professions to learn lists another character's profession")
+altRow.scripts.OnClick(altRow)
+local newShown, learnedByShown = false, false
+for _, w in ipairs(widgets) do
+    if w.text and w.text:find("Profession not learned", 1, true) then newShown = true end
+    if w.text and w.text:find("Learned by Other", 1, true) then learnedByShown = true end
+end
+assert(newShown and learnedByShown, "detail names the missing profession and who has it")
+click("All professions v")
+click("Tailoring")
+click("Professions to learn v")
 click("Learned recipes (shuffle previews)")
 click("Best available exit v")
 local disabledDE
@@ -546,4 +593,71 @@ click("Set active shuffle")
 eq(AHSnapshotDB.activePlan.estimate.cost, 6, "activation without Calculate uses custom input")
 eq(selectedTarget, 2)
 assert(visible("Missing reagent prices"), "custom estimate never fabricates market ranking prices")
+
+-- Recipe catalog scan: a stubbed client knows a few recipe spell IDs across professions.
+local said = {}
+local say = ns.say
+ns.say = function(msg) said[#said + 1] = msg end
+GetTime = function() return 10 end
+local timers = {}
+C_Timer = { After = function(_, f) timers[#timers + 1] = f end }
+GetItemInfo = function(id) return "Item " .. id, nil, 1, 1, nil, nil, nil, nil, nil, nil, 3, 7 end
+local function schematic(item, reagent, qty, makes)
+    return { name = "Schematic " .. item, outputItemID = item, quantityMin = makes,
+        reagentSlotSchematics = { { reagentType = 1, quantityRequired = qty, reagents = { { itemID = reagent } } } } }
+end
+local schematics = {
+    [1] = schematic(11, 10, 2),
+    [4] = schematic(22, 10, 1),
+    [30] = schematic(300, 301, 3, 2),
+    [31] = schematic(302, 301, 1),
+    [32] = schematic(303, 301, 1),
+    [33] = { name = "Enchant without product", reagentSlotSchematics = {} },
+    [40] = schematic(400, 401, 1),
+}
+local lines = { [1] = 197, [4] = 171, [30] = 202, [31] = 202, [32] = 202, [40] = 999 }
+C_TradeSkillUI = {
+    GetRecipeSchematic = function(id)
+        if id == 50 then error("bad id") end
+        return schematics[id]
+    end,
+    GetTradeSkillLineForRecipe = function(id) return lines[id], nil, lines[id] end,
+    GetRecipeInfo = function(id) return id == 32 and { isDummyRecipe = true } or nil end,
+}
+assert(loadfile("addon/ShuffleDetector/Catalog.lua"))("ShuffleDetector", ns)
+SlashCmdList.SHUFFLEDETECTOR("catalog nope")
+assert(said[#said]:find("highest spell ID", 1, true), "bad scan limit is explained")
+SlashCmdList.SHUFFLEDETECTOR("catalog 5000")
+local scanner
+for _, w in ipairs(widgets) do if w.scripts.OnUpdate then scanner = w end end
+assert(scanner, "scan runs across frames")
+scanner.scripts.OnUpdate(scanner)
+SlashCmdList.SHUFFLEDETECTOR("catalog")
+assert(said[#said]:find("scan running, 2001 of 5000", 1, true), "a second command reports progress")
+for _ = 1, 3 do if scanner.scripts.OnUpdate then scanner.scripts.OnUpdate(scanner) end end
+eq(scanner.scripts.OnUpdate, nil, "scan stops when done")
+local catalog = AHSnapshotDB.catalog
+eq(catalog.version, 1)
+eq(catalog.maxSpell, 5000)
+eq(catalog.build, "70888")
+eq(catalog.professions.Tailoring, nil, "professions a character has are not stored")
+eq(catalog.professions.Alchemy, nil, "an alt's profession is not stored")
+local engineering = catalog.professions.Engineering.recipes
+eq(#engineering, 2, "dummy and productless recipes are skipped")
+eq(engineering[1].name, "Schematic 300")
+eq(engineering[1].spell, 30)
+eq(engineering[1].makes, 2)
+eq(engineering[1].reagents[1].qty, 3)
+eq(catalog.professions["999"], nil)
+local text = table.concat(said, "\n")
+assert(text:find("2 recipes from professions none of your characters has: Engineering 2", 1, true), text)
+assert(text:find("Alchemy 1 of 1, Tailoring 1 of ", 1, true), "scan reports how many recorded recipes it found")
+assert(text:find("1 recipes skipped", 1, true), "unknown skill lines are counted, not guessed")
+eq(#timers, 1, "catalog items are requested")
+timers[1]()
+eq(AHSnapshotDB.items[300].name, "Item 300")
+eq(AHSnapshotDB.items[301].sell, 3)
+results = assert(ns.PlannerResults({ newOnly = true, profession = "Engineering" }))
+eq(#results, 2, "scanned recipes reach the browser")
+ns.say = say
 print("planner workflow checks passed")

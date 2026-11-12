@@ -35,6 +35,12 @@ AHSnapshotDB = {
   items = { [itemID] = { name = "Linen Cloth", sell = <vendor sell price, copper>,
                          class = <item class id>, quality = <rarity id>, ilvl = <base item level> } },  -- from GetItemInfo
   vendor = { [itemID] = <copper to buy one from a vendor> },  -- from the merchant window, gold-only items
+  catalog = {       -- /shuffledetector catalog: recipes of professions no recorded character has
+    version = 1, scanned = <unix>, build = "<client build>", maxSpell = <highest spell ID scanned>,
+    professions = { ["Engineering"] = { recipes = {
+      { name = "...", spell = <id>, item = <id>, makes = <n, if more than 1>, reagents = { { item = <id>, qty = <n> }, ... } },
+    } } },
+  },
   disenchants = {   -- one entry per successful Disenchant cast, oldest first, capped at 500
     { item = <id disenchanted>, quality = <item quality>, ilvl = <item level>, class = <item class>,
       loot = { { item = <id>, qty = <n> }, ... }, time = <unix>, complete = true,
@@ -367,9 +373,12 @@ days or asserting freshness. Age failures leave the price estimate intact with
 `ageReason`. No callback, availability quantity, gear variant resolution,
 disenchant model or guaranteed execution price is implied.
 
-`Planner.lua` copies the current character's recorded item-producing recipes into
-evaluation inputs, without modifying their stored tables. It exposes learned and
-unlearned status separately and excludes records missing complete reagents/products.
+`Planner.lua` copies recorded item-producing recipes into evaluation inputs,
+without modifying their stored tables: the current character's learned (`known`)
+and available recipes, then other characters' recipes (never `known`; their
+learned ones carry `learnedBy`), then `catalog` recipes for professions no
+character has (`catalog = true`). Each recipe carries `professionKnown` for the
+current character. It excludes records missing complete reagents/products.
 Recorded items of any class except weapons (2) and armor (4), whose suffix
 variants share an item ID, enter the commodity provider; gear and unrecorded
 items stay unavailable. Each explicit refresh takes a fresh per-item quote
@@ -393,7 +402,7 @@ plannerByCharacter = {
   ["Name-Realm-Faction"] = {
     version = 1,
     profession = "Tailoring",      -- optional; absent means all professions
-    recipes = "learned",          -- "learned", "unlearned", or "all"
+    recipes = "learned",          -- "learned", "unlearned", "new" (professions to learn), or "all"
     exit = "Vendor",              -- optional; absent means best available exit
     search = "",
     selected = "Tailoring:8774",   -- optional preview recipe key; not an execution plan

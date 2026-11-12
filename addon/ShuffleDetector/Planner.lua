@@ -75,7 +75,8 @@ function ns.PlannerResults(options)
     if type(db) ~= "table" or type(db.characters) ~= "table" then
         return nil, "No recorded characters. Open a profession window first."
     end
-    local character = db.characters[ns.charKey()]
+    local me = ns.charKey()
+    local character = db.characters[me]
     if type(character) ~= "table" or type(character.professions) ~= "table" then
         return nil, "No professions recorded for this character. Open a profession window first."
     end
@@ -99,20 +100,71 @@ function ns.PlannerResults(options)
             return type(info) == "table" and info.sell or nil
         end,
     }
-    local seen = {}
-    for profession, data in pairs(character.professions) do
-        if type(profession) == "string" and type(data) == "table" then
+    -- This character's recipes first, then other characters' (never learned here), then the game's
+    -- recipe catalog for professions no recorded character has.
+    local seen, listed, mine, anyone = {}, {}, {}, {}
+    local function list(profession)
+        if not listed[profession] then
+            listed[profession] = true
             professions[#professions + 1] = profession
-            for _, category in ipairs({ "recipes", "available" }) do
-                local rows = data[category]
-                for _, row in ipairs(type(rows) == "table" and rows or {}) do
-                    local recipe = recipeCopy(row, profession, category == "recipes")
-                    if not recipe then
-                        skipped = skipped + 1
-                    elseif not seen[recipe.key] then
-                        seen[recipe.key] = true
-                        recipes[#recipes + 1] = recipe
+        end
+    end
+    local function add(recipe)
+        list(recipe.profession)
+        local previous = seen[recipe.key]
+        if previous then
+            if not previous.known then previous.learnedBy = previous.learnedBy or recipe.learnedBy end
+            return
+        end
+        recipe.professionKnown = mine[recipe.profession] or false
+        seen[recipe.key] = recipe
+        recipes[#recipes + 1] = recipe
+    end
+    local others = {}
+    for key, data in pairs(db.characters) do
+        if type(key) == "string" and type(data) == "table" and type(data.professions) == "table" then
+            for profession in pairs(data.professions) do
+                if type(profession) == "string" then
+                    anyone[profession] = true
+                    if key == me then mine[profession] = true end
+                end
+            end
+            if key ~= me then others[#others + 1] = key end
+        end
+    end
+    table.sort(others)
+    local function scan(key, data, current)
+        for profession, prof in pairs(data.professions) do
+            if type(profession) == "string" and type(prof) == "table" then
+                list(profession)
+                for _, category in ipairs({ "recipes", "available" }) do
+                    local rows = prof[category]
+                    for _, row in ipairs(type(rows) == "table" and rows or {}) do
+                        local recipe = recipeCopy(row, profession, current and category == "recipes")
+                        if not recipe then
+                            if current then skipped = skipped + 1 end
+                        else
+                            if not current and category == "recipes" then
+                                recipe.learnedBy = key:match("^([^-]+)") or key
+                            end
+                            add(recipe)
+                        end
                     end
+                end
+            end
+        end
+    end
+    scan(me, character, true)
+    for _, key in ipairs(others) do scan(key, db.characters[key], false) end
+    local catalog = type(db.catalog) == "table" and db.catalog.version == 1
+        and type(db.catalog.professions) == "table" and db.catalog.professions or {}
+    for profession, prof in pairs(catalog) do
+        if type(profession) == "string" and not anyone[profession] and type(prof) == "table" then
+            for _, row in ipairs(type(prof.recipes) == "table" and prof.recipes or {}) do
+                local recipe = recipeCopy(row, profession, false)
+                if recipe then
+                    recipe.catalog = true
+                    add(recipe)
                 end
             end
         end
@@ -140,6 +192,7 @@ function ns.PlannerResults(options)
         if (not options.profession or recipe.profession == options.profession)
             and (not options.knownOnly or recipe.known)
             and (not options.unlearnedOnly or not recipe.known)
+            and (not options.newOnly or not recipe.professionKnown)
             and (search == "" or recipe.name:lower():find(search, 1, true)) then
             results[#results + 1] = ns.Evaluate(recipe, ctx)
         end

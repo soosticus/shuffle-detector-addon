@@ -4,6 +4,12 @@ Open items only; finished work is removed. Release notes are hand-written in `re
 
 ## Open items
 
+- Recipe catalog: confirm in game that `/shuffledetector catalog` finds recipes of
+  professions no character has (the scan's check line should report most recorded
+  Tailoring/Enchanting/Cooking recipes as found), how long the 1-500000 scan takes,
+  and that the profession names match `GetProfessionInfo`'s. If the client only
+  describes open professions, the browser still lists alts' professions.
+
 - Addon-only migration: verify the current Forever/Auctionator public price API with
   `/shuffledetector prices` before/after a scan (`/shuffledetector log 80`). Establish
   redistribution permission and client applicability for a versioned disenchant

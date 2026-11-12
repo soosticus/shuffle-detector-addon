@@ -122,7 +122,16 @@ The browser ranks the current character's recorded item-producing recipes by
 estimated profit. Use the **Profession**, **Recipes** and **Sell crafted item via**
 dropdowns to filter; enter a recipe name and press Enter to search. **Learned recipes**
 are shuffle previews for this character; **Unlearned patterns** compare recipes to
-learn later, not actions that can craft them now. Selecting any row only shows its
+learn later, not actions that can craft them now. Unlearned patterns also include
+recipes your other recorded characters know, and **Professions to learn** lists
+only recipes of professions this character does not have, to spot a profitable
+profession to pick up. Professions none of your characters has come from
+`/shuffledetector catalog`, which reads every recipe the game client describes
+(spell IDs 1-500000 by default, or `/shuffledetector catalog <highest ID>`) and
+keeps those of professions no character has; it prints how many recipes of your
+recorded professions it also found as a check. Whether this client describes
+recipes of professions nobody has is not yet confirmed; if the scan reports none,
+it does not. Run it again after a game patch. Selecting any row only shows its
 breakdown. Select a row for reagent costs, exit values, missing-price reasons and
 casting-only profit/hour. The batch calculator accepts **craft counts** or a
 **budget in whole copper**; it shows shopping requirements, finished output and

@@ -13,6 +13,7 @@ Prices.lua
 Evaluate.lua
 Calculator.lua
 Planner.lua
+Catalog.lua
 Browser.lua
 Observations.lua
 Disenchant.lua
