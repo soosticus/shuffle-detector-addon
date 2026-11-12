@@ -16,7 +16,10 @@ local function widget(parent)
     function w:SetSize(width, height) self.width, self.height = width, height end
     function w:SetHeight(height) self.height = height end
     function w:SetWidth(width) self.width = width end
-    function w:SetText(value) self.text = value end
+    function w:SetText(value)
+        self.text = value
+        if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self) end
+    end
     function w:GetText() return self.text end
     function w:GetParent() return self.parent end
     function w:GetStringHeight() return #self.text end
@@ -48,9 +51,12 @@ UnitName = function() return "Test" end
 GetRealmName = function() return "Realm" end
 UnitFactionGroup = function() return "Alliance" end
 local ns = {}
-local selectedTarget
+local selectedTarget, targetChanges = nil, 0
 ns.PrepareShufflePlanChange = function() return true end
-ns.SetSnatchTarget = function(target) selectedTarget = target; return true end
+ns.SetSnatchTarget = function(target)
+    selectedTarget, targetChanges = target, targetChanges + 1
+    return true
+end
 assert(loadfile("addon/ShuffleDetector/ShuffleDetector.lua"))("ShuffleDetector", ns)
 
 -- Synthetic records; no production data or DE baseline.
@@ -309,4 +315,135 @@ learned[#learned + 1] = malformed
 local checked, _, checkedInfo = ns.PlannerResults({ knownOnly = true })
 eq(#checked, 2, "malformed records never become free or partially costed recipes")
 eq(checkedInfo.skipped, 4)
+
+-- Reload only the browser module to discard its locals, as a UI reload would.
+local function reloadBrowser()
+    if browser:IsShown() then browser:Hide() end
+    assert(loadfile("addon/ShuffleDetector/Browser.lua"))("ShuffleDetector", ns)
+    ns.TogglePlanner()
+    for _, w in ipairs(widgets) do
+        if w.name == "ShuffleDetectorBrowser" and w:IsShown() then browser = w end
+    end
+end
+local function editBox(width)
+    for _, w in ipairs(widgets) do
+        if w.template == "InputBoxTemplate" and w.width == width and w:IsShown() then return w end
+    end
+    error("missing edit box " .. width)
+end
+local key = ns.charKey()
+local activePlan, activeSaved, target = ns.plan, AHSnapshotDB.activePlan, selectedTarget
+local changesBeforeRestore = targetChanges
+click("Tailoring v")
+click("Tailoring")
+click("Learned recipes v")
+click("All recipes")
+click("Best available exit v")
+click("Vendor")
+editBox(200):SetText("Piece")
+editBox(120):SetText("75")
+click("Crafts")
+click("Refresh / search")
+local state = AHSnapshotDB.plannerByCharacter[key]
+eq(state.version, 1)
+eq(state.profession, "Tailoring")
+eq(state.recipes, "all")
+eq(state.exit, "Vendor")
+eq(state.search, "Piece")
+eq(state.mode, "budget")
+eq(state.amount, "75")
+eq(state.selected, "Tailoring:2")
+local costBefore = find(assert(ns.PlannerResults()), "Piece").cost
+prices[10] = 6
+reloadBrowser()
+eq(editBox(200):GetText(), "Piece", "search survives module reload")
+eq(editBox(120):GetText(), "75", "calculator input survives module reload")
+assert(visible("Tailoring v") and visible("All recipes v") and visible("Vendor v"))
+assert(visible("Budget (copper)"), "calculator mode survives reload")
+assert(visible("> Piece"), "preview selection survives reload")
+eq(visible("Batch estimate"), nil, "old calculated quotes are never restored")
+assert(find(assert(ns.PlannerResults()), "Piece").cost ~= costBefore, "restored preview uses fresh prices")
+click("Calculate")
+assert(visible("2 crafts / 4 finished items"), "restored budget is calculated from fresh prices")
+eq(ns.plan, activePlan, "restoring browser state never changes execution")
+eq(AHSnapshotDB.activePlan, activeSaved)
+eq(selectedTarget, target)
+eq(targetChanges, changesBeforeRestore, "restoring browser settings never calls execution target setters")
+
+local originalCharKey = ns.charKey
+browser:Hide()
+ns.charKey = function() return "Other-Realm-Alliance" end
+reloadBrowser()
+eq(editBox(200):GetText(), "", "another character gets its own default filters")
+eq(editBox(120):GetText(), "1")
+assert(visible("Learned recipes v") and visible("All professions v") and visible("Crafts"))
+editBox(120):SetText("9")
+browser:Hide()
+ns.charKey = originalCharKey
+reloadBrowser()
+eq(editBox(120):GetText(), "75", "another character's input does not replace this character's settings")
+eq(AHSnapshotDB.plannerByCharacter["Other-Realm-Alliance"].amount, "9")
+
+-- A saved selection on a later page must be visible, not just used in the detail pane.
+for i = 1, 12 do
+    learned[#learned + 1] = recipe("Extra " .. i, 20, 10, i + 10, 100 + i)
+end
+browser:Hide()
+state = AHSnapshotDB.plannerByCharacter[key]
+state.search, state.selected = "", "Tailoring:112"
+reloadBrowser()
+assert(visible("> Extra 12"), "restored selection reveals its page")
+prices[10] = 100
+click("Refresh / search")
+assert(visible("> Extra 12"), "refresh keeps the selected row visible when rankings change")
+learned[#learned] = nil
+reloadBrowser()
+assert(AHSnapshotDB.plannerByCharacter[key].selected ~= "Tailoring:112",
+    "a removed recipe falls back to a current matching preview")
+eq(ns.plan, activePlan, "a missing preview recipe never clears the active plan")
+
+editBox(120):SetText("bad")
+reloadBrowser()
+click("Calculate")
+assert(visible("Enter a whole number"), "invalid typed amounts remain explicit calculator errors")
+eq(editBox(120):GetText(), "bad", "draft input is not silently replaced with a valid amount")
+local invalidStates = {
+    false,
+    { version = 99 },
+    { version = 1, search = {}, recipes = "all", mode = "crafts", amount = "1" },
+    { version = 1, search = "", recipes = "all", mode = "crafts", amount = "1", exit = "Disenchant" },
+    { version = 1, search = "", recipes = "all", mode = "crafts", amount = "1", selected = {} },
+    { version = 1, search = "", recipes = "all", mode = "other", amount = "1" },
+    { version = 1, search = "", recipes = "all", mode = "crafts", amount = string.rep("1", 13) },
+}
+for _, invalidState in ipairs(invalidStates) do
+    browser:Hide()
+    AHSnapshotDB.plannerByCharacter[key] = invalidState
+    assert(loadfile("addon/ShuffleDetector/Browser.lua"))("ShuffleDetector", ns)
+    ns.TogglePlanner()
+    for _, w in ipairs(widgets) do
+        if w.name == "ShuffleDetectorBrowser" and w:IsShown() then browser = w end
+    end
+    assert(AHSnapshotDB.log[#AHSnapshotDB.log]:find("invalid or unsupported saved settings", 1, true))
+    eq(editBox(120):GetText(), "1")
+    eq(editBox(200):GetText(), "")
+    assert(visible("Learned recipes v") and visible("Crafts"), "bad state restores safe browser defaults")
+end
+browser:Hide()
+AHSnapshotDB.plannerByCharacter = false
+reloadBrowser()
+assert(AHSnapshotDB.log[#AHSnapshotDB.log]:find("invalid saved settings container", 1, true))
+eq(editBox(120):GetText(), "1")
+click("Learned recipes v")
+click("Unlearned patterns (learn later)")
+click("Best available exit v")
+click("Sell on AH (verified item types)")
+reloadBrowser()
+assert(visible("Unlearned patterns v") and visible("Sell on AH v"),
+    "unlearned and AH filters survive reload even without a priced exit")
+assert(visible("> Unlearned"), "the unlearned preview selection survives reload")
+eq(ns.plan, activePlan)
+eq(AHSnapshotDB.activePlan, activeSaved)
+eq(selectedTarget, target)
+eq(targetChanges, changesBeforeRestore)
 print("planner workflow checks passed")

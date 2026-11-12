@@ -376,9 +376,38 @@ budget. Unknown cost blocks budget calculation but does not prevent showing
 requirements for an explicit craft count. The 100000-craft cap is explicit;
 finished output over the execution limit of 100000 is flagged without clamping.
 No AH quantity/stock, independent-Poisson range or DE baseline is fabricated.
-`Browser.lua` keeps only transient preview state: it neither writes planner
-SavedVariables nor replaces `ns.plan` or any snatcher/statistics state. Durable
-selection and the centralized safe execution transition remain future work.
+`Browser.lua` saves preview preferences in `AHSnapshotDB.plannerByCharacter`,
+keyed by `ns.charKey()` (name-realm-faction):
+
+```lua
+plannerByCharacter = {
+  ["Name-Realm-Faction"] = {
+    version = 1,
+    profession = "Tailoring",      -- optional; absent means all professions
+    recipes = "learned",          -- "learned", "unlearned", or "all"
+    exit = "Vendor",              -- optional; absent means best available exit
+    search = "",
+    selected = "Tailoring:8774",   -- optional preview recipe key; not an execution plan
+    mode = "crafts",              -- "crafts" or "budget" (whole copper)
+    amount = "20",                -- edit-box draft, validated when calculating
+  },
+}
+```
+
+Filters, search/amount edits, recipe selection and calculator mode are saved as
+they change; the game flushes them on reload/logout. Stored fields are validated
+before restoring; malformed or unsupported records reset to browser defaults with
+an `ns.log` diagnostic. Other characters' settings remain untouched. Reopening
+always evaluates current recipes/prices and shows the selected recipe's page, or
+falls back to the first matching recipe if the selection is no longer available.
+Quotes, calculated batches and activation notices are transient. Invalid draft
+amounts remain visible and produce normal calculator errors rather than silently
+becoming a valid batch. No companion QSettings are read or imported.
+
+Restoring or editing preview preferences does not replace `ns.plan`, change the
+snatcher target/caps, reset progress, or trigger crafting/purchases. Only the
+explicit **Set active shuffle** transition writes `activePlan` and the target
+(see the active-plan section above).
 The preview's recipe filter distinguishes learned shuffles from unlearned patterns;
 both are read-only recipe details, never action buttons. Dropdown filters keep
 the no-baseline Disenchant choice disabled. Row subtitles describe why profit

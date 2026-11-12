@@ -128,6 +128,13 @@ casting-only profit/hour. The batch calculator accepts **craft counts** or a
 **budget in whole copper**; it shows shopping requirements, finished output and
 estimated cost/net/profit.
 
+The browser remembers filters, search text, the previewed recipe, calculator mode
+and amount separately for each character across `/reload` and logout. Reopening
+it refreshes price estimates and reveals the selected recipe's page. If that
+recipe no longer matches, the first matching preview is shown instead. Calculated
+batches and price quotes are not saved; press **Calculate** for a fresh breakdown.
+Companion preferences are not imported.
+
 For a fully priced learned recipe, **Set active shuffle** stores that recipe and its
 finished-item target in the addon. It uses the calculated batch, or the amount box
 (default 1 craft) if **Calculate** was not pressed. Incomplete prices and unlearned
@@ -154,10 +161,10 @@ This slice deliberately has limits:
   The calculator caps at 100000 crafts and flags more than 100000 finished items;
   it does not invent a numeric DE outcome range.
 
-Selecting a row or calculating a preview is session-only: neither replaces your
+Selecting a row or calculating a preview never replaces your
 active plan, resets batch progress, changes purchase caps, or buys/crafts anything.
 Within the browser, only **Set active shuffle** changes the plan and target.
-Persistent planner settings, custom material costs and the complete addon-only
+Custom material costs and the complete addon-only
 workflow remain migration work. The existing companion and its generated plans
 continue to work unchanged.
 

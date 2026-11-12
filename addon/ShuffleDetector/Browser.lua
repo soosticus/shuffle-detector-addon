@@ -4,6 +4,57 @@ local rows, results, info, selected, batch, calculationError, activationNotice =
 local options, page, mode = { knownOnly = true }, 1, "crafts"
 local PAGE_SIZE = 10
 local refresh, render, menuCover
+local stateReady = false
+
+local function boundedText(value, limit, optional)
+    return (optional and value == nil) or (type(value) == "string" and #value <= limit)
+end
+
+local function validState(state)
+    return type(state) == "table" and state.version == 1
+        and boundedText(state.profession, 100, true)
+        and boundedText(state.search, 100)
+        and boundedText(state.selected, 300, true)
+        and (state.recipes == "learned" or state.recipes == "unlearned" or state.recipes == "all")
+        and (state.exit == nil or state.exit == "Vendor" or state.exit == "Sell on AH")
+        and (state.mode == "crafts" or state.mode == "budget")
+        and boundedText(state.amount, 12)
+end
+
+local function savedStates()
+    if AHSnapshotDB.plannerByCharacter == nil then AHSnapshotDB.plannerByCharacter = {} end
+    if type(AHSnapshotDB.plannerByCharacter) ~= "table" then
+        ns.log("planner: invalid saved settings container; resetting browser settings")
+        AHSnapshotDB.plannerByCharacter = {}
+    end
+    return AHSnapshotDB.plannerByCharacter
+end
+
+local function restoreState()
+    local state = savedStates()[ns.charKey()]
+    if state ~= nil and not validState(state) then
+        ns.log("planner: invalid or unsupported saved settings for " .. ns.charKey() .. "; using browser defaults")
+        state = nil
+    end
+    options = {
+        knownOnly = not state or state.recipes == "learned",
+        unlearnedOnly = state and state.recipes == "unlearned",
+        profession = state and state.profession,
+        exit = state and state.exit,
+        search = state and state.search or "",
+    }
+    selected, mode = state and state.selected, state and state.mode or "crafts"
+    return state and state.amount or "1"
+end
+
+local function saveState()
+    if not stateReady then return end
+    savedStates()[ns.charKey()] = {
+        version = 1, profession = options.profession, search = searchBox:GetText(),
+        recipes = options.knownOnly and "learned" or (options.unlearnedOnly and "unlearned" or "all"),
+        exit = options.exit, selected = selected, mode = mode, amount = amount:GetText(),
+    }
+end
 
 local function money(value)
     if value == nil then return "Not priced" end
@@ -187,6 +238,10 @@ refresh = function()
     info, results = info or {}, results or {}
     batch, calculationError, activationNotice = nil, nil, nil
     if not current() then selected = results[1] and results[1].recipe.key end
+    for i, result in ipairs(results) do
+        if result.recipe.key == selected then page = math.ceil(i / PAGE_SIZE); break end
+    end
+    saveState()
     local meaning = options.knownOnly and "Learned recipes: shuffle previews, not action buttons."
         or (options.unlearnedOnly and "Unlearned patterns: compare recipes to learn later; not craftable yet."
             or "All recipes: learned shuffles and unlearned patterns; select a row for details.")
@@ -273,6 +328,7 @@ function ns.TogglePlanner()
         if panel:IsShown() then panel:Hide() else panel:Show(); refresh() end
         return
     end
+    local savedAmount = restoreState()
     panel = CreateFrame("Frame", "ShuffleDetectorBrowser", UIParent, "BasicFrameTemplateWithInset")
     panel:SetSize(980, 710)
     panel:SetPoint("CENTER")
@@ -282,7 +338,10 @@ function ns.TogglePlanner()
     panel:RegisterForDrag("LeftButton")
     panel:SetScript("OnDragStart", panel.StartMoving)
     panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
-    panel:SetScript("OnHide", function() if menuCover then menuCover:Hide() end end)
+    panel:SetScript("OnHide", function()
+        saveState()
+        if menuCover then menuCover:Hide() end
+    end)
     panel.TitleText:SetText("ShuffleDetector - read-only recipe browser")
     text(panel, "Profession", 15, -40, 175, "GameFontNormal")
     text(panel, "Recipes", 200, -40, 180, "GameFontNormal")
@@ -316,7 +375,8 @@ function ns.TogglePlanner()
     searchBox:SetPoint("TOPLEFT", 605, -60)
     searchBox:SetAutoFocus(false)
     searchBox:SetMaxLetters(100)
-    searchBox:SetText("")
+    searchBox:SetText(options.search)
+    searchBox:SetScript("OnTextChanged", saveState)
     searchBox:SetScript("OnEnterPressed", function(self) self:ClearFocus(); page = 1; refresh() end)
     searchBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     button(panel, "Refresh / search", 825, -60, 140, refresh)
@@ -334,6 +394,7 @@ function ns.TogglePlanner()
         rows[i]:SetScript("OnClick", function(self)
             selected, batch, calculationError = self.key, nil, nil
             activationNotice = nil
+            saveState()
             scroll:SetVerticalScroll(0)
             render()
         end)
@@ -353,14 +414,19 @@ function ns.TogglePlanner()
     amount:SetPoint("TOPLEFT", 415, -636)
     amount:SetAutoFocus(false)
     amount:SetMaxLetters(12)
-    amount:SetText("1")
+    amount:SetText(savedAmount)
     amount:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    amount:SetScript("OnTextChanged", function() batch = nil; updateUseButton() end)
+    amount:SetScript("OnTextChanged", function()
+        batch, calculationError, activationNotice = nil, nil, nil
+        saveState()
+        updateUseButton()
+    end)
     local modeButton
-    modeButton = button(panel, "Crafts", 550, -636, 115, function()
+    modeButton = button(panel, mode == "crafts" and "Crafts" or "Budget (copper)", 550, -636, 115, function()
         mode = mode == "crafts" and "budget" or "crafts"
         modeButton:SetText(mode == "crafts" and "Crafts" or "Budget (copper)")
         batch, calculationError = nil, nil
+        saveState()
         details()
     end)
     button(panel, "Calculate", 680, -636, 120, function()
@@ -386,6 +452,7 @@ function ns.TogglePlanner()
     button(panel, "< Previous", 15, -636, 120, function() page = page - 1; render() end)
     button(panel, "Next >", 145, -636, 120, function() page = page + 1; render() end)
     countLabel = text(panel, "", 15, -684, 940, "GameFontHighlightSmall")
+    stateReady = true
     panel:Show()
     refresh()
 end
