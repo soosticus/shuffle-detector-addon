@@ -287,14 +287,10 @@ SlashCmdList.SHUFFLEDETECTOR("browse")
 eq(browser.shown, true)
 eq(ns.plan.item, 20, "browsing after activation preserves the selected execution plan")
 eq(AHSnapshotDB.planSelection.preserve, true)
-local savedActivePlan = AHSnapshotDB.activePlan
-ns.plan = nil
-AHSnapshotDB.activePlan = { version = 1, selectedAt = 1700000000, recipe = "Invalid" }
-assert(loadfile("addon/ShuffleDetector/Plan.lua"))("ShuffleDetector", ns)
-eq(ns.plan, nil, "malformed saved selections are ignored")
-AHSnapshotDB.activePlan = savedActivePlan
-assert(loadfile("addon/ShuffleDetector/Plan.lua"))("ShuffleDetector", ns)
-eq(ns.plan.item, 20, "the in-game selection restores from SavedVariables after reload")
+eq(ns.ValidateActivePlan({ version = 1, selectedAt = 1700000000, recipe = "Invalid" }), false,
+    "malformed saved selections are ignored")
+eq(ns.ValidateActivePlan(AHSnapshotDB.activePlan), true,
+    "the saved in-game selection is valid for restore after reload (snatch harness covers ADDON_LOADED)")
 
 local saved = AHSnapshotDB.characters
 AHSnapshotDB.characters = nil

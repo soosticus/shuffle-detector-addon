@@ -9,7 +9,7 @@ local function frame()
     local noop = function() end
     for _, method in ipairs({ "SetSize", "SetPoint", "SetWidth", "SetHeight", "SetJustifyH", "SetMovable",
         "SetClampedToScreen", "EnableMouse", "RegisterForDrag", "SetAutoFocus", "SetMaxLetters",
-        "SetScrollChild", "RegisterEvent", "RegisterUnitEvent", "StartMoving", "StopMovingOrSizing",
+        "SetScrollChild", "RegisterEvent", "UnregisterEvent", "RegisterUnitEvent", "StartMoving", "StopMovingOrSizing",
         "SetFrameStrata", "RegisterForClicks", "SetAllPoints", "SetColorTexture", "SetTextColor" }) do f[method] = noop end
     function f:SetScript(event, fn) self.scripts[event] = fn end
     function f:SetParent(parent) self.parent = parent end
@@ -1521,20 +1521,45 @@ allowed, blocked = ns.SetSnatchTarget(8)
 eq(allowed, nil, "pending purchases block target changes")
 assert(blocked:find("pending purchase", 1, true))
 
+-- Like the game: the addon's files run before its SavedVariables exist, then ADDON_LOADED fires.
+local function loadLikeGame(db)
+    AHSnapshotDB = nil
+    assert(loadfile("addon/ShuffleDetector/Shuffle.lua"))("ShuffleDetector", ns)
+    local events = frames[#frames]
+    AHSnapshotDB = db
+    events.scripts.OnEvent(events, "ADDON_LOADED", "Auctionator")
+    return events
+end
 s = setup()
+local db = AHSnapshotDB
 local activePlan = { version = 1, recipe = "In-game choice", selectedAt = 200 }
-AHSnapshotDB.activePlan = activePlan
-ns.plan = { version = 1, recipe = "Older companion plan", generated = 199 }
+db.activePlan = activePlan
+local companionPlan = { version = 1, recipe = "Older companion plan", generated = 199 }
+ns.plan = companionPlan
 ns.ValidateActivePlan = function(candidate) return candidate == activePlan end
-assert(loadfile("addon/ShuffleDetector/Shuffle.lua"))("ShuffleDetector", ns)
-eq(ns.plan, activePlan, "newer in-game selections supersede preserved Plan.lua files")
+local events = loadLikeGame(db)
+eq(ns.plan, companionPlan, "another addon's ADDON_LOADED does not restore")
+events.scripts.OnEvent(events, "ADDON_LOADED", "ShuffleDetector")
+eq(ns.plan, activePlan, "newer in-game selections survive a reload over preserved Plan.lua files")
 
 s = setup()
+db = AHSnapshotDB
+activePlan = { version = 1, recipe = "In-game choice", selectedAt = 200 }
+db.activePlan = activePlan
+ns.plan = nil
+ns.ValidateActivePlan = function(candidate) return candidate == activePlan end
+events = loadLikeGame(db)
+events.scripts.OnEvent(events, "ADDON_LOADED", "ShuffleDetector")
+eq(ns.plan, activePlan, "in-game selections survive a reload without a Plan.lua plan")
+
+s = setup()
+db = AHSnapshotDB
 activePlan = { version = 1, recipe = "Older in-game choice", selectedAt = 200 }
-AHSnapshotDB.activePlan = activePlan
+db.activePlan = activePlan
 ns.plan = { version = 1, recipe = "New companion plan", generated = 201 }
 ns.ValidateActivePlan = function(candidate) return candidate == activePlan end
-assert(loadfile("addon/ShuffleDetector/Shuffle.lua"))("ShuffleDetector", ns)
+events = loadLikeGame(db)
+events.scripts.OnEvent(events, "ADDON_LOADED", "ShuffleDetector")
 eq(ns.plan.recipe, "New companion plan", "newer companion plans retain precedence")
 eq(AHSnapshotDB.activePlan, nil, "superseded in-game selections are cleared")
 

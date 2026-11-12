@@ -11,14 +11,19 @@ local DISENCHANT_ID = 13262
 local PLAN_VERSION = 1
 local MACRO = "/click " .. BUTTON_NAME
 
-local savedPlan = type(AHSnapshotDB) == "table" and AHSnapshotDB.activePlan
-if ns.ValidateActivePlan and ns.ValidateActivePlan(savedPlan) then
+-- SavedVariables load after the addon's files run, so the in-game selection
+-- (AHSnapshotDB.activePlan) is restored on ADDON_LOADED, not at file scope.
+-- A newer in-game selection beats an older companion Plan.lua and vice versa.
+function ns.RestoreActivePlan()
+    local savedPlan = type(AHSnapshotDB) == "table" and AHSnapshotDB.activePlan
+    if not (ns.ValidateActivePlan and ns.ValidateActivePlan(savedPlan)) then return false end
     local generated = type(ns.plan) == "table" and ns.plan.generated
     if type(generated) ~= "number" or savedPlan.selectedAt >= generated then
         ns.plan = savedPlan
-    else
-        AHSnapshotDB.activePlan = nil
+        return true
     end
+    AHSnapshotDB.activePlan = nil
+    return false
 end
 
 BINDING_HEADER_SHUFFLEDETECTOR = "ShuffleDetector"
@@ -513,6 +518,7 @@ end
 create()
 
 local ev = CreateFrame("Frame")
+ev:RegisterEvent("ADDON_LOADED")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:RegisterEvent("BAG_UPDATE_DELAYED")
 ev:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -526,6 +532,13 @@ pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_FAILED", "player")
 pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_INTERRUPTED", "player")
 pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_SUCCEEDED", "player")
 ev:SetScript("OnEvent", function(_, event, a1, a2, a3)
+    if event == "ADDON_LOADED" then
+        if a1 == ADDON then
+            ev:UnregisterEvent("ADDON_LOADED")
+            if ns.RestoreActivePlan() then log("restored in-game shuffle: " .. tostring(ns.plan.recipe)) end
+        end
+        return
+    end
     if event == "UNIT_SPELLCAST_SUCCEEDED" and ns.SnatchCraftCompleted then
         ns.SnatchCraftCompleted(a3, a2)
     end

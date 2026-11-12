@@ -49,8 +49,8 @@ AHSnapshotDB = {
 in the in-game browser for a fully priced learned recipe, with the calculated batch
 or one computed from the amount box. Unknown prices cannot be activated. The selected recipe and its
 finished-item batch target persist separately in `activePlan` and the character's
-`snatcher` state. Loading the bundled `Plan.lua` restores `activePlan` when no
-companion-generated plan assigned one. The later-loaded shuffle runtime compares
+`snatcher` state. SavedVariables load after the addon's files run, so `Shuffle.lua`
+restores `activePlan` on `ADDON_LOADED` (before `PLAYER_LOGIN`). It compares
 timestamps so a newer in-game choice supersedes an older generated plan, while a
 newer companion-generated plan supersedes and clears the stale in-game choice.
 Selecting a plan does not buy or craft: purchases still need configured limits and
