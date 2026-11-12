@@ -125,13 +125,14 @@ are shuffle previews for this character; **Unlearned patterns** compare recipes 
 learn later, not actions that can craft them now. Unlearned patterns also include
 recipes your other recorded characters know, and **Professions to learn** lists
 only recipes of professions this character does not have, to spot a profitable
-profession to pick up. Professions none of your characters has come from
-`/shuffledetector catalog`, which reads every recipe the game client describes
-(spell IDs 1-500000 by default, or `/shuffledetector catalog <highest ID>`) and
-keeps those of professions no character has; it prints how many recipes of your
-recorded professions it also found as a check. Whether this client describes
-recipes of professions nobody has is not yet confirmed; if the scan reports none,
-it does not. Run it again after a game patch. Selecting any row only shows its
+profession to pick up. For professions none of your characters has, the browser
+reads every recipe the game client describes (spell IDs 1-500000) the first time
+it opens, and again after a game patch; this takes a few seconds in the background,
+then the list updates. It keeps only professions no character has and prints how
+many recipes of your recorded professions it also found, as a check.
+`/shuffledetector catalog [highest spell ID]` rescans by hand. Whether this client
+describes recipes of professions nobody has is not yet confirmed; if the scan
+reports none, it does not. Selecting any row only shows its
 breakdown. Select a row for reagent costs, exit values, missing-price reasons and
 casting-only profit/hour. The batch calculator accepts **craft counts** or a
 **budget in whole copper**; it shows shopping requirements, finished output and

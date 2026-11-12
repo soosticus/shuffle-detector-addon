@@ -131,7 +131,7 @@ end
 local function details()
     local result = current()
     if not result then
-        detail:SetText("No matching item-producing recipes.\n\nOpen your profession windows to record recipes, then click Refresh. Try another profession or recipe filter. Records without a product or complete reagents cannot be ranked. For professions none of your characters has, run /shuffledetector catalog.")
+        detail:SetText("No matching item-producing recipes.\n\nOpen your profession windows to record recipes, then click Refresh. Try another profession or recipe filter. Records without a product or complete reagents cannot be ranked. Recipes of professions none of your characters has are read from the game when the browser opens.")
     else
         local recipe = result.recipe
         local lines = {
@@ -289,6 +289,12 @@ refresh = function()
         or options.unlearnedOnly and "Unlearned patterns, including other characters' and new professions; not craftable yet."
         or options.newOnly and "Professions to learn: recipes from professions this character does not have."
         or "All recipes: learned shuffles and unlearned patterns; select a row for details."
+    if ns.EnsureRecipeCatalog then
+        ns.EnsureRecipeCatalog(function() if panel and panel:IsShown() then refresh() end end)
+    end
+    if ns.RecipeCatalogProgress and ns.RecipeCatalogProgress() then
+        meaning = meaning .. " Reading other professions' recipes from the game; the list updates when done."
+    end
     summary:SetText(err or (ns.charKey() .. " - " .. meaning))
     providerLabel:SetText(providerText(info.provider))
     professionMenu:SetText((options.profession or "All professions") .. " v")

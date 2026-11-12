@@ -659,5 +659,21 @@ eq(AHSnapshotDB.items[300].name, "Item 300")
 eq(AHSnapshotDB.items[301].sell, 3)
 results = assert(ns.PlannerResults({ newOnly = true, profession = "Engineering" }))
 eq(#results, 2, "scanned recipes reach the browser")
+eq(ns.RecipeCatalogProgress(), nil)
+ns.EnsureRecipeCatalog(function() error("the same build is not scanned again") end)
+eq(scanner.scripts.OnUpdate, nil, "a catalog for this build is reused")
+AHSnapshotDB.catalog.build = "older"
+if not browser:IsShown() then ns.TogglePlanner() end
+click("Refresh / search")
+assert(scanner.scripts.OnUpdate, "opening the browser after a patch reads the catalog again")
+assert(visible("Reading other professions' recipes from the game"), "the browser shows scan progress")
+local frames = 0
+while scanner.scripts.OnUpdate do
+    scanner.scripts.OnUpdate(scanner)
+    frames = frames + 1
+end
+eq(AHSnapshotDB.catalog.build, "70888")
+eq(AHSnapshotDB.catalog.maxSpell, 500000)
+eq(visible("Reading other professions"), nil, "the browser refreshes when the scan ends")
 ns.say = say
 print("planner workflow checks passed")

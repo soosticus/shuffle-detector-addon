@@ -14,6 +14,7 @@ local DEFAULT_MAX, LIMIT, FRAME_MS, FRAME_IDS = 500000, 2000000, 8, 2000
 
 local scanning
 local driver
+local failed -- an automatic scan that errored is not retried until /reload
 
 local function integer(n, low, high)
     return type(n) == "number" and n >= low and n <= high and n == math.floor(n)
@@ -145,15 +146,33 @@ local function step()
             end
         end
         s.id, n = s.id + 1, n + 1
-        if s.id % 100000 == 0 then ns.say(("catalog: scanned %d of %d spell IDs"):format(s.id, s.max)) end
+        if s.id % 100000 == 0 and not s.auto then ns.say(("catalog: scanned %d of %d spell IDs"):format(s.id, s.max)) end
         if (deadline and clock() >= deadline) or (not deadline and n >= FRAME_IDS) then return end
     end
     scanning = nil
     driver:SetScript("OnUpdate", nil)
     finish(s)
+    if s.onDone then s.onDone() end
 end
 
-function ns.ScanRecipeCatalog(arg)
+local function currentBuild()
+    return GetBuildInfo and select(2, GetBuildInfo())
+end
+
+-- Percent done while a scan runs, else nil.
+function ns.RecipeCatalogProgress()
+    return scanning and math.floor(100 * scanning.id / scanning.max)
+end
+
+-- The browser starts a scan when there is no catalog for this client build; onDone runs when it finishes.
+function ns.EnsureRecipeCatalog(onDone)
+    if scanning or failed then return end
+    local catalog = AHSnapshotDB.catalog
+    if type(catalog) == "table" and catalog.version == 1 and catalog.build == currentBuild() then return end
+    ns.ScanRecipeCatalog(nil, onDone)
+end
+
+function ns.ScanRecipeCatalog(arg, onDone)
     if scanning then
         ns.say(("catalog: scan running, %d of %d spell IDs"):format(scanning.id, scanning.max))
         return
@@ -171,15 +190,18 @@ function ns.ScanRecipeCatalog(arg)
             return
         end
     end
-    scanning = { id = 1, max = max, found = {}, total = 0, unnamed = 0, started = GetTime() }
+    scanning = { id = 1, max = max, found = {}, total = 0, unnamed = 0, started = GetTime(), onDone = onDone,
+        auto = onDone ~= nil }
     driver = driver or CreateFrame("Frame")
     driver:SetScript("OnUpdate", function()
         local ok, err = pcall(step)
         if not ok then
+            if scanning and scanning.auto then failed = true end
             scanning = nil
             driver:SetScript("OnUpdate", nil)
             ns.say("catalog: scan failed: " .. tostring(err))
         end
     end)
-    ns.say(("catalog: scanning spell IDs 1-%d for recipes; this takes a few seconds"):format(max))
+    ns.say(onDone and "catalog: reading recipes of professions none of your characters has from the game, once per game build"
+        or ("catalog: scanning spell IDs 1-%d for recipes; this takes a few seconds"):format(max))
 end
