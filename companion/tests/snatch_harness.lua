@@ -1318,7 +1318,17 @@ for _, exit in ipairs({ "Disenchant", "Vendor" }) do
     end
     eq(s.completed, 4, "every finished craft advances target")
     eq(ns.NextShuffleStep().kind, exit == "Vendor" and "sell" or "disenchant", "exit after entire queue")
-    for i = 1, 4 do
+    if exit == "Vendor" then
+        local before = #calls
+        batchPress()
+        eq(#calls, before + 4, "one press sells every crafted stack")
+        for i = 1, 4 do eq(calls[before + i][1], "sell"); eq(calls[before + i][3], i) end
+        batchPress()
+        eq(#calls, before + 4, "a fast second press does not sell again before the bags update")
+        contents, bags[20], free = {}, 0, free + 4
+        shuffleEvent("BAG_UPDATE_DELAYED")
+    end
+    for i = 1, exit == "Vendor" and 0 or 4 do
         batchPress()
         if exit == "Disenchant" then
             eq(ShuffleDetectorShuffleButton:GetAttribute("type"), nil, "DE disarmed until loot bags update")
@@ -1408,6 +1418,17 @@ statsEvents.scripts.OnEvent(statsEvents, "PLAYER_MONEY")
 eq(stat.income, 300, "matching gold and output loss confirm sale income")
 statsEvents.scripts.OnEvent(statsEvents, "PLAYER_MONEY")
 eq(stat.income, 300, "sale receipt cannot be counted twice")
+stat.available, bags[20] = 3, 3
+ns.BatchStatsSale(0, 1, 3)
+bags[20], balance = 2, balance + 300
+statsEvents.scripts.OnEvent(statsEvents, "PLAYER_MONEY")
+eq(stat.income, 600, "the first stack of a multi-stack sale is counted")
+assert(stat.sale, "the rest of the press's sale is still expected")
+bags[20], balance = 0, balance + 600
+statsEvents.scripts.OnEvent(statsEvents, "BAG_UPDATE_DELAYED")
+eq(stat.income, 1200, "later stacks of the same press are counted")
+eq(stat.sale, nil, "the sale settles once everything sold")
+stat.income, stat.sold = 300, stat.sold - 3
 local cost, income, net, average = ns.BatchStatsTotals(stat)
 eq(cost, 160)
 eq(income, 300)

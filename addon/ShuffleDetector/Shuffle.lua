@@ -67,7 +67,7 @@ local function findCrafted(plan)
     local numSlots = (c and c.GetContainerNumSlots) or GetContainerNumSlots
     local itemLink = (c and c.GetContainerItemLink) or GetContainerItemLink
     local wantName = plan.itemName or plan.recipe
-    local firstBag, firstSlot, slots = nil, nil, 0
+    local firstBag, firstSlot, slots, list = nil, nil, 0, {}
     for bag = 0, NUM_BAG_SLOTS or 4 do
         for slot = 1, numSlots(bag) or 0 do
             local link = itemLink(bag, slot)
@@ -81,13 +81,14 @@ local function findCrafted(plan)
                 if match then
                     firstBag, firstSlot = firstBag or bag, firstSlot or slot
                     slots = slots + 1
+                    list[#list + 1] = { bag, slot }
                 end
             end
         end
     end
     local count = slots
     if plan.item and slots > 0 then count = itemCount(plan.item) end
-    return firstBag, firstSlot, count
+    return firstBag, firstSlot, count, list
 end
 
 local function missingReagent(plan)
@@ -148,7 +149,7 @@ function ns.NextShuffleStep()
     if not plan then
         return { kind = "idle", label = "No shuffle loaded", crafted = 0, craftable = 0 }
     end
-    local bag, slot, crafted = findCrafted(plan)
+    local bag, slot, crafted, stacks = findCrafted(plan)
     local step = { crafted = crafted, craftable = craftableCount(plan) }
     if plan.exit == "Disenchant" and bag then
         if IsSpellKnown and not IsSpellKnown(DISENCHANT_ID) then
@@ -160,8 +161,8 @@ function ns.NextShuffleStep()
         return step
     end
     if plan.exit == "Vendor" and bag and merchantOpen() then
-        step.kind, step.label, step.stage = "sell", "Sell " .. plan.recipe .. " to the vendor", 2
-        step.bag, step.slot = bag, slot
+        step.kind, step.label, step.stage = "sell", ("Sell %d x %s to the vendor"):format(crafted, plan.recipe), 2
+        step.bag, step.slot, step.stacks = bag, slot, stacks
         return step
     end
     local shopping = ns.NextSnatchPurchase and ns.NextSnatchPurchase()
@@ -319,7 +320,7 @@ local function apply()
         elseif step.kind == "purchase" then
             btn.purchase = step.purchase
         elseif step.kind == "sell" then
-            btn.sellSlot = { step.bag, step.slot }
+            btn.sellSlot = step.stacks
         elseif step.kind == "disenchant" then
             btn.disenchantSlot = { step.bag, step.slot }
             btn:SetAttribute("type", "spell")
@@ -421,12 +422,22 @@ local function create()
             tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe), tostring(self.lastDown)))
         if not acted then log("next: " .. ns.NextShuffleStep().label) end
         if sellSlot then
-            if ns.BatchStatsSale then ns.BatchStatsSale(sellSlot[1], sellSlot[2]) end
+            -- Selling is not a protected action: one press sells every crafted stack in the bags.
+            if ns.BatchStatsSale then ns.BatchStatsSale(sellSlot[1][1], sellSlot[1][2], ns.plan.item and itemCount(ns.plan.item)) end
             local use = (C_Container and C_Container.UseContainerItem) or UseContainerItem
-            local ok, err = pcall(use, sellSlot[1], sellSlot[2])
-            if not ok then
+            local sold = 0
+            for _, at in ipairs(sellSlot) do
+                local ok, err = pcall(use, at[1], at[2])
+                if ok then
+                    sold = sold + 1
+                else
+                    say("sale failed: " .. tostring(err))
+                    break
+                end
+            end
+            log(("vendor sale: %d of %d stacks"):format(sold, #sellSlot))
+            if sold == 0 then
                 if ns.BatchStatsSaleFailed then ns.BatchStatsSaleFailed() end
-                say("sale failed: " .. tostring(err))
                 acted = false
             end
         elseif self.craftRecipe then

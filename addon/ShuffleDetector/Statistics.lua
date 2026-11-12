@@ -81,7 +81,8 @@ local function count(id)
     return fn and fn(id) or 0
 end
 
-function ns.BatchStatsSale(bag, slot)
+-- units: how many of the item the press is selling in total (several stacks), default the stack at bag/slot.
+function ns.BatchStatsSale(bag, slot, units)
     local _, character = database()
     if not character then return end
     local batch = character.history[#character.history]
@@ -97,7 +98,8 @@ function ns.BatchStatsSale(bag, slot)
         ns.log("statistics: vendor sell price unavailable")
         return
     end
-    batch.sale = { before = count(id), gold = GetMoney(), price = price, at = GetTime() }
+    local before = count(id)
+    batch.sale = { before = before, gold = GetMoney(), price = price, at = GetTime(), left = units or nil }
     local sale = batch.sale
     C_Timer.After(5, function()
         if batch.sale == sale then
@@ -331,7 +333,14 @@ events:SetScript("OnEvent", function(_, event)
             local sold = math.min(batch.available, removed)
             if sold > 0 and GetMoney() - sale.gold == removed * sale.price then
                 batch.income, batch.sold = batch.income + sold * sale.price, batch.sold + sold
-                batch.available, batch.sale = batch.available - sold, nil
+                batch.available = batch.available - sold
+                -- A multi-stack sale can arrive over several bag updates; keep counting until all of it is in.
+                sale.left = sale.left and sale.left - removed
+                if sale.left and sale.left > 0 and batch.available > 0 then
+                    sale.before, sale.gold = count(batch.item), GetMoney()
+                else
+                    batch.sale = nil
+                end
             end
         end
     end
