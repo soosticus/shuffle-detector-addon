@@ -1,3 +1,0 @@
--- Overwritten by the companion app ("Send to game"); read by Shuffle.lua after /reload.
--- Format: see common/docs/FORMAT.md. Shuffle.lua restores an in-game selection on
--- ADDON_LOADED and resolves timestamp precedence against a generated plan.

@@ -1,4 +1,4 @@
--- Shuffle: runs the loaded shuffle (ns.plan, from Plan.lua) one step per macro press, and shows a
+-- Shuffle: runs the active shuffle (ns.plan, chosen in the browser) one step per macro press, and shows a
 -- tracker with the step you are on. Protected actions (casting, using items) can only come from a
 -- secure button on a hardware event, so a chat command cannot craft or disenchant by itself.
 -- Instead, an invisible secure button chooses and does the action when clicked. Macro:
@@ -13,17 +13,11 @@ local MACRO = "/click " .. BUTTON_NAME
 
 -- SavedVariables load after the addon's files run, so the in-game selection
 -- (AHSnapshotDB.activePlan) is restored on ADDON_LOADED, not at file scope.
--- A newer in-game selection beats an older companion Plan.lua and vice versa.
 function ns.RestoreActivePlan()
     local savedPlan = type(AHSnapshotDB) == "table" and AHSnapshotDB.activePlan
     if not (ns.ValidateActivePlan and ns.ValidateActivePlan(savedPlan)) then return false end
-    local generated = type(ns.plan) == "table" and ns.plan.generated
-    if type(generated) ~= "number" or savedPlan.selectedAt >= generated then
-        ns.plan = savedPlan
-        return true
-    end
-    AHSnapshotDB.activePlan = nil
-    return false
+    ns.plan = savedPlan
+    return true
 end
 
 BINDING_HEADER_SHUFFLEDETECTOR = "ShuffleDetector"
@@ -237,7 +231,7 @@ local function refreshTracker(step)
         tracker.title:SetText("Shuffle")
         tracker.line1:SetText("")
         tracker.line2:SetText("")
-        tracker.foot:SetText(step.label .. ". Send one from the companion app, then /reload.")
+        tracker.foot:SetText(step.label .. ". Choose one in /shuffledetector browse: Set active shuffle.")
         return
     end
     local exit = plan.exit
@@ -510,7 +504,7 @@ end
 -- /shuffle: prepare the next step by hand; the button also does this on every click.
 function ns.ShuffleStep()
     if not currentPlan() then
-        say("no shuffle loaded. In the companion app choose a shuffle and use Addon > Send selected shuffle to game, then /reload.")
+        say("no shuffle loaded. Open /shuffledetector browse, select a learned recipe and press Set active shuffle.")
     end
     apply()
     local how = btn:GetAttribute("type") or (btn.craftRecipe and "tradeskill") or "none"
@@ -535,11 +529,11 @@ end
 function ns.PrintPlan()
     local plan = ns.plan
     if not plan then
-        say("no shuffle loaded. In the companion app choose a shuffle and use Addon > Send selected shuffle to game, then /reload.")
+        say("no shuffle loaded. Open /shuffledetector browse, select a learned recipe and press Set active shuffle.")
         return
     end
     if not currentPlan() then
-        say("the loaded shuffle uses an unsupported format; update the addon and the companion app.")
+        say("the saved shuffle uses an unsupported format; choose it again in /shuffledetector browse.")
         return
     end
     local reagents = {}

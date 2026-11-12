@@ -13,94 +13,34 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   and that the profession names match `GetProfessionInfo`'s. If the client only
   describes open professions, the browser still lists alts' professions.
 
-- Addon-only migration: verify the current Forever/Auctionator public price API with
-  `/shuffledetector prices` before/after a scan (`/shuffledetector log 80`). Establish
-  redistribution permission and client applicability for a versioned disenchant
-  baseline; unverified seeds and sparse observations must not enter trusted rankings.
-  Then move rankings, calculation and safe selection into WoW, migrate user state,
-  and complete in-game acceptance before retiring the desktop runtime. Keep reusable
-  developer generators/tests and all SavedVariables. The new diagnostic alone does
-  not remove any companion dependency. Developer-only `shuffledetector.bundle`
-  validates provenance/client declarations, outcomes and deterministic Lua output;
-  it supplies no production dataset and is not loaded by the addon yet (FORMAT.md).
-  One user run on Forever 1.60.1/build 70862/interface 16001/project 18 with
-  Auctionator 344 confirms ID/link reads agree for cached 2589 (25) and 2996 (49);
-  7054 was unpriced/uncached. New before/after-scan logs on build 70888 explicitly
-  without reload show 2589 changing 20 -> 26 and 2996 changing 49 -> 56; raw ages
-  change 2 -> 0. ID reads therefore observe changed scan data without reload for
-  these items. After the scan, 2589 has a valid ID quote but no cached item link:
-  ID lookups must not wait for `GetItemInfo`. This is separate evidence from the
-  earlier retracted post-scan claims. The user explicitly confirms copper units
-  for the tested Forever/Auctionator 344 API. Age units, `RegisterForDBUpdate`,
-  exactness/gear variants, depth and DE applicability remain unverified.
-  Exactness and DE valuation functions are exposed; the local v2 diagnostic probes
-  them without assuming correct yields or fees. `Evaluate.lua` is a pure,
-  harness-tested evaluation core (injected providers; partial DE and missing data
-  stay unknown, multi-output DE scales value and time, exploratory models only in an
-  opt-in view). `Prices.lua` provides on-demand commodity-only copper estimates
-  for the tested client/provider versions, with explicit unknown/error reasons;
-  it does not assert stock, exactness or age units. `/shuffledetector browse`
-  now loads the provider/evaluator and a read-only in-game recipe browser with
-  current-character filters, breakdowns, and craft-count/budget estimates.
-  Unknown DE data stays unavailable. An explicit **Set active shuffle** action now
-  transfers only learned recipes with complete pricing and a batch (calculated, or
-  from the amount box); it persists the selected plan and item target in SavedVariables.
-  It does not purchase or craft, and unresolved purchases/sales block plan changes.
-  Lua harnesses cover activation, validation, target persistence and no-action
-  behavior. In-game acceptance remains open: verify the selected recipe/exit/target,
-  reload restoration, and that only a later macro press crafts. Full migration and
-  retirement of the companion remain open.
-  Browser filters/search, preview recipe selection and calculator mode/input now
-  persist per character across reload/logout, separately from the active plan.
-  Reopening takes fresh quotes and reveals the selected recipe's page; no saved
-  prices or calculated batches are reused. Lua harnesses cover restoration,
-  character isolation, changed prices, removed recipes and malformed settings
-  without execution-state changes. Confirm this preference restoration in game;
-  desktop preferences are not imported.
-  The in-game batch calculator now supports per-character custom material costs,
-  including direct and raw inputs; rankings and snatcher limits remain unchanged.
-  Confirm entry, persistence, budget calculation and the frozen estimate in game.
-  The first dev-47d2ecc client test opened the browser, but reported unreadable
-  cycling filters and `unsupported-provider-version` for AH inputs. Revised
-  dropdowns and readable missing-data reasons are built; the provider now shows
-  exact detected metadata and tolerates surrounding version whitespace. Diagnosis:
-  the installed Auctionator `.toc` says `## Version: 345`, while the provider
-  accepted only 344, so most rows had unknown reagent prices. On build 70888,
-  two 345 probes four seconds apart returned 2589: 26 -> 24 and 2996: 59 -> 56;
-  24 and 56 match the subsequently saved Auctionator copper price database. A
-  replay of the actual saved scan and recipes through the Lua planner changed
-  0/46 to 43/46 priced Tailoring costs (42/46 have both cost and exit). Auctionator
-  then updated to 346 and was rejected again, so per the user the version/client
-  gate and preview switch are removed: any Auctionator with the v1 API is used and
-  breaks are fixed when they occur. Consumables (potions) are now priced by item
-  ID like trade goods; weapons/armor stay unpriced (suffix variants). A replay of
-  the saved data prices every learned recipe for Suest (58/58) and Arand (59/59).
-  Confirm in game that the banner shows 346, rows are priced, and Set active
-  shuffle works without pressing Calculate (confirmed in game 2026-11-12, along with
-  the selection now surviving /reload). Do not waive DE gates to hide missing data.
-  Disenchant source: on Forever, Auctionator loads its disenchant code but not its
-  probability table (`/shuffledetector prices 4343 6239` returned nil for Brown Linen
-  Pants and Red Linen Vest; diagnostic reports "probability table loaded=false"), and
-  that table is All Rights Reserved, so it cannot be copied. Candidate: CMaNGOS
-  ClassicDB (github.com/cmangos/classic-db, GPLv3 plus a COPYRIGHT.md fair-use notice)
-  has populated `disenchant_loot_template` rows (entry = ilvl*100 + quality; chance,
-  min/max count). It models Vanilla 1.12, not Forever, and redistribution rights for a
-  generated addon bundle are not established. Needs a user decision before use; if
-  adopted, ship it as an uncertain opt-in model until logged disenchants confirm it
-  (rare outcomes need well over 10 samples per bracket).
+- Disenchant yields in game (next release, 0.10.0, a release candidate for 1.0.0):
+  disenchant exits are disabled in the browser until a trusted yield model exists.
+  On Forever, Auctionator loads its disenchant code but not its probability table
+  (`/shuffledetector prices 4343 6239` returned nil for Brown Linen Pants and Red
+  Linen Vest; the diagnostic reports "probability table loaded=false"), and that
+  table is All Rights Reserved, so it cannot be copied. Candidate: CMaNGOS ClassicDB
+  (github.com/cmangos/classic-db, GPLv3 plus a COPYRIGHT.md fair-use notice) has
+  populated `disenchant_loot_template` rows (entry = ilvl*100 + quality; chance,
+  min/max count). It models Vanilla 1.12, not Forever, and redistribution rights are
+  not established. Needs a user decision before use; if adopted, ship it as an
+  uncertain opt-in model until logged disenchants (`AHSnapshotDB.disenchants` and its
+  aggregates) confirm it (rare outcomes need well over 10 samples per bracket). The
+  addon records each item's `class`/`quality`/`ilvl`; items crafted by Enchanters
+  (wands) cannot be disenchanted. Do not waive the gates to hide missing data.
 
-- Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
+- Confirm in game: browser preferences and custom material costs survive `/reload`;
+  Auctionator's v1 API keeps working (the version gate was removed; breaks are fixed
+  when they occur). Age units, `RegisterForDBUpdate`, exactness/gear variants and
+  depth remain unverified.
 
-- Confirm batch statistics in game: confirmed vendor/AH purchases, macro vendor-sale bag/gold matching, raw conversions, multi-output averages, uncertain/reloaded sales and purchase reconciliation. Resend priced plans, check frozen estimates, AddOn Settings link, chart layout, history rollover and manual-entry undo. Cash-flow trends are not a causal income-improvement baseline; companion history charts and automatic AH-proceeds attribution remain follow-ups.
+- Confirm batch statistics in game: confirmed vendor/AH purchases, macro vendor-sale bag/gold matching, raw conversions, multi-output averages, uncertain/reloaded sales and purchase reconciliation. Check frozen estimates, AddOn Settings link, chart layout, history rollover and manual-entry undo. Cash-flow trends are not a causal income-improvement baseline; automatic AH-proceeds attribution remains a follow-up.
 
-- Confirm same-process source companion refresh during real disk updates: dialog deferral, selected shuffle/calculator state and addon version display, virtual desktop/screen placement and minimized/maximized state. Lua/data edits refresh the existing UI; Python refresh preserves the native outer window. Offscreen tests cover stable-file polling, state restoration and reload failure rollback; packaged builds continue using the self-updater.
 - Handle vendor faction/location restrictions.
-- Confirm in game that the addon loads with its Auctionator dependency and that the companion shows prices after an Auctionator scan and `/reload` (prices are read from `Auctionator.lua`, see `auctionator.py`). Open question: the realm key (`PvE`, `ClassicBetaPvE2`) with the freshest data is picked by default; check it is the right realm.
 - Confirm in game that the fast-press gating no longer repeats a craft or disenchant step.
 - Confirm space-limited finished-item craft batches in game: reserve two empty general-purpose slots, account for unlocked partial output stacks and multi-output recipes, stop at materials/target, then drain the full batch through vendor or disenchant presses. Check interruption, full bags and loot headroom; queue/capacity behavior is covered by the Lua harness.
 - Confirm in game that the Vendor sell step (addon 0.7.2) works. AH listing is out of scope (Auctionator and similar addons do it); AH exits only prompt.
 - Shuffle follow-up: take the craft count or budget from the calculator.
-- Confirm the in-game material snatcher on Forever 1.60.1: resend a multi-output shuffle, set a small target with cheap materials, test merchant bundles/stock, AH item buyouts and commodity quote/confirmation, price changes, mailbox collection, reload recovery and Auctionator interference. Implementation has a Lua API stub harness; protected actions and real server events are not verified in game.
+- Confirm the in-game material snatcher on Forever 1.60.1: set a multi-output shuffle active, set a small target with cheap materials, test merchant bundles/stock, AH item buyouts and commodity quote/confirmation, price changes, mailbox collection, reload recovery and Auctionator interference. Implementation has a Lua API stub harness; protected actions and real server events are not verified in game.
 - Confirm raw linen/bolt shopping and macro preparation in game: open Tailoring to record Bolt of Linen Cloth, set the cloth cap and a small bag target, verify the read-only bolt cap is twice the cloth cap (zero disables both), mail reservations, cheaper-source switching, then collect and press the shuffle macro to queue the remaining batch's bolts before bags. Check queue completion, fast presses between casts, interruption/retry and full bags. Single-input/single-output refinement and queue gating are covered by the Lua harness; real queued casts still need confirmation.
 - Confirm the single-button purchase flow in game: saved limits, macro-driven vendor buys, AH polling, item buyouts and separate commodity quote/confirmation presses; waiting states, down/up deduplication, combat and mail collection. Panel buttons share the same reservations; real protected purchase behavior remains unverified.
 - Confirm craft-first macro progression and bag-bounded vendor purchases in game:
@@ -114,17 +54,15 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   an affordable quantity, and that one press buys up to five stacks of a vendor reagent as several one-stack purchases. Check the raw
   row's unfilled-bolt count and decreasing raw requirement as bolts enter bags.
 - Confirm the merged batch/shuffle window in game: compact 60-pixel material rows with right-hand prices, More/Less controls expansion and recovery-button access, layout at your UI scale, live craft/purchase state, drag/position restoration, and `/shuffledetector shuffle` / `snatch` toggling the same window. The action macro remains independent of visibility; hiding the window stops polling but does not erase settings. Collapsing controls alone does not stop polling.
-- Snatcher follow-ups: unattended vendor purchasing only if client restrictions permit it; multi-step or shared-raw intermediate chains, multi-output intermediates, companion calculator target/cap import, and bank inventory. AH buying remains click-confirmed.
+- Snatcher follow-ups: unattended vendor purchasing only if client restrictions permit it; multi-step or shared-raw intermediate chains, multi-output intermediates, and bank inventory. AH buying remains click-confirmed.
 - Calculator follow-ups: model price impact when buying or selling large quantities (walk the sell side of the order book), and offer a "number of disenchants" target. Use the observed disenchant results (data plan step 3) for the range instead of Poisson once there are enough samples.
-- Companion self-update is confirmed on Windows (0.8.4 to 0.8.5). macOS (`ditto`, `open`) and Linux (tar.gz builds; the Flatpak cannot self-update) are untested. A failed Windows swap leaves `%TEMP%\ShuffleDetector-update.log`.
-- Confirm the Linux Flatpak build (`companion/packaging/flatpak/`, built by `release.yml`; it replaced the Linux tar.gz) installs and starts on a real machine, and that the sandbox can reach the WoW folder (Wine prefix, Lutris, Bottles may need `flatpak override`). It was written without being able to run flatpak-builder, so the first CI run may need fixes.
 - Check that pushing the re-pointed `v0.2.4a` tag after the history rewrite did not start an unwanted release run (`release.yml` triggers on `v*` tags).
 
 ## Data plan: a permitted source for recipe, price and yield data
 
-Rule: never scrape Wowhead or any other site against its terms (all Wowhead data and code is gone). Check the terms before using any source, and keep end users from downloading anything from a third-party site themselves. Layout of what the addon records is in `common/docs/FORMAT.md`; the output shape (`items`, `vendor`, `vendor_sell`, `recipes` with `profession`, `makes`, `reagents`, `yields`, `skill`, `refined`) stays the same so the calculator does not change.
+Rule: never scrape Wowhead or any other site against its terms (all Wowhead data and code is gone). Check the terms before using any source, and keep end users from downloading anything from a third-party site themselves. Layout of what the addon records is in `docs/FORMAT.md`.
 
-Done and confirmed in game: step 1 (the addon records known recipes with reagents, item names and sell prices), step 2 (unlearned recipes in `available`, vendor buy prices in `vendor`), and the addon requesting names and sell prices for every id in `ItemList.lua` (`--send-items`). `GetRecipeSourceText` never returns a value on this client, so `source` is unused.
+Done and confirmed in game: step 1 (the addon records known recipes with reagents, item names and sell prices), step 2 (unlearned recipes in `available`, vendor buy prices in `vendor`), and the addon requesting names and sell prices for item ids (now every item of the recorded and catalog recipes). `GetRecipeSourceText` never returns a value on this client, so `source` is unused.
 
 ### Steps 1 and 2 follow-ups
 
@@ -132,40 +70,21 @@ Done and confirmed in game: step 1 (the addon records known recipes with reagent
 - Recorded recipes have no skill requirement (only the trivial level), so a recipe known by one character shows as learnable for another until a source supplies skill levels.
 - Record names for scanned items too (the scan stores IDs only, so items outside the recipes show as "Item N" unless the bundled data names them).
 - Confirm the merchant recorder keeps only unlimited-stock listings: visit a vendor with limited-stock goods and check they are absent from `AHSnapshotDB.vendor`.
-- Open question: the companion could drop recipes whose product or reagents are in `AHSnapshotDB.unanswered` (about 260 ids that are not items in this client).
-- Local-install route (`--local-recipes`, `casc.py`, `db2.py`, `localdata.py`; reads reagents, products, trivial levels and craft times for about 2300 recipes from the user's own client, nothing downloaded or bundled). Next: a GUI toggle, a JSON cache of the result, Enchanting recipes (no product item), mapping recipes to the characters' professions, and checking its `makes` (always 1) against the addon's recorded value (addon data wins). Limits: the WDC5 reader skips encrypted sections and sparse tables, so `ItemSparse` (base `BuyPrice`) would need sparse support, and recipe skill requirements are not in the client.
+- Open question: the browser could drop recipes whose product or reagents are in `AHSnapshotDB.unanswered` (about 260 ids that are not items in this client).
 - wago.tools (client tables, would give skill requirements) is **paused**: its `robots.txt` disallows everything except the home page and it has no terms page, so do not fetch it. Only its author (Discord or GitHub `QartemisT`) can grant permission. Rechecked 2026-10-12, still disallowed.
 
-### Step 3: disenchant yields (built; not yet confirmed in game)
+### Step 3: logged disenchants (built; not yet confirmed in game)
 
-Two sources, no site involved. The companion reads Auctionator's disenchant table from the installed addon's files (`deyields.py`; the game does not load it on this client, so it cannot be read in game) and the addon records each item's class, quality and item level in `AHSnapshotDB.items`. `Disenchant.lua` logs each real disenchant to `AHSnapshotDB.disenchants`, and once an item has samples the companion's average of those wins (`data_loader.observed_yields`). Precedence: observed, then Auctionator, then the seed `yields`.
+`Disenchant.lua` logs each real disenchant to `AHSnapshotDB.disenchants`, binding targets to cast start (including an explicit shuffle-button target), checking one-item consumption, retrying delayed complete loot, skipping partial results and recording capture/client metadata. Raw history is capped at 500; build/realm/item aggregates keep complete identified samples beyond rollover. Lua stub checks cover these paths; actual event ordering and secure targets still need confirmation. Using these samples in the browser is part of the 0.10.0 item above.
 
-The collector now binds targets to cast start (including an explicit shuffle-button
-target), checks one-item consumption, retries delayed complete loot, skips partial
-results and records capture/client metadata without rewriting old samples. Lua
-stub checks cover these paths; actual event ordering/manual and secure targets
-still need confirmation. Raw history remains capped at 500; separate build/realm/item
-aggregates now retain complete identified samples, whole outcomes and cross moments
-beyond rollover, without relabeling legacy evidence. Their migration/reload/isolation
-paths have Lua stub checks, not real-client confirmation. Replacing the companion's
-immediate sparse-sample override is still pending in the addon-only migration;
-capture metadata and sample counts alone do not establish accuracy.
-
-To confirm: `/shuffledetector yields`, `/reload`, check that items in `AHSnapshotDB.items` have `class`/`quality`/`ilvl` and that the companion shows "Auctionator disenchant table" for crafted armor. Also disenchant a few items (check that `SpellTargetItem` fires for a disenchant driven by the shuffle button's `target-item` attribute) and check `AHSnapshotDB.disenchants`.
-
-## Planned: faster and automatic reference data builds
-
-Only relevant if the wago.tools route (paused above) is ever allowed; the addon-recorded data needs none of this.
-
-- Incremental builds keyed on the client build number, a weekly scheduled workflow that rebuilds and publishes the data when it changes (test one manual run first; only if the source's terms allow automated downloads), and a companion "download latest data" option that fetches from our own release.
-- Confirm the source's terms allow republishing the derived bundle before making the repo public.
+To confirm: disenchant a few items (check that `SpellTargetItem` fires for a disenchant driven by the shuffle button's `target-item` attribute), `/reload`, and check `AHSnapshotDB.disenchants`; `/shuffledetector yields` re-records item class and level.
 
 ## Planned: more professions
 
-The companion evaluates every crafting profession in this client (Tailoring, Leatherworking, Blacksmithing, Engineering, Enchanting, Alchemy, Mining/smelting, Cooking and First Aid). What is left:
+The browser evaluates every crafting profession in this client (Tailoring, Leatherworking, Blacksmithing, Engineering, Enchanting, Alchemy, Mining/smelting, Cooking and First Aid). What is left:
 
 - Confirm the addon records known recipes for every profession (only verified for Tailoring, Enchanting and Cooking); the "known only" filter falls back to showing everything for a profession with none recorded. Also confirm the shuffle button can craft recipes of other professions when their window is open.
 - Gathering and processing: Herbalism, Skinning and Mining as sources of raw materials, and buying or gathering inputs versus the AH price.
 - Other exit steps (for example salvage) in the same exit comparison. Prospecting and milling do not exist in this client because it has no Jewelcrafting or Inscription.
 - Allow chains across professions held by different characters (craft on one, process on another), and chains where one craft feeds another profession's craft.
-- Per-recipe craft times: the calculator uses 30 s unless a recipe sets `craft_seconds`. Read the cast times from the game or the client tables (the local-install route already has them).
+- Per-recipe craft times: the calculator uses 30 s unless a recipe sets `craft_seconds`. Read the cast times from the game.

@@ -1,3 +1,0 @@
--- Overwritten by the companion app ("send items"); read by ShuffleDetector.lua. A list of item ids to ask the game about.
-local _, ns = ...
-ns.wantedItems = nil

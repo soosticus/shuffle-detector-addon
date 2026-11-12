@@ -886,7 +886,7 @@ local function saveInputs()
         end
     end
     local s = state()
-    if not s then message("Send a recipe with item, spell and reagents from the companion first."); return false end
+    if not s then message("Choose a shuffle in /shuffledetector browse (Set active shuffle) first."); return false end
     stop()
     s.target = target
     for id, price in pairs(prices) do s.prices[id] = price end
@@ -908,7 +908,7 @@ refresh = function()
     if not panel then return end
     local s, p = state()
     if not s then
-        panel.title:SetText("Send a shuffle from the companion to configure a batch")
+        panel.title:SetText("Choose a shuffle in /shuffledetector browse to configure a batch")
         panel.progress:SetText("")
         if panel.statistics then panel.statistics:SetText("") end
         for _, row in ipairs(rows) do row.frame:Hide() end

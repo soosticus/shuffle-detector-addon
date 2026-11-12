@@ -17,8 +17,6 @@ Catalog.lua
 Browser.lua
 Observations.lua
 Disenchant.lua
-Plan.lua
-ItemList.lua
 Statistics.lua
 Shuffle.lua
 Snatch.lua

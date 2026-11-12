@@ -1,15 +1,11 @@
 # SavedVariables format
 
 The addon writes `AHSnapshotDB` to `WTF/Account/<acct>/SavedVariables/ShuffleDetector.lua`.
-The companion app only reads this file. Prices are in copper.
+Prices are in copper.
 
-Prices are not in this file. They come from Auctionator's own SavedVariables file, `Auctionator.lua` in the
-same folder: `AUCTIONATOR_PRICE_DATABASE` holds one CBOR blob per realm key (for example `ClassicBetaPvE2`) plus a
-`__dbversion`; `auctionator.py` decodes it. Each item key is `"<itemID>"` or, for gear, `"g:<itemID>:<ilvl>"`, and
-maps to `{ m = <last seen minimum price>, h = {day = highest low}, l = {day = lowest low}, a = {day = quantity} }`
-with days counted from 2020-01-01 local midnight. The companion keeps the cheapest `m` per item id, treats it as
-buyable in any quantity ("shallow"), and dates the realm by the newest day in `h`. Older versions of this addon
-saved a copy in a `scans` table; the addon deletes it on load and the companion ignores it.
+Prices are not in this file. The addon reads Auctionator's public in-game API on demand
+(`Prices.lua`; see the price-provider contract below). Older versions of this addon saved a
+`scans` table; the addon deletes it on load.
 
 ```lua
 AHSnapshotDB = {
@@ -56,9 +52,7 @@ in the in-game browser for a fully priced learned recipe, with the calculated ba
 or one computed from the amount box. Unknown prices cannot be activated. The selected recipe and its
 finished-item batch target persist separately in `activePlan` and the character's
 `snatcher` state. SavedVariables load after the addon's files run, so `Shuffle.lua`
-restores `activePlan` on `ADDON_LOADED` (before `PLAYER_LOGIN`). It compares
-timestamps so a newer in-game choice supersedes an older generated plan, while a
-newer companion-generated plan supersedes and clears the stale in-game choice.
+restores a valid `activePlan` as the loaded plan on `ADDON_LOADED` (before `PLAYER_LOGIN`).
 Selecting a plan does not buy or craft: purchases still need configured limits and
 a later shuffle-macro press; Auction House commodity quotes and confirmations are
 separate steps. Crafting requires its own shuffle-macro press.
@@ -66,16 +60,11 @@ separate steps. Crafting requires its own shuffle-macro press.
 Recipes are recorded for the professions a character has, as the game's profession window reports
 them; `reagents` (basic reagents only, no optional or finishing slots), `item`, `makes` and `spell`
 are present when the game's API supplied them. `items` holds the name and vendor sell price of every
-reagent and product of those recipes. The companion layers both over the bundled reference data
-(`Reference.with_observed`): recorded names and sell prices replace the bundled ones, and recorded
-recipes replace the bundled recipe of the same name but keep its skill, yields and source. Recipes
-without bundled yields can still be sold on the AH or to a vendor. `refined` entries (bolts, bars) are
-derived from recipes with a single reagent whose product is a reagent elsewhere. `available` recipes
-add recipes no character knows (a recipe the character knows always wins); they have no `skill`, so
-their status is "unknown" until a skill requirement is available.
+reagent and product of those recipes. `available` recipes are ones the character has not
+learned; the browser lists them, and recipes other characters know, as **Unlearned patterns**.
 
 `vendor` is recorded whenever a merchant window is opened (price per single item; reputation discounts
-are included in what the game shows) and replaces the bundled vendor buy price. Only unlimited-stock
+are included in what the game shows) and is the vendor buy price the browser uses. Only unlimited-stock
 listings count (as in Auctionator): a limited-stock listing is not recorded, and drops an existing
 entry for that item. The game has no bulk query for buy prices, so they fill in as vendors are visited.
 
@@ -96,20 +85,10 @@ client identity. These describe capture evidence, **not** verified baseline
 accuracy. Older entries remain unchanged and have unknown capture/client
 identity; do not infer their build from the current login. Raw history is still
 capped at 500; versioned aggregates described below retain compatible complete
-observations beyond that rollover. The
-companion averages the loot per disenchant by the disenchanted item id (`data_loader.observed_yields`)
-and, once any samples exist, uses that average and the sample count (`recipe["yield_samples"]`) in place
-of a recipe's bundled `yields` for its crafted item.
+observations beyond that rollover. They are not used for estimates yet.
 
-`class`, `quality` and `ilvl` in `items` let the companion look up disenchant yields without any web data:
-Auctionator ships a table of disenchant results (`Auctionator/Source_Classic/Enchant/DisenchantingProbabilities.lua`,
-entries `{lowIlvl, highIlvl, pct, count, itemID, pct, count, itemID, ...}` per item class and quality) but the
-game only loads it for the "classic" game type, not this client, so `deyields.py` reads that file from the
-AddOns folder next to the SavedVariables (`<flavor>/WTF/Account/<acct>/SavedVariables/..` to
-`<flavor>/Interface/AddOns/Auctionator/..`). The expected count of each result is the sum of `pct/100*count`
-over the entry matching the item's level. The companion uses it (`ScanData.auctionator_yields`) in place of
-the bundled `yields` and marks the recipe `yield_source = "Auctionator"`. Precedence: observed disenchants,
-then Auctionator, then the bundled seed. Entries recorded by older versions get these fields after
+`class`, `quality` and `ilvl` in `items` identify an item's row in a disenchant yield table, for the
+planned in-game yield estimates. Entries recorded by older versions get these fields after
 `/shuffledetector yields` (or the next login) and a `/reload`.
 
 ## Disenchant observation aggregates
@@ -153,51 +132,44 @@ history is bounded.
 
 Unknown newer/malformed aggregate formats are preserved with a diagnostic while
 raw capture continues; malformed raw-history values are preserved and recording
-fails explicitly. Incomplete new outcomes are never appended. The companion
-still consumes raw observations only and ignores this aggregate namespace.
+fails explicitly. Incomplete new outcomes are never appended.
 Neither completeness nor a large count automatically promotes observations into
 a trusted baseline; the future evaluator must apply its separate evidence policy.
 
 The addon also stores UI state
 (`shuffleTracker`, `shuffleTrackerShown`, `logEcho`) and a diagnostic ring buffer `log` (up to 300
-`"HH:MM:SS message"` strings about button clicks, casts and game errors) in the same table; the companion
-ignores them. `/shuffledetector log` prints the buffer.
+`"HH:MM:SS message"` strings about button clicks, casts and game errors) in the same table. `/shuffledetector log` prints the buffer.
 `shuffleTracker` (point, relPoint, x, y) and `shuffleTrackerShown` now control the single combined
 batch/shuffle window; existing standalone-tracker positions and visibility are reused.
 
-# Item list (companion -> addon)
+# Item requests
 
 The vendor sell price and name of any item are in the game's own item cache, so the addon can fetch
-them for items it has never seen. The companion writes
-`Interface/AddOns/ShuffleDetector/ItemList.lua` (`ns.wantedItems = { id, id, ... }`, every reagent,
-product, disenchant yield and refined raw of the recipes it knows, including ones read from the
-game's files with `--local-recipes`) with `shuffledetector --send-items`. After `/reload` the addon
-asks the game for the ids not yet in `items`, in batches of 40 per second, starting 5 seconds after
-login (or run `/shuffledetector items`), and records the answers in `items`. Ids the game never
-answers for (about 10% of a list built from the game's files, mostly ids that are not items in this
-client) are stored in `unanswered = { [itemID] = true }` and skipped at login; the slash command retries
-them. Addon updates keep an existing `ItemList.lua`.
+them for items it has never seen. Five seconds after login (or on `/shuffledetector items`) it
+collects every reagent and product of the recorded recipes (`recipes` and `available` of every
+character, and the `catalog`), asks the game for the ids not yet in `items` in batches of 40 per
+second, and records the answers in `items`. Ids the game never answers for (mostly ids that are not
+items in this client) are stored in `unanswered = { [itemID] = true }` and skipped at login; the
+slash command retries them.
 
-# Shuffle plan (companion -> addon)
+# Active shuffle
 
-The game rewrites SavedVariables on `/reload` and logout, so the companion cannot hand data to
-the addon that way. Instead it writes `Interface/AddOns/ShuffleDetector/Plan.lua`, which the
-addon loads on `/reload`. Addon updates keep an existing `Plan.lua`.
+**Set active shuffle** in the browser saves the plan in `activePlan`, which the addon loads as
+`ns.plan`:
 
 ```lua
-local _, ns = ...
-ns.plan = {
+activePlan = {
     version = 1,
-    generated = <unix>,
+    selectedAt = <unix>,
     recipe = "Silk Headband",        -- crafting spell name
-    spell = 8774, item = 7054,       -- optional ids; item identifies the crafted piece in bags
-    itemName = "Silk Headband",      -- optional; used when item is absent
-    makes = 1,                      -- optional output items per craft; defaults to 1
+    spell = 8774, item = 7054,       -- item identifies the crafted piece in bags
+    itemName = "Silk Headband",
+    makes = 1,                       -- output items per craft
     exit = "Disenchant",             -- or "Sell on AH" / "Vendor" / "" (craft only)
     reagents = { { item = 4305, qty = 4 }, ... },
+    estimate = { cost = <copper per craft>, income = <net copper per craft> },  -- when known
 }
 ```
-
 The shuffle runs one step per press of a macro (`/click ShuffleDetectorShuffleButton`)
 or the "Next shuffle step" key binding: drain crafted pieces through Disenchant or Vendor
 exit presses, otherwise queue the crafts that fit available materials, remaining target
@@ -210,10 +182,9 @@ locked until completion or interruption; every successful main-recipe cast incre
 invisible and chooses the step as it is clicked, because chat commands cannot cast.
 
 A reagent can also include `raw = { item = 2589, qty = 2 }` (for reagent item 2996, Bolt of
-Linen Cloth): raw item ID and raw units per intermediate. The companion exports this from
-the calculator's existing refinement metadata, regardless of which source was cheapest in
-the saved scan. The addon checks it against a learned single-input, single-output recipe
-recorded on the current character; old plans without the field can use recorded recipes too.
+Linen Cloth): raw item ID and raw units per intermediate, taken from the planner's refinement
+metadata. The addon checks it against a learned single-input, single-output recipe
+recorded on the current character; plans without the field can use recorded recipes too.
 Raw bag/mail/in-flight stock covers the intermediate requirement rather than creating a second
 independent shopping target. A macro press can craft that intermediate before the main recipe;
 stackable intermediates consuming multiple raw items per output use the modern crafting queue
@@ -245,8 +216,8 @@ remain one cast per press; only casts of the main recipe advance `completed`.
 
 Polling, offers and commodity quotes are not persisted. The combined panel's position and
 visibility use the existing `shuffleTracker`/`shuffleTrackerShown` UI fields. Polling uses live
-`C_AuctionHouse` search results, not Auctionator's saved minimum prices. The companion ignores
-shopping state. The snatcher never writes the selected `Plan.lua`.
+`C_AuctionHouse` search results, not Auctionator's saved minimum prices. The snatcher never
+changes the active plan.
 
 The shuffle button also dispatches vendor buys, AH polling, buyouts and commodity
 quote/confirmation steps through the same shopping state and checks as the panel. Each
@@ -275,7 +246,7 @@ reservations now include `total` (actual bundle cost in copper).
 Each history record has `id`, `recipe`, `item`, `started`, `target`, `makes`, `crafts`, `items`,
 `available` (recorded output not yet sold/disenchanted), `cost`, `income`, `manualCost`,
 `manualIncome`, `purchases` (units bought), `sold` (output units sold), and optional `closed`
-timestamp / `incomplete` flag. Optional `estimate = {cost, income}` copies per-craft companion
+timestamp / `incomplete` flag. Optional `estimate = {cost, income}` copies the plan's per-craft
 cost and net exit value at batch creation. It is never counted as actual cash. Manual entries
 can retain `lastAdjustment = {kind, value}` for one-step undo. A pending macro vendor sale
 stores `sale = {before, gold, price, at}` until matching bag/gold changes confirm it; restored
@@ -285,68 +256,9 @@ Costs count confirmed snatcher spending in full; income counts attributed macro 
 sales plus manual additions. Unsold AH items and disenchant loot have no realized income.
 Cash net is `cost + manualCost` subtracted from `income + manualIncome`; average divides
 this by newly crafted `items` (unavailable until at least one item was crafted). A closed
-batch remains in history until retention removes it. The companion ignores this ledger.
+batch remains in history until retention removes it.
 
-Plans may include `estimate = { cost = <copper per craft>, income = <net copper per craft> }`
-when the selected result has finite values for both. Old plans omit it and still work.
-
-# Reference data
-
-`common/data/reference.json` holds item names, vendor prices, recipes (reagents, plus optional `profession` (default Tailoring) and `makes`, the pieces one craft produces), `refined` (bolt or bar item -> raw item and quantity per piece) and average
-disenchant yields. The bundled values are unverified seed data; edit them or pass an extra file
-that overrides recipes by name.
-
-# Build-time reference bundle contract
-
-`shuffledetector.bundle` is developer tooling for the addon-only migration:
-
-```
-PYTHONPATH=companion/src python -m shuffledetector.bundle reviewed-input.json Data.lua
-```
-
-It currently supplies a validator/generator only: **no production dataset or
-disenchant baseline is provided, and generated files are not yet loaded by the
-addon**. The companion workflow above remains unchanged. Do not feed the
-unverified `reference.json` seeds into a trusted bundle.
-
-Schema 1 input is a JSON object with exactly these fields:
-
-| Field | Contract |
-| --- | --- |
-| `schema`, `revision` | Integer `1` and a nonempty dataset revision. No generation timestamp is added, so identical inputs generate identical Lua. |
-| `client` | `{flavor, interface, build}`: explicit client flavor, positive interface integer and exact build identifier. Interface alone is not evidence that another client shares the data. |
-| `coverage` | Nonempty description of what is covered, missing, or uncertain. Empty model arrays mean no data, never an implicit zero yield. |
-| `sources` | Array of `{id, revision, sha256, license, permission, redistributable}`. SHA256 is the lowercase 64-digit hash of reviewed source input; `permission` points to the redistribution evidence, and `redistributable` must be boolean `true`, even for exploratory data. |
-| `recipes` | Array of `{spell, item, profession, makes, reagents, source, status}`. Profession is a stable ID; reagents are `{item, qty}`. Optional `name`, `skill`, `craft_seconds` and `verification`; unknown skills remain absent. These are item-producing recipes, not productless enchants. |
-| `disenchant` | Array of `{class, quality, low, high, source, status}` plus exactly one of `expected` or `outcomes`, and optional `verification`. Classes 2/4, qualities 2/3/4, inclusive positive item-level bounds. |
-| `exclusions` | Array of `{item, reason, source, status}` and optional `verification` for item-specific eligibility exceptions. These carry provenance too; they are not inferred from class alone. |
-
-Every recipe, DE model and exclusion uses a declared source ID and a `status` of
-`trusted` or `exploratory`. A trusted record additionally requires nonempty
-`verification` describing client-specific evidence. These fields are reviewed
-declarations: **the validator cannot establish redistribution rights or game
-accuracy**. Neither an installed file nor a filled-in license string grants
-permission. A production source must still pass the human provenance/client
-review; no data is fetched automatically.
-
-`expected` is an array of `{item, avg}` with positive finite average quantities;
-it contains no invented distribution or numeric confidence interval.
-`outcomes` is an array of `{probability, loot}`, with `loot = [{item, qty}, ...]`.
-Each probability is positive and at most one; the sum must be one within 1e-9
-roundoff, without normalization. Whole-cast loot vectors preserve correlations.
-An explicit empty loot vector can represent a documented no-drop outcome, but a
-model must contain some material output. Duplicate material/outcome identities,
-reversed/overlapping bands within a trust level, nonfinite numbers and integers
-not exactly representable in Lua are rejected. Trusted and exploratory bands can
-coexist but must remain distinct in future evaluation/UI.
-
-The generator canonicalizes row order, emits `ns.bundle`, adds a canonical-input
-`content_sha256`, and derives sorted `wanted_items` from all referenced products,
-reagents, DE materials and exclusions. Invalid input never replaces an existing
-output file. Synthetic fixtures in `tests/test_bundle.py` exercise the contract
-and generated Lua; they are not real game evidence or a distributable baseline.
-
-## In-game price-provider contract (migration work)
+# In-game price-provider contract
 
 `Prices.lua` is loaded for the read-only `/shuffledetector browse` preview. Its
 `ns.AuctionatorQuote(itemID, "commodity")` reads the public v1 ID API on demand,
@@ -421,7 +333,7 @@ always evaluates current recipes/prices and shows the selected recipe's page, or
 falls back to the first matching recipe if the selection is no longer available.
 Quotes, calculated batches and activation notices are transient. Invalid draft
 amounts remain visible and produce normal calculator errors rather than silently
-becoming a valid batch. No companion QSettings are read or imported.
+becoming a valid batch.
 
 Material-cost overrides are per character and item ID, whole copper from 0 to
 100000000000 inclusive. They replace that material's AH/vendor input estimate

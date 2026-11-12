@@ -1789,33 +1789,20 @@ s = setup()
 local db = AHSnapshotDB
 local activePlan = { version = 1, recipe = "In-game choice", selectedAt = 200 }
 db.activePlan = activePlan
-local companionPlan = { version = 1, recipe = "Older companion plan", generated = 199 }
-ns.plan = companionPlan
-ns.ValidateActivePlan = function(candidate) return candidate == activePlan end
-local events = loadLikeGame(db)
-eq(ns.plan, companionPlan, "another addon's ADDON_LOADED does not restore")
-events.scripts.OnEvent(events, "ADDON_LOADED", "ShuffleDetector")
-eq(ns.plan, activePlan, "newer in-game selections survive a reload over preserved Plan.lua files")
-
-s = setup()
-db = AHSnapshotDB
-activePlan = { version = 1, recipe = "In-game choice", selectedAt = 200 }
-db.activePlan = activePlan
 ns.plan = nil
 ns.ValidateActivePlan = function(candidate) return candidate == activePlan end
-events = loadLikeGame(db)
+local events = loadLikeGame(db)
+eq(ns.plan, nil, "another addon's ADDON_LOADED does not restore")
 events.scripts.OnEvent(events, "ADDON_LOADED", "ShuffleDetector")
-eq(ns.plan, activePlan, "in-game selections survive a reload without a Plan.lua plan")
+eq(ns.plan, activePlan, "the in-game selection survives a reload")
 
 s = setup()
 db = AHSnapshotDB
-activePlan = { version = 1, recipe = "Older in-game choice", selectedAt = 200 }
-db.activePlan = activePlan
-ns.plan = { version = 1, recipe = "New companion plan", generated = 201 }
-ns.ValidateActivePlan = function(candidate) return candidate == activePlan end
+db.activePlan = { version = 1, recipe = "Broken" }
+ns.plan = nil
+ns.ValidateActivePlan = function() return false end
 events = loadLikeGame(db)
 events.scripts.OnEvent(events, "ADDON_LOADED", "ShuffleDetector")
-eq(ns.plan.recipe, "New companion plan", "newer companion plans retain precedence")
-eq(AHSnapshotDB.activePlan, nil, "superseded in-game selections are cleared")
+eq(ns.plan, nil, "an invalid saved selection is not loaded")
 
 print("snatcher checks passed")

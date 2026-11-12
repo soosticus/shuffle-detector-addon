@@ -1,5 +1,5 @@
 -- ShuffleDetector core: shared namespace, profession/recipe snapshot, slash commands.
--- Prices.lua reads Auctionator in game; the companion also reads its saved price database.
+-- Prices.lua reads Auctionator in game.
 -- Data is written by the game to WTF/Account/<acct>/SavedVariables/ShuffleDetector.lua
 
 local ADDON, ns = ...
@@ -70,7 +70,7 @@ local function recordItem(id)
     if name then
         awaiting[id] = nil
         AHSnapshotDB.items = AHSnapshotDB.items or {}
-        -- class, quality and ilvl let the companion look up disenchant yields (companion/deyields.py)
+        -- class, quality and ilvl identify an item's row in a disenchant yield table
         AHSnapshotDB.items[id] = { name = name, sell = sell or 0, class = class, quality = quality, ilvl = ilvl }
     elseif not awaiting[id] then
         awaiting[id] = true
@@ -91,8 +91,7 @@ function ns.RefreshItemDetails(quiet)
     if not quiet then say(("refreshed class and item level for %d recorded items"):format(n)) end
 end
 
--- Ask the game for every item in ns.wantedItems (ItemList.lua, written by the companion) that is not recorded
--- yet. Requests go out in small batches; answers arrive on GET_ITEM_INFO_RECEIVED and are recorded by recordItem.
+-- Ask the game for items that are not recorded yet. Requests go out in small batches; answers arrive on GET_ITEM_INFO_RECEIVED and are recorded by recordItem.
 local BATCH, BATCH_DELAY = 40, 1
 local function requestItems(todo)
     local i = 1
@@ -138,12 +137,34 @@ function ns.RequestItems(ids)
     return #todo
 end
 
-function ns.LoadWantedItems(quiet)
+function ns.LoadRecipeItems(quiet)
     -- Ids the game never answered for on an earlier run are skipped at login; /shuffledetector items retries them.
     local unanswered = AHSnapshotDB.unanswered or {}
-    local list = ns.wantedItems
-    if type(list) ~= "table" or #list == 0 then
-        if not quiet then say("no item list; send items from the companion app, then /reload") end
+    local list, listed = {}, {}
+    local function add(id)
+        if type(id) == "number" and not listed[id] then listed[id] = true; list[#list + 1] = id end
+    end
+    local function addRecipes(recipes)
+        for _, r in ipairs(type(recipes) == "table" and recipes or {}) do
+            if type(r) == "table" then
+                add(r.item)
+                for _, x in ipairs(type(r.reagents) == "table" and r.reagents or {}) do
+                    if type(x) == "table" then add(x.item) end
+                end
+            end
+        end
+    end
+    for _, c in pairs(type(AHSnapshotDB.characters) == "table" and AHSnapshotDB.characters or {}) do
+        for _, prof in pairs(type(c) == "table" and type(c.professions) == "table" and c.professions or {}) do
+            if type(prof) == "table" then addRecipes(prof.recipes); addRecipes(prof.available) end
+        end
+    end
+    local catalog = AHSnapshotDB.catalog
+    for _, prof in pairs(type(catalog) == "table" and type(catalog.professions) == "table" and catalog.professions or {}) do
+        if type(prof) == "table" then addRecipes(prof.recipes) end
+    end
+    if #list == 0 then
+        if not quiet then say("no recipes recorded yet; open a profession window first") end
         return
     end
     local known = AHSnapshotDB.items or {}
@@ -155,10 +176,10 @@ function ns.LoadWantedItems(quiet)
         end
     end
     if #todo == 0 then
-        if not quiet then say(("all %d listed items are already recorded"):format(#list)) end
+        if not quiet then say(("all %d recipe items are already recorded"):format(#list)) end
         return
     end
-    say(("requesting %d of %d listed items from the game"):format(#todo, #list))
+    say(("requesting %d of %d recipe items from the game"):format(#todo, #list))
     requestItems(todo)
 end
 
@@ -396,7 +417,7 @@ frame:SetScript("OnEvent", function(_, event, itemId)
     else
         snapshotSkills()
         if event == "PLAYER_LOGIN" then
-            C_Timer.After(5, function() ns.LoadWantedItems(true) end)
+            C_Timer.After(5, function() ns.LoadRecipeItems(true) end)
             C_Timer.After(25, function() ns.RefreshItemDetails(true) end)
         end
     end
@@ -467,13 +488,13 @@ SlashCmdList["SHUFFLEDETECTOR"] = function(msg)
     elseif msg == "disenchant" then
         ns.DebugDisenchant()
     elseif msg == "items" then
-        ns.LoadWantedItems()
+        ns.LoadRecipeItems()
     elseif msg == "yields" then
         ns.RefreshItemDetails()
     elseif msg == "catalog" or msg:find("^catalog ") then
         ns.ScanRecipeCatalog(msg:match("^catalog%s*(.-)%s*$"))
     else
-        say("usage: /shuffledetector browse (in-game ranking and calculator preview) | items (request recipe item names and prices) | yields (re-record item class and level for disenchant yields) | prices [item IDs] (Auctionator API diagnostic) | catalog [highest spell ID] (read recipes of professions none of your characters has from the game client) | shuffle or snatch (toggle batch and shuffle window) | stats (batch analytics) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
+        say("usage: /shuffledetector browse (in-game ranking and calculator preview) | items (request names and sell prices of recorded recipes' items) | yields (re-record item class and level) | prices [item IDs] (Auctionator API diagnostic) | catalog [highest spell ID] (read recipes of professions none of your characters has from the game client) | shuffle or snatch (toggle batch and shuffle window) | stats (batch analytics) | step | macro | plan | log (hidden diagnostics: log <n> | clear | echo). Open a profession window to record its recipes.")
     end
 end
 
