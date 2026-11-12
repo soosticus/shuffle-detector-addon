@@ -308,6 +308,18 @@ eq(calls[1][3], 12, "vendor quantity limited to whole affordable bundles")
 MerchantFrame.shown, balance = false, 100000
 
 s = setup()
+s.target, s.prices[1] = 500, 100
+C_Item.GetItemInfo = function(id) return "Item " .. id, nil, nil, nil, nil, nil, nil, 20 end
+MerchantFrame.shown = true
+merchants = { { id = 1, price = 80, stackCount = 1, numAvailable = -1, isPurchasable = true, max = 200 } }
+eq(ns.NextSnatchPurchase().qty, 100, "vendor buys stop at five stacks")
+bags[1] = 70
+eq(ns.NextSnatchPurchase().qty, 30, "held stock counts toward the five stacks")
+bags[1] = 100
+eq(ns.NextSnatchPurchase(), nil, "no vendor buy while five stacks are held")
+MerchantFrame.shown = false
+
+s = setup()
 s.target, s.prices[1] = 5, 100
 commodity[1] = { { quantity = 4, unitPrice = 80 }, { quantity = 20, unitPrice = 120 } }
 start(s)

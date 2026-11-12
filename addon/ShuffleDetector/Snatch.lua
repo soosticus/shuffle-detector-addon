@@ -1,6 +1,8 @@
 local _, ns = ...
 
 local MAX_TARGET, POLL_SECONDS = 100000, 3
+-- Vendor reagents can be rebought at any visit, so keep bag space for AH materials.
+local VENDOR_STACKS = 5
 local panel, rows, statusText, pollButton
 local running, ahOpen, pending, search, offer
 local nextSearch, cursor, ownCall = 0, 0, false
@@ -373,6 +375,10 @@ local function merchantOffer(id)
                 local capacity = ns.BagOutputCapacity and ns.BagOutputCapacity(id)
                 if capacity then qty = math.min(qty, math.floor(capacity / bundle) * bundle) end
                 if stock ~= -1 then qty = math.min(qty, math.floor(stock / bundle) * bundle) end
+                local info = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+                local stack = info and select(8, info(id))
+                stack = type(stack) == "number" and stack > 0 and stack or max
+                qty = math.min(qty, math.floor(math.max(0, VENDOR_STACKS * stack - count(id)) / bundle) * bundle)
                 qty = math.min(qty, math.floor(GetMoney() / price) * bundle)
                 while qty > 0 and qty ~= completeQuantity(qty, r) do qty = qty - bundle end
                 local total = qty / bundle * price
