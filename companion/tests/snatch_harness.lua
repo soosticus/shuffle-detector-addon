@@ -284,6 +284,30 @@ assert(ns.NextSnatchPurchase().label:find("(AH busy)", 1, true), "throttled sear
 ready = true
 
 s = setup()
+s.target, s.prices[1], balance = 500, 100, 5000
+commodity[1] = { { quantity = 2000, unitPrice = 80 } }
+start(s)
+result(1)
+ns.SnatchBuyAH()
+eq(calls[2][1], "quote", "an unaffordable batch still offers what gold covers")
+eq(calls[2][3], 62, "commodity quantity limited to current gold")
+
+s = setup()
+s.target, s.prices[1], balance = 500, 100, 50
+commodity[1] = { { quantity = 2000, unitPrice = 80 } }
+start(s)
+result(1)
+assert(ns.NextSnatchPurchase().label:find("not enough gold", 1, true), "no affordable unit is explained")
+
+s = setup()
+s.target, s.prices[1], balance = 500, 100, 1000
+MerchantFrame.shown = true
+merchants = { { id = 1, price = 150, stackCount = 2, numAvailable = -1, isPurchasable = true } }
+ns.SnatchBuyVendor(1)
+eq(calls[1][3], 12, "vendor quantity limited to whole affordable bundles")
+MerchantFrame.shown, balance = false, 100000
+
+s = setup()
 s.target, s.prices[1] = 5, 100
 commodity[1] = { { quantity = 4, unitPrice = 80 }, { quantity = 20, unitPrice = 120 } }
 start(s)
@@ -422,7 +446,7 @@ s = setup()
 s.target, s.prices[1], balance = 5, 100, 799
 commodity[1] = { { quantity = 10, unitPrice = 80 } }
 start(s); result(1); ns.SnatchBuyAH()
-eq(#calls, 1, "do not quote unaffordable offers")
+eq(calls[2][3], 9, "quote only the affordable part of an offer")
 
 s = setup()
 s.target, s.prices[1] = 5, 100

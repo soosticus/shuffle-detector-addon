@@ -373,6 +373,7 @@ local function merchantOffer(id)
                 local capacity = ns.BagOutputCapacity and ns.BagOutputCapacity(id)
                 if capacity then qty = math.min(qty, math.floor(capacity / bundle) * bundle) end
                 if stock ~= -1 then qty = math.min(qty, math.floor(stock / bundle) * bundle) end
+                qty = math.min(qty, math.floor(GetMoney() / price) * bundle)
                 while qty > 0 and qty ~= completeQuantity(qty, r) do qty = qty - bundle end
                 local total = qty / bundle * price
                 local units = equivalent({ qty = qty }, r)
@@ -440,10 +441,12 @@ local function results(id, key, commodity)
             end
         end
         table.sort(list, function(a, b) return a.unitPrice < b.unitPrice end)
-        local qty, total = 0, 0
+        -- Buy what the limit and current gold allow rather than nothing when the whole batch is unaffordable.
+        local qty, total, gold = 0, 0, GetMoney()
         for _, v in ipairs(list) do
             if v.unitPrice > r.cap then break end
-            local take = math.min(v.quantity, r.missing - qty)
+            local take = math.min(v.quantity, r.missing - qty, math.floor((gold - total) / v.unitPrice))
+            if take <= 0 then break end
             qty, total = qty + take, total + take * v.unitPrice
             if qty == r.missing then break end
         end
@@ -503,7 +506,9 @@ local function observe(id, key, commodity)
         end
     end
     local text
-    if own then
+    if low and low <= r.cap and GetMoney() < low then
+        text = ("%s: not enough gold to buy one at %s"):format(itemName(id), money(math.floor(low + 0.5)))
+    elseif own then
         text = ("%s: your own listing is in the results; cancel it to buy"):format(itemName(id))
     elseif not low then
         text = ("%s: none listed"):format(itemName(id))
