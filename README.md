@@ -136,7 +136,10 @@ reports none, it does not. Selecting any row only shows its
 breakdown. Select a row for reagent costs, exit values, missing-price reasons and
 casting-only profit/hour. The batch calculator accepts **craft counts** or a
 **budget in whole copper**; it shows shopping requirements, finished output and
-estimated cost/net/profit.
+estimated cost/net/profit. If you have saved price limits in the shuffle window,
+it also shows the batch at your limits: the most the materials cost when every
+craft's reagents are bought at or under the limit (a bolt limited by its cloth
+limit, as the snatcher does), the returns, and the least profit.
 
 The browser remembers filters, search text, the previewed recipe, calculator mode
 and amount separately for each character across `/reload` and logout. Reopening

@@ -65,3 +65,34 @@ function ns.CalculateBatch(result, mode, amount)
     end
     return batch
 end
+
+-- The batch at saved price limits: the most its materials can cost when bought within the limits, the
+-- estimated returns and the least profit. A refined reagent with a limit on its raw material uses the
+-- raw-derived limit, as the snatcher does. Reagents without a limit are listed in `missing`.
+function ns.BatchLimitEstimate(result, batch, limits, refined)
+    if not (result and batch and type(limits) == "table") then return end
+    local perCraft, missing, any = 0, {}, false
+    for _, r in ipairs(result.recipe.reagents or {}) do
+        local raw = refined and refined[r.item]
+        local unit
+        if raw and (limits[raw.raw] or 0) > 0 then
+            unit = limits[raw.raw] * raw.per
+        elseif (limits[r.item] or 0) > 0 then
+            unit = limits[r.item]
+        end
+        if unit then
+            any = true
+            perCraft = perCraft + unit * r.qty
+        else
+            missing[#missing + 1] = raw and raw.raw or r.item
+        end
+    end
+    if not any then return end
+    local estimate = { missing = missing, perCraft = perCraft }
+    if #missing == 0 then
+        estimate.cost = perCraft * batch.crafts
+        estimate.value = batch.revenue
+        if estimate.value ~= nil then estimate.profit = estimate.value - estimate.cost end
+    end
+    return estimate
+end

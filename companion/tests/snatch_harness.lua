@@ -154,6 +154,7 @@ eq(ns.SnatchParseMoney("-1"), nil)
 eq(ns.SnatchParseMoney("1g1g"), nil)
 eq(ns.SnatchParseMoney("nan"), nil)
 s.target, s.prices[1], bags[1] = 5, 100, 3
+eq(ns.SnatchPriceLimits()[1], 100, "saved limits are readable for any recipe")
 eq(ns.SnatchNeeds()[1].missing, 7, "subtract bags")
 ns.plan.makes = 3
 ns.SnatchNeeds()

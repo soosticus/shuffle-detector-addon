@@ -206,6 +206,17 @@ local function details()
             lines[#lines + 1] = ("\n%s\n%d crafts / %d finished items"):format(heading("Batch estimate"), batch.crafts, batch.items)
             lines[#lines + 1] = "Materials: " .. money(batch.cost) .. "; returns: " .. money(batch.revenue)
             lines[#lines + 1] = "Profit: " .. money(batch.profit)
+            local limited = ns.BatchLimitEstimate(result, batch, ns.SnatchPriceLimits and ns.SnatchPriceLimits(),
+                info.context and info.context.refined)
+            if limited and limited.cost then
+                lines[#lines + 1] = ("At your price limits: materials up to %s; returns %s; profit at least %s"):format(
+                    money(limited.cost), money(limited.value), money(limited.profit))
+            elseif limited then
+                local names = {}
+                for _, id in ipairs(limited.missing) do names[#names + 1] = itemName(id) end
+                lines[#lines + 1] = "No price limit saved for " .. table.concat(names, ", ")
+                    .. "; set one in the shuffle window to estimate at your limits."
+            end
             if batch.capped then lines[#lines + 1] = "Budget search capped at 100000 crafts." end
             if batch.transferReason then lines[#lines + 1] = batch.transferReason end
             for _, purchase in ipairs(batch.purchases) do

@@ -233,6 +233,14 @@ local function need(id)
     for _, r in ipairs(ns.SnatchNeeds()) do if r.item == id then return r end end
 end
 
+-- This character's saved price limits by item ID (copper per item), for any recipe, or nil.
+function ns.SnatchPriceLimits()
+    local key = UnitGUID and UnitGUID("player")
+    local all = AHSnapshotDB and AHSnapshotDB.snatcher
+    local s = key and type(all) == "table" and all[key]
+    return type(s) == "table" and type(s.prices) == "table" and s.prices or nil
+end
+
 -- Most one craft's reagents cost at the saved price limits (a refined reagent at its raw-derived limit),
 -- or nil and the first reagent without a limit.
 function ns.SnatchLimitCostPerCraft()
