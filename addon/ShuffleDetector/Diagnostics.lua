@@ -60,6 +60,11 @@ function ns.DebugPrices(arg)
         table.sort(names)
         report("v1 functions: " .. table.concat(names, ", "))
         report("candidate calls use (addonName, itemID/link); verify signature and units before use")
+        local enchant = type(Auctionator.Enchant) == "table" and Auctionator.Enchant
+        local constants = type(Auctionator.Constants) == "table" and Auctionator.Constants
+        report(("Auctionator disenchant code loaded=%s, probability table loaded=%s"):format(
+            tostring(enchant and type(enchant.GetDisenchantAuctionPrice) == "function" or false),
+            tostring(constants and type(constants.DisenchantingProbability) == "table" or false)))
         for _, id in ipairs(ids) do
             local label = "item " .. id
             probe(label .. " price by ID", v1.GetAuctionPriceByItemID, ADDON, id)
@@ -77,6 +82,21 @@ function ns.DebugPrices(arg)
                     probe(label .. " age by link (raw; units unverified)", v1.GetAuctionAgeByItemLink, ADDON, link)
                     probe(label .. " exactness by link (raw)", v1.IsAuctionDataExactByItemLink, ADDON, link)
                     probe(label .. " DE value by link (raw; model unverified)", v1.GetDisenchantPriceByItemLink, ADDON, link)
+                    local breakdown = enchant and enchant.GetDisenchantBreakdown
+                    if type(breakdown) == "function" then
+                        local okInfo, itemInfo = pcall(function() return { info(link) } end)
+                        local okRows, rows = false, nil
+                        if okInfo then okRows, rows = pcall(breakdown, link, itemInfo) end
+                        if not okRows then
+                            report(label .. " DE breakdown: error: " .. tostring(okInfo and rows or itemInfo))
+                        elseif type(rows) ~= "table" or #rows == 0 then
+                            report(label .. " DE breakdown: none")
+                        else
+                            for _, row in ipairs(rows) do
+                                report(label .. " DE breakdown:" .. tostring(row):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+                            end
+                        end
+                    end
                 else
                     report(label .. " link comparison: item not cached")
                 end
