@@ -106,7 +106,12 @@ local function state()
         if s.inFlight then
             pending = s.inFlight
             pending.kind = "uncertain"
-            message("Unconfirmed purchase restored. Check bags and mail, then resolve it.")
+            if pending.vendor then
+                pending.at = GetTime()
+                message("Unconfirmed vendor purchase restored. Checking bags.")
+            else
+                message("Unconfirmed purchase restored. Check bags and mail, then resolve it.")
+            end
         end
     end
     if ns.BatchStatsEnsure then ns.BatchStatsEnsure(p, s) end
@@ -304,6 +309,20 @@ local function reservePurchase()
     pending.batch = s.statsId
     s.inFlight = pending
     pending.at = GetTime()
+end
+
+-- Vendor goods land in the bags at once, so the bag count settles the outcome.
+local function settleVendor()
+    if not (pending and pending.vendor) then return end
+    local p, s = pending, state()
+    if count(p.item) >= p.before + p.qty then
+        if ns.BatchStatsPurchase then ns.BatchStatsPurchase(p) end
+        message("Vendor purchase received.")
+    else
+        message(("Vendor purchase of %d x %s did not arrive; nothing was charged."):format(p.qty, itemName(p.item)))
+    end
+    if s then s.inFlight = nil end
+    pending = nil
 end
 
 local function finishPurchase()
@@ -678,18 +697,19 @@ local function onEvent(_, event, a, b)
     elseif event == "AUCTION_HOUSE_PURCHASE_COMPLETED" and pending and pending.kind == "buyingItem" and a == pending.auction then
         finishPurchase()
     elseif event == "BAG_UPDATE_DELAYED" then
-        if pending and pending.vendor and count(pending.item) >= pending.before + pending.qty then
-            message("Vendor purchase received.")
-            local s = state()
-            if ns.BatchStatsPurchase then ns.BatchStatsPurchase(pending) end
-            s.inFlight = nil
-            pending = nil
+        if pending and pending.vendor and (pending.kind == "uncertain"
+            or count(pending.item) >= pending.before + pending.qty) then
+            settleVendor()
         end
         local s = state()
         if s then syncBags(s) end
     elseif event == "UI_ERROR_MESSAGE" and pending then
-        if pending.vendor then pending.kind = "uncertain" end
-        message("Game purchase error: " .. tostring(b) .. ". Check bags/mail; purchases remain blocked.")
+        if pending.vendor then
+            pending.kind, pending.at = "uncertain", GetTime()
+            message("Game purchase error: " .. tostring(b) .. ". Checking bags.")
+        else
+            message("Game purchase error: " .. tostring(b) .. ". Check bags/mail; purchases remain blocked.")
+        end
         running = false
     elseif event == "PLAYER_REGEN_DISABLED" then
         stop("In combat. Polling stopped.")
@@ -700,6 +720,11 @@ ns.SnatchOnEvent = onEvent
 
 function ns.SnatchResolvePurchase(received)
     if not pending or pending.kind ~= "uncertain" then return end
+    if pending.vendor then
+        settleVendor()
+        if refresh then refresh() end
+        return
+    end
     local p, s = pending, state()
     s.inFlight, pending = nil, nil
     if received and ns.BatchStatsPurchase then ns.BatchStatsPurchase(p) end
@@ -902,11 +927,11 @@ local function createPanel()
                 return
             end
             StaticPopupDialogs["SHUFFLEDETECTOR_SNATCH_RESOLVE"] = {
-                text = pending.vendor and ("Check your bags for %d x %s. Confirm only after verifying the vendor purchase succeeded or failed."):format(
+                text = pending.vendor and ("Settle the vendor purchase of %d x %s from your current bag count?"):format(
                     pending.qty, itemName(pending.item))
                     or ("Check bags AND mail for %d x %s. Is this purchase still in mail? Choose No only after confirming it is already in your bags or the purchase failed."):format(
                         pending.qty, itemName(pending.item)),
-                button1 = pending.vendor and "Checked bags" or "Yes, in mail",
+                button1 = pending.vendor and "Check bags" or "Yes, in mail",
                 button2 = pending.vendor and "Cancel" or "No, checked",
                 button3 = not pending.vendor and "Cancel" or nil,
                 OnAccept = function() ns.SnatchResolvePurchase(true) end,
@@ -984,7 +1009,12 @@ local function update(_, delta)
         message("Commodity quote expired.")
         refresh()
     end
-    if pending and (pending.kind == "buyingCommodity" or pending.kind == "buyingItem" or pending.kind == "vendor")
+    if pending and pending.vendor and (pending.kind == "uncertain" and GetTime() - pending.at > 1
+        or GetTime() - pending.at > 15) then
+        settleVendor()
+        refresh()
+    end
+    if pending and (pending.kind == "buyingCommodity" or pending.kind == "buyingItem")
         and GetTime() - pending.at > 15 then
         pending.kind = "uncertain"
         stop("Purchase confirmation timed out. Check bags/mail, then resolve the uncertain purchase.")

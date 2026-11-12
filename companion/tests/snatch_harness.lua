@@ -211,10 +211,41 @@ MerchantFrame.shown = true
 merchants = { { id = 1, price = 150, stackCount = 2, numAvailable = -1, isPurchasable = true } }
 ns.SnatchBuyVendor(1)
 advance(16)
-eq(s.inFlight.kind, "uncertain", "vendor timeout is not silent")
-ns.SnatchResolvePurchase(true)
-eq(s.inFlight, nil)
+eq(s.inFlight, nil, "vendor timeout settles from the bag count")
 eq(s.awaiting[1], nil, "vendor reconciliation never creates a mail reservation")
+eq(ns.NextSnatchPurchase().action, "vendor", "an undelivered vendor buy can be retried")
+
+s = setup()
+s.target, s.prices[1] = 5, 100
+MerchantFrame.shown = true
+merchants = { { id = 1, price = 150, stackCount = 2, numAvailable = -1, isPurchasable = true } }
+ns.SnatchBuyVendor(1)
+event("UI_ERROR_MESSAGE", 3, "Inventory is full.")
+eq(s.inFlight.kind, "uncertain", "a game error waits briefly for bags")
+eq(ns.NextSnatchPurchase().blocking, true)
+advance(0.5)
+eq(s.inFlight.kind, "uncertain")
+advance(1)
+eq(s.inFlight, nil, "a failed vendor buy releases its reservation without manual resolution")
+
+s = setup()
+s.target, s.prices[1] = 5, 100
+MerchantFrame.shown = true
+merchants = { { id = 1, price = 150, stackCount = 2, numAvailable = -1, isPurchasable = true } }
+ns.SnatchBuyVendor(1)
+event("UI_ERROR_MESSAGE", 3, "Some unrelated error.")
+bags[1] = 10
+event("BAG_UPDATE_DELAYED")
+eq(s.inFlight, nil, "a vendor buy that arrives after an error still counts as received")
+
+s = setup()
+s.target, s.prices[1] = 5, 100
+s.inFlight = { kind = "vendor", vendor = true, item = 1, before = 0, qty = 10, total = 750, at = 3174 }
+assert(loadfile("addon/ShuffleDetector/Snatch.lua"))("ShuffleDetector", ns)
+ns.SnatchNeeds()
+eq(s.inFlight.kind, "uncertain", "a restored vendor purchase is checked against bags")
+advance(2)
+eq(s.inFlight, nil, "a restored undelivered vendor purchase settles after reload")
 
 s = setup()
 s.target, s.prices[1] = 2, 50
@@ -833,6 +864,21 @@ eq(ns.NextSnatchPurchase().kind, "purchase", "the whole batch still needs more m
 eq(ns.NextShuffleStep().kind, "craft", "craft available materials before stockpiling the rest of the batch")
 pressPurchase()
 eq(calls[1][1], "craft", "vendor presence does not starve crafting")
+
+s = setup()
+s.target, s.prices[1] = 50, 100
+MerchantFrame.shown = true
+merchants = { { id = 1, price = 80, stackCount = 1, numAvailable = -1, isPurchasable = true } }
+pressPurchase = macro()
+pressPurchase()
+eq(calls[1][1], "vendor")
+event("UI_ERROR_MESSAGE", 3, "Inventory is full.")
+pressPurchase()
+eq(#calls, 1, "macro waits while the failed vendor buy is checked")
+advance(2)
+bags[1] = 2
+pressPurchase()
+eq(calls[2][1], "craft", "macro crafts after an inventory-full vendor error")
 
 s = linen()
 bags[2589] = 12

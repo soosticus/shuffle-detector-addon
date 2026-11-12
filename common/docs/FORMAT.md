@@ -235,6 +235,7 @@ remain one cast per press; only casts of the main recipe advance `completed`.
   auction ID and/or quoted `total`, or `vendor`/`before` for a merchant purchase). It is saved
   before a merchant purchase or AH buyout/quote confirmation. A
   reload restores it as `uncertain`; subsequent purchases remain blocked until reconciled.
+  Vendor reservations are settled automatically from the bag count (`before` + `qty`).
 
 Polling, offers and commodity quotes are not persisted. The combined panel's position and
 visibility use the existing `shuffleTracker`/`shuffleTrackerShown` UI fields. Polling uses live
