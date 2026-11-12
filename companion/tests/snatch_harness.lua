@@ -265,6 +265,26 @@ eq(#calls, 0, "no bundle overshoot")
 
 s = setup()
 s.target, s.prices[1] = 5, 100
+commodity[1] = { { quantity = 20, unitPrice = 120 } }
+start(s)
+result(1)
+assert(ns.NextSnatchPurchase().label:find("Item 1: cheapest 0g 1s 20c, limit 0g 1s 0c", 1, true),
+    "a poll with nothing under the limit says what it saw")
+commodity[1] = { { quantity = 20, unitPrice = 60, containsOwnerItem = true } }
+advance(3)
+result(1)
+assert(ns.NextSnatchPurchase().label:find("your own listing", 1, true), "own listings blocking a buy are reported")
+commodity[1] = {}
+advance(3)
+result(1)
+assert(ns.NextSnatchPurchase().label:find("Item 1: none listed", 1, true))
+ready = false
+advance(3)
+assert(ns.NextSnatchPurchase().label:find("(AH busy)", 1, true), "throttled searches are reported")
+ready = true
+
+s = setup()
+s.target, s.prices[1] = 5, 100
 commodity[1] = { { quantity = 4, unitPrice = 80 }, { quantity = 20, unitPrice = 120 } }
 start(s)
 eq(calls[1][1], "search")

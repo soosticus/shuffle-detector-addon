@@ -99,7 +99,9 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   vendor purchase. Ready crafts/raw preparation now precede more shopping, and vendor
   buys preserve two general slots when capacity APIs are available. Uncertain vendor
   purchases (game error, timeout or reload) now settle from the bag count; confirm that
-  the macro resumes after an "Inventory is full" vendor error. Check the raw
+  the macro resumes after an "Inventory is full" vendor error, and that the AH poll
+  status (cheapest vs limit, none listed, own listing, AH busy) appears under the
+  waiting label. Check the raw
   row's unfilled-bolt count and decreasing raw requirement as bolts enter bags.
 - Confirm the merged batch/shuffle window in game: compact 60-pixel material rows with right-hand prices, More/Less controls expansion and recovery-button access, layout at your UI scale, live craft/purchase state, drag/position restoration, and `/shuffledetector shuffle` / `snatch` toggling the same window. The action macro remains independent of visibility; hiding the window stops polling but does not erase settings. Collapsing controls alone does not stop polling.
 - Snatcher follow-ups: unattended vendor purchasing only if client restrictions permit it; multi-step or shared-raw intermediate chains, multi-output intermediates, companion calculator target/cap import, and bank inventory. AH buying remains click-confirmed.

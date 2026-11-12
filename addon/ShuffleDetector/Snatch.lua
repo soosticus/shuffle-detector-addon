@@ -8,6 +8,7 @@ local lastCast
 local restored
 local collectingUntil
 local snapshots = {}
+local seen = {}
 local refresh
 local populate
 
@@ -479,6 +480,40 @@ local function results(id, key, commodity)
     end
 end
 
+-- What the last search for an item found, so a poll that buys nothing can say why.
+local function observe(id, key, commodity)
+    local r, api = need(id), C_AuctionHouse
+    if not r then return end
+    local low, own = nil, false
+    if commodity then
+        for i = 1, api.GetNumCommoditySearchResults(id) do
+            local v = api.GetCommoditySearchResultInfo(id, i)
+            if v and v.quantity > 0 then
+                if v.containsOwnerItem or v.containsAccountItem then own = true end
+                if not low or v.unitPrice < low then low = v.unitPrice end
+            end
+        end
+    else
+        for i = 1, api.GetNumItemSearchResults(key) do
+            local v = api.GetItemSearchResultInfo(key, i)
+            if v and v.buyoutAmount and v.buyoutAmount > 0 and v.quantity > 0 then
+                local unit = v.buyoutAmount / v.quantity
+                if not low or unit < low then low = unit end
+            end
+        end
+    end
+    local text
+    if own then
+        text = ("%s: your own listing is in the results; cancel it to buy"):format(itemName(id))
+    elseif not low then
+        text = ("%s: none listed"):format(itemName(id))
+    else
+        text = ("%s: cheapest %s, limit %s"):format(itemName(id), money(math.floor(low + 0.5)), money(r.cap))
+    end
+    if not seen[id] or seen[id].text ~= text then ns.log("snatch poll: " .. text) end
+    seen[id] = { text = text, at = GetTime() }
+end
+
 local function ahChoice(id)
     local r = need(id)
     if not r then return end
@@ -527,7 +562,12 @@ function ns.SnatchPoll()
         "ConfirmCommoditiesPurchase", "CancelCommoditiesPurchase", "PlaceBid" }) do
         if not api or type(api[name]) ~= "function" then stop("Unavailable auction API: " .. name); return end
     end
-    if not api.IsThrottledMessageSystemReady() then return end
+    if not api.IsThrottledMessageSystemReady() then
+        if not seen.throttled then ns.log("snatch poll: waiting for the AH to accept searches") end
+        seen.throttled = true
+        return
+    end
+    seen.throttled = nil
     local needs = ns.SnatchNeeds()
     for _ = 1, #needs do
         cursor = cursor % #needs + 1
@@ -625,10 +665,18 @@ function ns.NextSnatchPurchase()
                 label = ("%s %d x %s for %s"):format(offer.kind == "commodity" and "Quote" or "Buy",
                     offer.qty, itemName(offer.item), money(offer.total)) }
         end
+        local notes = {}
+        for _, r in ipairs(ns.SnatchNeeds()) do
+            if r.missing > 0 and r.cap > 0 and seen[r.item] and GetTime() - seen[r.item].at <= 30 then
+                notes[#notes + 1] = seen[r.item].text
+            end
+        end
         for _, r in ipairs(ns.SnatchNeeds()) do
             if r.missing > 0 and r.cap > 0 then
-                return { kind = running and "idle" or "purchase", action = "poll",
-                    label = running and "Waiting for AH offers within saved limits" or "Start AH polling with saved limits" }
+                local label = running and "Waiting for AH offers within saved limits" or "Start AH polling with saved limits"
+                if running and seen.throttled then label = label .. " (AH busy)" end
+                if #notes > 0 then label = label .. "\n" .. table.concat(notes, "\n") end
+                return { kind = running and "idle" or "purchase", action = "poll", label = label }
             end
         end
         for _, r in ipairs(ns.SnatchNeeds()) do
@@ -666,6 +714,7 @@ local function onEvent(_, event, a, b)
         local id = type(a) == "table" and a.itemID or a
         if search and id == search.item then
             snapshots[id] = search
+            observe(id, search.key, search.commodity)
             offer = ahChoice(id)
             search = nil
             if offer then
