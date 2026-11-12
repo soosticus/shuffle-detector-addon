@@ -59,71 +59,34 @@ local api = Auctionator.API.v1
 Auctionator.API.v1 = nil
 eq(quote().reason, "unavailable")
 Auctionator.API.v1 = api
-provider = "345"
-q = quote()
-eq(q.unit, 26, "the verified 345/build 70888 combination is supported without an opt-in")
-eq(q.status, "estimate")
-eq(q.provisional, nil)
-eq(ns.PriceProviderStatus().minimumVersion, 344)
-eq(ns.PriceProviderStatus().testedVersions, "344/345")
+for _, version in ipairs({ "345", 346, " \t347\r\n", "400.1", "343", "unexpected" }) do
+    provider = version
+    q = quote()
+    eq(q.unit, 26, "any Auctionator version with the v1 API is used: " .. tostring(version))
+    eq(q.status, "estimate")
+end
+provider = " \t347\r\n"
+eq(ns.PriceProviderStatus().normalizedVersion, "347", "the detected version is recorded for diagnosis")
+provider = nil
+eq(quote().unit, 26, "missing version metadata does not block prices")
+eq(ns.PriceProviderStatus().normalizedVersion, "unknown version")
+build = "99999"
+eq(quote().unit, 26, "no client build gate")
+eq(ns.PriceProviderStatus().client.build, "99999", "client build is recorded")
+build, provider = "70888", "346"
 prices[2589] = nil
-eq(quote().reason, "no-price", "a missing 345 price is not free")
+eq(quote().reason, "no-price", "a missing price is not free")
 prices[2589] = 0
-eq(quote().reason, "invalid-price", "an invalid 345 price is not free")
-prices[2589] = 24
-eq(quote().unit, 24)
+eq(quote().reason, "invalid-price", "an invalid price is not free")
 prices[2589] = 26
-eq(quote().unit, 26, "345 prices are read on demand")
-provider = 345
-eq(quote().unit, 26, "numeric 345 metadata is supported")
-provider = " \t345\r\n"
-eq(quote().unit, 26, "345 metadata may contain surrounding whitespace")
-provider = "346"
-eq(quote().reason, "untested-provider-version", "a newer release is reported as untested")
-eq(quote().unit, nil, "untested provider prices are off by default")
-assert(quote().detail:find("346", 1, true), "show the actual detected version")
-eq(ns.PriceProviderStatus().untestedVersion, "346")
+Auctionator.API.v1 = nil
+eq(quote().reason, "unavailable")
+assert(ns.PriceProviderStatus().detail:find("346", 1, true), "unavailable API names the installed version")
 local logCount = #logs
 quote()
-eq(#logs, logCount, "a rejected version is logged once, not once per recipe")
-ns.SetUntestedProviderAllowed(true)
-q = quote()
-eq(q.unit, 26, "explicit opt-in previews untested prices")
-eq(q.provisional, true, "opted-in quotes stay labeled untested")
-eq(ns.PriceProviderStatus().provisional, true)
-eq(#logs, logCount, "opting in does not repeat the rejection log")
-provider = "343"
-eq(quote().reason, "unsupported-provider-version", "opt-in never covers an older release")
-provider = "345.1"
-eq(quote().reason, "unsupported-provider-version", "opt-in never covers a non-release version string")
-provider = "344"
-eq(quote().provisional, nil, "the tested release is never labeled untested")
-ns.SetUntestedProviderAllowed(false)
-provider = "346"
-eq(quote().unit, nil, "turning the preview off restores the gate")
-provider = 344
-eq(quote().unit, 26, "numeric metadata is supported")
-provider = "344"
-eq(quote().unit, 26, "string metadata is supported")
-provider = " \t344\r\n"
-eq(quote().unit, 26, "TOC whitespace is not a different Auctionator version")
-provider = "344.1"
-eq(quote().reason, "unsupported-provider-version", "do not broaden support to a different release")
-provider = nil
-eq(quote().reason, "unsupported-provider-version")
-assert(quote().detail:find('"nil" (nil)', 1, true))
-provider, build = "344", "99999"
-eq(quote().reason, "unsupported-client")
-build = "70862"
-eq(quote().unit, 26, "baseline supported build shares confirmed copper contract")
-provider = "345"
-eq(quote().reason, "untested-provider-version", "345 is not yet verified on build 70862")
-eq(ns.PriceProviderStatus().testedVersions, "344")
-ns.SetUntestedProviderAllowed(true)
-eq(quote().provisional, true, "345/build 70862 remains an explicit untested preview")
-ns.SetUntestedProviderAllowed(false)
-provider = "344"
-build = "70888"
+eq(#logs, logCount, "an unavailable API is logged once, not once per recipe")
+Auctionator.API.v1 = api
+eq(quote().unit, 26)
 local metadata = C_AddOns.GetAddOnMetadata
 C_AddOns = nil
 GetAddOnMetadata = metadata

@@ -1,6 +1,5 @@
 local _, ns = ...
 local panel, detail, scroll, summary, providerLabel, countLabel, professionMenu, exitMenu, recipeMenu, amount, searchBox, useButton
-local untestedButton, previewUntested
 local rows, results, info, selected, batch, calculationError, activationNotice = {}, {}, {}, nil, nil, nil, nil
 local options, page, mode = { knownOnly = true }, 1, "crafts"
 local PAGE_SIZE = 10
@@ -29,15 +28,12 @@ end
 
 local function quoteReason(quote)
     local reasons = {
-        ["unsupported-item-identity"] = "AH value not verified for this item type",
+        ["unsupported-item-identity"] = "No AH value for weapons/armor (suffix variants) or unrecorded items",
         ["unsupported-provider-version"] = "AH provider version not verified (see banner)",
-        ["untested-provider-version"] = "Newer Auctionator not yet tested (see banner)",
-        ["unsupported-client"] = "Client version not verified (see banner)",
-        ["unavailable"] = "Auctionator price API unavailable",
+        ["unavailable"] = "Auctionator price API unavailable (see banner)",
         ["no-price"] = "No Auctionator quote; scan and Refresh",
         ["invalid-price"] = "Auctionator returned an invalid price (see log)",
         ["provider-error"] = "Auctionator API error (see log)",
-        ["client-identity-error"] = "Cannot read client version (see log)",
     }
     return reasons[quote.reason] or quote.reason or "AH estimate"
 end
@@ -47,15 +43,19 @@ local function blocked(result)
     if result.net == nil then return "No priced exit for this filter - see breakdown" end
 end
 
-local function updateUseButton()
-    if not useButton then return end
-    local allowed = ns.CanActivatePlannerResult and ns.CanActivatePlannerResult(current(), batch)
-    if allowed then useButton:Enable() else useButton:Disable() end
+-- The calculated batch, or one computed from the amount box so Set active shuffle
+-- does not require pressing Calculate first.
+local function activationBatch()
+    if batch then return batch end
+    local result = current()
+    if not result or not amount then return nil end
+    return (ns.CalculateBatch(result, mode, tonumber(amount:GetText())))
 end
 
-local function untested()
-    local provider = info.provider
-    return provider and provider.provisional and provider.normalizedVersion
+local function updateUseButton()
+    if not useButton then return end
+    local allowed = ns.CanActivatePlannerResult and ns.CanActivatePlannerResult(current(), activationBatch())
+    if allowed then useButton:Enable() else useButton:Disable() end
 end
 
 local function details()
@@ -71,9 +71,6 @@ local function details()
                 or "Pattern to learn later. This character cannot craft it yet; acquisition requirements are not verified.",
             ("Makes %d per craft; 30s assumed craft time."):format(recipe.makes),
         }
-        if untested() then
-            lines[#lines + 1] = ("|cffffaa33AH values come from untested Auctionator %s.|r"):format(untested())
-        end
         if activationNotice then lines[#lines + 1] = "\n" .. activationNotice end
         lines[#lines + 1] = ""
         lines[#lines + 1] = heading("Estimate per craft")
@@ -123,7 +120,7 @@ local function details()
             end
             lines[#lines + 1] = exit.label .. ": " .. (exit.net ~= nil and money(exit.net) or reason or "Not priced")
         end
-        lines[#lines + 1] = "AH sales assume a 5% fee. Only trade goods get AH values; crafted gear has none yet."
+        lines[#lines + 1] = "AH sales assume a 5% fee. Weapons and armor get no AH value yet (suffix variants)."
         lines[#lines + 1] = "Disenchanting is never valued from guesses; your recorded disenchants are kept for a future verified table."
         if calculationError then
             lines[#lines + 1] = "\n" .. heading("Calculator") .. "\n" .. calculationError
@@ -140,7 +137,7 @@ local function details()
             end
             lines[#lines + 1] = "Required quantities, not confirmed auction stock."
         end
-        local canActivate, activationReason = ns.CanActivatePlannerResult(result, batch)
+        local canActivate, activationReason = ns.CanActivatePlannerResult(result, activationBatch())
         if not canActivate then
             lines[#lines + 1] = "\n" .. heading("Set active shuffle")
             lines[#lines + 1] = activationReason
@@ -163,7 +160,6 @@ render = function()
             if not subtitle then
                 local color = result.profit >= 0 and "|cff33ff99" or "|cffff7777"
                 subtitle = color .. money(result.profit) .. " profit/craft|r - " .. result.exit
-                if untested() then subtitle = subtitle .. " |cffffaa33(untested AH)|r" end
             end
             button.valueText:SetText(subtitle)
             button:Show()
@@ -178,15 +174,8 @@ end
 
 local function providerText(provider)
     if not provider then return "No provider status available." end
-    if provider.ready and provider.provisional then
-        return ("|cffffaa33Previewing UNTESTED Auctionator %s prices this session|r (tested for this client: %s). Confirm with /shuffledetector prices before and after a scan."):format(
-            provider.normalizedVersion, provider.testedVersions)
-    end
     if provider.ready then
-        return "Auctionator " .. provider.normalizedVersion .. ": copper commodity estimates. Stock and age units unverified."
-    end
-    if provider.reason == "untested-provider-version" then
-        return "|cffffaa33AH prices off:|r " .. provider.detail
+        return "Auctionator " .. provider.normalizedVersion .. " prices (lowest listing; stock depth unknown)."
     end
     return "|cffff7777AH prices unavailable:|r " .. (provider.detail or quoteReason(provider))
 end
@@ -203,13 +192,6 @@ refresh = function()
             or "All recipes: learned shuffles and unlearned patterns; select a row for details.")
     summary:SetText(err or (ns.charKey() .. " - " .. meaning))
     providerLabel:SetText(providerText(info.provider))
-    local newer = info.provider and info.provider.untestedVersion
-    if newer then
-        untestedButton:SetText((previewUntested and "Hide " or "Preview ") .. newer .. " prices")
-        untestedButton:Show()
-    else
-        untestedButton:Hide()
-    end
     professionMenu:SetText((options.profession or "All professions") .. " v")
     recipeMenu:SetText((options.knownOnly and "Learned recipes" or (options.unlearnedOnly and "Unlearned patterns" or "All recipes")) .. " v")
     exitMenu:SetText((options.exit or "Best available exit") .. " v")
@@ -340,12 +322,6 @@ function ns.TogglePlanner()
     button(panel, "Refresh / search", 825, -60, 140, refresh)
     summary = text(panel, "", 15, -98, 940)
     providerLabel = text(panel, "", 15, -124, 800)
-    untestedButton = button(panel, "", 825, -120, 140, function()
-        previewUntested = not previewUntested
-        ns.SetUntestedProviderAllowed(previewUntested)
-        refresh()
-    end)
-    untestedButton:Hide()
     text(panel, "Recipe / estimated profit per craft", 15, -172, 375, "GameFontNormal")
     text(panel, "Recipe breakdown (scroll for exits and batch results)", 410, -172, 530, "GameFontNormal")
     for i = 1, PAGE_SIZE do
@@ -379,6 +355,7 @@ function ns.TogglePlanner()
     amount:SetMaxLetters(12)
     amount:SetText("1")
     amount:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    amount:SetScript("OnTextChanged", function() batch = nil; updateUseButton() end)
     local modeButton
     modeButton = button(panel, "Crafts", 550, -636, 115, function()
         mode = mode == "crafts" and "budget" or "crafts"
@@ -394,6 +371,8 @@ function ns.TogglePlanner()
         scroll:SetVerticalScroll(math.max(0, detail:GetStringHeight() - 380))
     end)
     useButton = button(panel, "Set active shuffle", 810, -636, 155, function()
+        amount:ClearFocus()
+        batch = activationBatch()
         local ok, reason = ns.ActivatePlannerResult(current(), batch)
         if not ok then
             calculationError, activationNotice = reason, nil

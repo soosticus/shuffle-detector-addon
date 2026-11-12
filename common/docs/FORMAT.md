@@ -46,8 +46,8 @@ AHSnapshotDB = {
 ```
 
 `activePlan` is written only when the user explicitly chooses **Set active shuffle**
-in the in-game browser after calculating a fully priced batch for a learned recipe.
-Unknown or provisional prices cannot be activated. The selected recipe and its
+in the in-game browser for a fully priced learned recipe, with the calculated batch
+or one computed from the amount box. Unknown prices cannot be activated. The selected recipe and its
 finished-item batch target persist separately in `activePlan` and the character's
 `snatcher` state. Loading the bundled `Plan.lua` restores `activePlan` when no
 companion-generated plan assigned one. The later-loaded shuffle runtime compares
@@ -337,27 +337,15 @@ and generated Lua; they are not real game evidence or a distributable baseline.
 `ns.AuctionatorQuote(itemID, "commodity")` reads the public v1 ID API on demand,
 without item-info caching, disk access, refresh callbacks or synthetic stock.
 The caller must establish commodity identity; gear or unspecified identity
-returns unknown. Support is restricted to the tested Forever 1.60.1 builds
-70862/70888, interface 16001, project 18, with Auctionator 344 on either build
-and 345 on build 70888. User confirmation establishes copper units for 344;
-build 70888 logs establish changed 344 API prices after a scan without reload.
-For 345 on build 70888, two API values match the subsequently saved price database;
-whether a reload occurred between those probes remains unconfirmed. Auctionator
-344 is the minimum eligible whole-number release. An eligible but unverified
-release on the current client reports `untested-provider-version` with
-`untestedVersion`; its prices stay off unless the browser's session-only
-**Preview N prices** switch calls `ns.SetUntestedProviderAllowed(true)`. Then the
-status has `provisional = true`, quotes carry `provisional = true`, and the browser
-labels every affected banner, row and breakdown as untested. The switch is never
-saved and does not cover releases below the minimum or non-whole version strings.
-Other client versions remain unsupported.
+returns unknown. There is no Auctionator or client version gate: any release
+exposing `Auctionator.API.v1.GetAuctionPriceByItemID` is used, because addons
+update often and a break is fixed when it occurs. User confirmation establishes
+copper units for 344 on Forever 1.60.1; build 70888 logs establish changed API
+prices after a scan without reload, and 345 values match the saved price database.
 
-`ns.PriceProviderStatus()` exposes readiness, exact detected `providerVersion`,
-client identity, `minimumVersion`, `testedVersions`, and a readable `detail` for
-version/client rejections. Whole-number versions may be numeric or strings with
-surrounding whitespace; a version prefix such as `344.1` is not accepted.
-Metadata/version errors stay visible and rejection details are logged once per
-distinct mismatch.
+`ns.PriceProviderStatus()` exposes readiness, the detected `providerVersion` and
+trimmed `normalizedVersion`, client identity, and a readable `detail` when the API
+is unavailable (logged once per distinct message).
 
 Every quote has `status`, `source`, `currency`, `item`, `identity`, and explicit
 unknown `depth`, `exactness` and `ageUnits`. Supported quotes include client,
@@ -373,8 +361,9 @@ disenchant model or guaranteed execution price is implied.
 `Planner.lua` copies the current character's recorded item-producing recipes into
 evaluation inputs, without modifying their stored tables. It exposes learned and
 unlearned status separately and excludes records missing complete reagents/products.
-Only recorded class-7 trade goods enter the commodity provider; gear/unknown
-classes stay unavailable. Each explicit refresh takes a fresh per-item quote
+Recorded items of any class except weapons (2) and armor (4), whose suffix
+variants share an item ID, enter the commodity provider; gear and unrecorded
+items stay unavailable. Each explicit refresh takes a fresh per-item quote
 snapshot; there is no per-frame evaluation or assumed callback signature.
 Vendor observations are economic estimates with the existing location/discount
 limitations, not a proof of current merchant access. Single-reagent preparation

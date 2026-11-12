@@ -67,7 +67,8 @@ local function recipeCopy(row, profession, known)
 end
 
 -- A refresh uses a bounded quote snapshot. Never retain it across scans or require
--- live GetItemInfo: recorded class 7 (trade goods) establishes the supported identity.
+-- live GetItemInfo. Weapons (2) and armor (4) can carry suffix variants an item ID cannot
+-- tell apart, so they get no AH value; other recorded classes are priced by item ID.
 function ns.PlannerResults(options)
     options = options or {}
     local db = AHSnapshotDB
@@ -86,7 +87,8 @@ function ns.PlannerResults(options)
         price = function(id)
             if not quotes[id] then
                 local info = items[id]
-                local kind = type(info) == "table" and info.class == 7 and "commodity" or "unverified"
+                local class = type(info) == "table" and info.class
+                local kind = type(class) == "number" and class ~= 2 and class ~= 4 and "commodity" or "unverified"
                 quotes[id] = ns.AuctionatorQuote(id, kind)
             end
             return quotes[id].unit
@@ -142,20 +144,18 @@ function ns.PlannerResults(options)
             results[#results + 1] = ns.Evaluate(recipe, ctx)
         end
     end
-    local provider = ns.PriceProviderStatus()
-    for _, result in ipairs(results) do result.provisional = provider.provisional == true end
     return ns.RankEvaluations(results), nil, {
-        quotes = quotes, skipped = skipped, professions = professions, provider = provider,
+        quotes = quotes, skipped = skipped, professions = professions, provider = ns.PriceProviderStatus(),
     }
 end
 
 function ns.CanActivatePlannerResult(result, batch)
     local recipe = result and result.recipe
     if not recipe or not recipe.known then return nil, "Only a learned recipe can become the active shuffle." end
-    if result.invalid or result.provisional or result.exploratory
+    if result.invalid or result.exploratory
         or not finite(result.cost) or result.cost < 0 or not finite(result.net) or result.net < 0
         or not finite(result.profit) then
-        return nil, "The recipe needs complete, non-provisional prices and a trusted sale exit."
+        return nil, "Needs a price for every reagent and a priced sale exit (Vendor or AH)."
     end
     if (result.exit ~= "Vendor" and result.exit ~= "Sell on AH")
         or not integer(recipe.item, 1, 10000000) or not integer(recipe.spell, 1, 10000000)
@@ -166,7 +166,7 @@ function ns.CanActivatePlannerResult(result, batch)
         or batch.items ~= batch.crafts * (recipe.makes or 1)
         or not finite(batch.cost) or batch.cost < 0 or not finite(batch.revenue) or batch.revenue < 0
         or not finite(batch.profit) then
-        return nil, "Calculate a priced batch of 1 to 100000 finished items first."
+        return nil, "Enter 1 to 100000 finished items (crafts or budget) in the batch calculator."
     end
     if type(ns.PrepareShufflePlanChange) ~= "function" or type(ns.SetSnatchTarget) ~= "function" then
         return nil, "Shuffle execution is not ready yet; reload the addon and try again."

@@ -225,48 +225,29 @@ for _ = 1, 3 do
 end
 eq(#widgets, widgetCount, "reopening a dropdown reuses its frames")
 click("Refresh / search")
-local metadata = C_AddOns.GetAddOnMetadata
-C_AddOns.GetAddOnMetadata = function() return "unexpected-version" end
-click("Refresh / search")
-local showsActualVersion, repeatsUnknown = false, false
-for _, w in ipairs(widgets) do
-    if w:IsShown() and w.text then
-        if w.text:find('"unexpected-version" (string)', 1, true) then showsActualVersion = true end
-        if w.text:find("unknown / craft - unknown", 1, true) then repeatsUnknown = true end
-    end
-end
-assert(showsActualVersion, "surface the exact installed version in one visible banner")
-eq(repeatsUnknown, false, "incomplete rows say why instead of repeated unknown values")
 local function visible(fragment)
     for _, w in ipairs(widgets) do
         if w:IsShown() and w.text and w.text:find(fragment, 1, true) then return w end
     end
 end
-eq(visible("Preview 3"), nil, "no untested-price switch for an unsupported version")
-C_AddOns.GetAddOnMetadata = function() return "345" end
-click("Refresh / search")
-assert(visible("Auctionator 345: copper commodity estimates"), "verified 345 prices work by default")
-eq(visible("Preview 345 prices"), nil, "verified 345 needs no preview opt-in")
-eq(visible("Missing reagent prices"), nil, "verified 345 prices reach the recipe browser")
+local metadata = C_AddOns.GetAddOnMetadata
 C_AddOns.GetAddOnMetadata = function() return "346" end
 click("Refresh / search")
-assert(visible("AH prices off:"), "a newer Auctionator explains why prices are off")
-assert(visible("Missing reagent prices"), "untested prices are not used by default")
-click("Preview 346 prices")
-assert(visible("UNTESTED Auctionator 346"), "opt-in banner names the untested version")
-assert(visible("tested for this client: 344/345"), "preview banner lists the tested versions")
-assert(visible("(untested AH)"), "ranked rows from untested prices are labeled")
-assert(visible("AH values come from untested Auctionator 346"), "breakdown is labeled")
-local provisionalPiece = find(assert(ns.PlannerResults({ knownOnly = true })), "Piece")
-local provisionalBatch = assert(ns.CalculateBatch(provisionalPiece, "crafts", 1))
-eq(ns.CanActivatePlannerResult(provisionalPiece, provisionalBatch), nil,
-    "an opted-in unverified provider cannot activate a plan")
-eq(ns.plan.item, 900, "previewing untested prices leaves the active plan intact")
-click("Hide 346 prices")
-assert(visible("AH prices off:"), "hiding restores the gate")
-eq(visible("(untested AH)"), nil)
+assert(visible("Auctionator 346 prices"), "any Auctionator version is used and named in the banner")
+eq(visible("Missing reagent prices"), nil, "newer Auctionator prices reach the recipe browser")
+eq(visible("Preview 346"), nil, "there is no preview switch")
+eq(visible("UNTESTED"), nil, "newer versions are not labeled untested")
+local api = Auctionator.API.v1
+Auctionator.API.v1 = nil
+click("Refresh / search")
+assert(visible("does not expose Auctionator.API.v1"), "a missing API is explained in one banner")
+local repeatsUnknown = false
+for _, w in ipairs(widgets) do
+    if w:IsShown() and w.text and w.text:find("unknown / craft - unknown", 1, true) then repeatsUnknown = true end
+end
+eq(repeatsUnknown, false, "incomplete rows say why instead of repeated unknown values")
 assert(visible("no verified disenchant yield table"), "explain why disenchant is not estimated")
-C_AddOns.GetAddOnMetadata = function() return "345" end
+Auctionator.API.v1 = api
 click("Refresh / search")
 for _, w in ipairs(widgets) do
     if w.nameText and w.nameText.text and w.nameText.text:find("Piece", 1, true) and w.scripts.OnClick then
@@ -274,15 +255,21 @@ for _, w in ipairs(widgets) do
         break
     end
 end
+local use
+for _, w in ipairs(widgets) do
+    if w.text == "Set active shuffle" and w.scripts.OnClick then use = w end
+end
+assert(use and use.scripts.OnClick, "set active shuffle button exists")
+eq(use.disabled, true, "a 1 copper budget buys no crafts, so nothing to activate")
 click("Budget (copper)")
-click("Calculate")
+eq(use.disabled, false, "a fully priced learned recipe can be activated without pressing Calculate")
 click("Set active shuffle")
 eq(ns.plan.item, 20, "explicit browser action replaces the active plan")
 eq(AHSnapshotDB.activePlan.spell, 2, "the selected plan is saved in addon SavedVariables")
 eq(AHSnapshotDB.activePlan.exit, "Vendor")
 eq(AHSnapshotDB.activePlan.selectedAt, 1700000000, "selection timestamp is saved for companion precedence")
 eq(selectedTarget, 2, "batch calculator target is set in finished items")
-assert(visible("No purchases or crafts were started"), "345 activation never starts a protected action")
+assert(visible("No purchases or crafts were started"), "activation never starts a protected action")
 C_AddOns.GetAddOnMetadata = metadata
 click("Best available exit v")
 local cover

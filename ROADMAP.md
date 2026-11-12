@@ -34,8 +34,8 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   now loads the provider/evaluator and a read-only in-game recipe browser with
   current-character filters, breakdowns, and craft-count/budget estimates.
   Unknown DE data stays unavailable. An explicit **Set active shuffle** action now
-  transfers only learned recipes with complete, non-provisional pricing and a
-  calculated batch; it persists the selected plan and item target in SavedVariables.
+  transfers only learned recipes with complete pricing and a batch (calculated, or
+  from the amount box); it persists the selected plan and item target in SavedVariables.
   It does not purchase or craft, and unresolved purchases/sales block plan changes.
   Lua harnesses cover activation, validation, target persistence and no-action
   behavior. In-game acceptance remains open: verify the selected recipe/exit/target,
@@ -50,12 +50,14 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   two 345 probes four seconds apart returned 2589: 26 -> 24 and 2996: 59 -> 56;
   24 and 56 match the subsequently saved Auctionator copper price database. A
   replay of the actual saved scan and recipes through the Lua planner changed
-  0/46 to 43/46 priced Tailoring costs (42/46 have both cost and exit). Auctionator 345
-  is now accepted on build 70888, 344 on either tested build; the minimum eligible
-  whole-number release is 344. Other eligible but unverified releases remain
-  session-only, labeled previews. Confirm whether 345 updates without reload;
-  verify potion/other commodity identity and gear variants before broadening AH
-  coverage. Do not waive DE gates to hide missing data.
+  0/46 to 43/46 priced Tailoring costs (42/46 have both cost and exit). Auctionator
+  then updated to 346 and was rejected again, so per the user the version/client
+  gate and preview switch are removed: any Auctionator with the v1 API is used and
+  breaks are fixed when they occur. Consumables (potions) are now priced by item
+  ID like trade goods; weapons/armor stay unpriced (suffix variants). A replay of
+  the saved data prices every learned recipe for Suest (58/58) and Arand (59/59).
+  Confirm in game that the banner shows 346, rows are priced, and Set active
+  shuffle works without pressing Calculate. Do not waive DE gates to hide missing data.
 
 - Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
 

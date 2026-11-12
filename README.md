@@ -100,6 +100,8 @@ Missing quotes and errors do not mean zero prices. The user-tested Forever
 after a scan without reload. On build 70888, Auctionator 345 returned 24c for 2589
 and 56c for 2996, matching the subsequently saved price database. Whether the 345
 probe changed without a reload, age units, and item variant behavior remain unverified.
+The addon does not gate on Auctionator's version: any release that exposes
+`Auctionator.API.v1` is used, and a future API break is fixed when it happens.
 
 The local v2 probe also records the public API's raw exactness flags and DE
 valuations, where available. DE values are opaque estimates: they do not supply a
@@ -126,9 +128,10 @@ casting-only profit/hour. The batch calculator accepts **craft counts** or a
 **budget in whole copper**; it shows shopping requirements, finished output and
 estimated cost/net/profit.
 
-After calculating a fully priced batch for a learned recipe, **Set active shuffle**
-stores that recipe and its finished-item target in the addon. Incomplete prices,
-unlearned recipes and the opt-in untested Auctionator preview cannot be activated.
+For a fully priced learned recipe, **Set active shuffle** stores that recipe and its
+finished-item target in the addon. It uses the calculated batch, or the amount box
+(default 1 craft) if **Calculate** was not pressed. Incomplete prices and unlearned
+recipes cannot be activated.
 This explicit button changes the active plan but does not buy or craft anything.
 Purchases still require configured limits and a later shuffle-macro press; Auction
 House commodity quotes and confirmations remain separate steps. Crafting still
@@ -137,14 +140,9 @@ in SavedVariables.
 
 This slice deliberately has limits:
 
-- AH prices are on-demand, shallow estimates for recorded trade goods only.
-  The provider supports Forever 1.60.1 builds 70862/70888, interface 16001/project
-  18, with Auctionator 344 on either build and 345 on build 70888. The minimum
-  eligible whole-number Auctionator release is 344; an eligible but unverified
-  release turns AH prices off with an explanation. **Preview N prices** next to
-  the banner uses them for this session only, with every affected value labeled
-  *untested AH*. Gear, potions and other unverified item identities have no AH
-  valuation.
+- AH prices are on-demand, shallow estimates (Auctionator's lowest listing) for
+  recorded items priced by item ID: trade goods, potions and other consumables.
+  Weapons and armor have no AH valuation, because suffix variants share an item ID.
 - Unknown inputs or yields stay unknown, never free or zero. No verified
   disenchant yield table ships yet, so disenchant values are not estimated.
 - Recorded vendor quotes may be stale or specific to another character's
@@ -163,12 +161,9 @@ Persistent planner settings, custom material costs and the complete addon-only
 workflow remain migration work. The existing companion and its generated plans
 continue to work unchanged.
 
-The provider banner reports the installed Auctionator version. If it is rejected,
-the banner and diagnostic log show the exact detected metadata and tested version,
-not just `unsupported-provider-version`. Numeric and string release metadata,
-including surrounding TOC whitespace, use the same version checks; releases
-not verified for the current client require an opt-in preview. A rejected provider
-can still leave valid recorded vendor alternatives visible. Unpriced rows explain the
+The provider banner reports the installed Auctionator version. If Auctionator is
+missing or its v1 price API is gone, the banner and diagnostic log say so and name
+the detected version; recorded vendor alternatives stay visible. Unpriced rows explain the
 missing input/exit instead of repeating `unknown`, and Disenchant is disabled in
 the exit dropdown until a trusted model is available.
 
