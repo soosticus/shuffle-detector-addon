@@ -311,8 +311,23 @@ s = setup()
 s.target, s.prices[1] = 500, 100
 C_Item.GetItemInfo = function(id) return "Item " .. id, nil, nil, nil, nil, nil, nil, 20 end
 MerchantFrame.shown = true
-merchants = { { id = 1, price = 80, stackCount = 1, numAvailable = -1, isPurchasable = true, max = 200 } }
-eq(ns.NextSnatchPurchase().qty, 100, "vendor buys stop at five stacks")
+merchants = { { id = 1, price = 80, stackCount = 1, numAvailable = -1, isPurchasable = true, max = 20 } }
+eq(ns.NextSnatchPurchase().qty, 100, "vendor buys stop at five stacks, not at one purchase's limit")
+ns.SnatchBuyVendor(1)
+eq(#calls, 5, "a five-stack buy is split into per-call stacks")
+for i = 1, 5 do eq(calls[i][3], 20) end
+eq(s.inFlight.qty, 100, "one reservation covers every split call")
+bags[1] = 100
+event("BAG_UPDATE_DELAYED")
+eq(s.inFlight, nil, "the split buy settles once all of it arrives")
+bags[1] = 0
+ns.SnatchBuyVendor(1)
+event("UI_ERROR_MESSAGE", 3, "Inventory is full.")
+bags[1] = 60
+event("BAG_UPDATE_DELAYED")
+eq(s.inFlight, nil, "a partly delivered split buy settles")
+eq(ns.NextSnatchPurchase().qty, 40, "the undelivered stacks can be bought again")
+bags[1] = 0
 bags[1] = 70
 eq(ns.NextSnatchPurchase().qty, 30, "held stock counts toward the five stacks")
 bags[1] = 100
@@ -928,13 +943,14 @@ merchants = { { id = 1, price = 80, stackCount = 1, numAvailable = -1, isPurchas
 pressPurchase = macro()
 pressPurchase()
 eq(calls[1][1], "vendor")
+local bought = #calls
 event("UI_ERROR_MESSAGE", 3, "Inventory is full.")
 pressPurchase()
-eq(#calls, 1, "macro waits while the failed vendor buy is checked")
+eq(#calls, bought, "macro waits while the failed vendor buy is checked")
 advance(2)
 bags[1] = 2
 pressPurchase()
-eq(calls[2][1], "craft", "macro crafts after an inventory-full vendor error")
+eq(calls[bought + 1][1], "craft", "macro crafts after an inventory-full vendor error")
 
 s = linen()
 bags[2589] = 12

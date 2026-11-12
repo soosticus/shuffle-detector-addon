@@ -318,9 +318,14 @@ end
 local function settleVendor()
     if not (pending and pending.vendor) then return end
     local p, s = pending, state()
-    if count(p.item) >= p.before + p.qty then
+    local got = count(p.item) - p.before
+    if got >= p.qty then
         if ns.BatchStatsPurchase then ns.BatchStatsPurchase(p) end
         message("Vendor purchase received.")
+    elseif got > 0 then
+        p.total, p.qty = math.floor(p.total * got / p.qty + 0.5), got
+        if ns.BatchStatsPurchase then ns.BatchStatsPurchase(p) end
+        message(("Vendor purchase partly received: %d x %s."):format(got, itemName(p.item)))
     else
         message(("Vendor purchase of %d x %s did not arrive; nothing was charged."):format(p.qty, itemName(p.item)))
     end
@@ -370,8 +375,9 @@ local function merchantOffer(id)
             if purchasable and price and bundle and bundle > 0 and not extended and stock
                 and price <= r.cap * bundle and (stock == -1 or stock >= bundle) then
                 local qty = math.floor(r.missing / bundle) * bundle
+                -- The game caps one BuyMerchantItem call at this; larger buys are split into several calls.
                 local max = GetMerchantItemMaxStack and GetMerchantItemMaxStack(i) or bundle
-                qty = math.min(qty, math.floor(max / bundle) * bundle)
+                local chunk = math.max(bundle, math.floor(max / bundle) * bundle)
                 local capacity = ns.BagOutputCapacity and ns.BagOutputCapacity(id)
                 if capacity then qty = math.min(qty, math.floor(capacity / bundle) * bundle) end
                 if stock ~= -1 then qty = math.min(qty, math.floor(stock / bundle) * bundle) end
@@ -384,7 +390,7 @@ local function merchantOffer(id)
                 local total = qty / bundle * price
                 local units = equivalent({ qty = qty }, r)
                 if qty > 0 and total <= GetMoney() and (not best or total / units < best.total / best.units) then
-                    best = { slot = i, item = id, qty = qty, total = total, units = units }
+                    best = { slot = i, item = id, qty = qty, total = total, units = units, chunk = chunk }
                 end
             end
         end
@@ -422,7 +428,13 @@ function ns.SnatchBuyVendor(id)
     stop()
     pending = { kind = "vendor", vendor = true, item = id, before = count(id), qty = o.qty, total = o.total }
     reservePurchase()
-    local ok, err = pcall(BuyMerchantItem, o.slot, o.qty)
+    local ok, err = true, nil
+    local left = o.qty
+    while ok and left > 0 do
+        local n = math.min(left, o.chunk or left)
+        ok, err = pcall(BuyMerchantItem, o.slot, n)
+        left = left - n
+    end
     if not ok then
         pending.kind = "uncertain"
         message("Vendor purchase failed: " .. tostring(err) .. ". Check bags and resolve it.")
