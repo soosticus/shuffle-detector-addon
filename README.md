@@ -135,10 +135,21 @@ recipe no longer matches, the first matching preview is shown instead. Calculate
 batches and price quotes are not saved; press **Calculate** for a fresh breakdown.
 Companion preferences are not imported.
 
+For a batch, **Material costs** lets you set an average cost per unit in whole
+copper for each reagent or its recorded raw preparation material. Use **Previous
+material** / **Next material** to choose an item, **Set cost** to save an
+override, or **Use market** to clear it. Zero is allowed. Overrides are remembered
+per item and character; they replace that item's AH/vendor estimate for the batch,
+while buying a refined material and preparing it from raw still compete on cost.
+The batch breakdown identifies custom prices and relevant overrides not used.
+The recipe ranking and per-craft market breakdown remain based on market/vendor
+estimates. Custom costs are estimates, not purchase limits or available stock;
+configure the snatcher's limits separately.
+
 For a fully priced learned recipe, **Set active shuffle** stores that recipe and its
 finished-item target in the addon. It uses the calculated batch, or the amount box
 (default 1 craft) if **Calculate** was not pressed. Incomplete prices and unlearned
-recipes cannot be activated.
+recipes cannot be activated. The frozen plan estimate uses any custom batch costs.
 This explicit button changes the active plan but does not buy or craft anything.
 Purchases still require configured limits and a later shuffle-macro press; Auction
 House commodity quotes and confirmations remain separate steps. Crafting still
@@ -164,8 +175,7 @@ This slice deliberately has limits:
 Selecting a row or calculating a preview never replaces your
 active plan, resets batch progress, changes purchase caps, or buys/crafts anything.
 Within the browser, only **Set active shuffle** changes the plan and target.
-Custom material costs and the complete addon-only
-workflow remain migration work. The existing companion and its generated plans
+The complete addon-only workflow remains migration work. The existing companion and its generated plans
 continue to work unchanged.
 
 The provider banner reports the installed Auctionator version. If Auctionator is

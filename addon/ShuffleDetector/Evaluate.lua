@@ -66,14 +66,25 @@ local function reagentLine(r, ctx)
     local ah = call(ctx.price, r.item)
     local vendor = call(ctx.vendorBuy, r.item)
     line.ahUnit, line.vendorUnit = ah, vendor
-    if ah then options[#options + 1] = { total = ah * r.qty, source = "AH" } end
-    if vendor then options[#options + 1] = { total = vendor * r.qty, source = "Vendor" } end
+    local custom = ctx.customCosts and ctx.customCosts[r.item]
+    if custom ~= nil then
+        options[#options + 1] = { total = custom * r.qty, source = "Custom" }
+    else
+        if ah then options[#options + 1] = { total = ah * r.qty, source = "AH" } end
+        if vendor then options[#options + 1] = { total = vendor * r.qty, source = "Vendor" } end
+    end
     local refined = ctx.refined and ctx.refined[r.item]
     if refined then
         local need = refined.per * r.qty
         local rawAh, rawVendor = call(ctx.price, refined.raw), call(ctx.vendorBuy, refined.raw)
-        local best, rawSource = rawAh and rawAh * need, "AH"
-        if rawVendor and (not best or rawVendor * need < best) then best, rawSource = rawVendor * need, "Vendor" end
+        local rawCustom = ctx.customCosts and ctx.customCosts[refined.raw]
+        local best, rawSource
+        if rawCustom ~= nil then
+            best, rawSource = rawCustom * need, "Custom"
+        else
+            best, rawSource = rawAh and rawAh * need, "AH"
+            if rawVendor and (not best or rawVendor * need < best) then best, rawSource = rawVendor * need, "Vendor" end
+        end
         if best then
             line.rawItem, line.rawUnit, line.rawQty = refined.raw, best / r.qty, refined.per
             line.rawSource = rawSource
@@ -126,7 +137,8 @@ end
 -- Evaluates one craft of a recipe.
 -- recipe: { name, spell, item, makes, reagents = {{item, qty}}, craftSeconds,
 --           disenchant = model from ns.DisenchantModel | false (not disenchantable) | nil (unknown) }
--- ctx:    { price(item), vendorBuy(item), vendorSell(item), refined = {[item] = {raw, per}}, settings }
+-- ctx:    { price(item), vendorBuy(item), vendorSell(item), refined = {[item] = {raw, per}},
+--           customCosts = {[item] = validated whole copper}, settings }
 -- Each provider returns a non-negative number or nil for unknown. Results keep nil
 -- for anything unknown instead of treating it as free or worthless.
 function ns.Evaluate(recipe, ctx)

@@ -1,17 +1,27 @@
 local _, ns = ...
-local panel, detail, scroll, summary, providerLabel, countLabel, professionMenu, exitMenu, recipeMenu, amount, searchBox, useButton
+local panel, detail, scroll, summary, providerLabel, countLabel, professionMenu, exitMenu, recipeMenu, amount, searchBox, useButton, costButton
 local rows, results, info, selected, batch, calculationError, activationNotice = {}, {}, {}, nil, nil, nil, nil
 local options, page, mode = { knownOnly = true }, 1, "crafts"
 local PAGE_SIZE = 10
 local refresh, render, menuCover
 local stateReady = false
+local materialCosts, costPanel = {}, nil
+local MAX_CUSTOM_COST = 100000000000
+
+local function integer(n, low, high)
+    return type(n) == "number" and n >= low and n <= high and n == math.floor(n)
+end
 
 local function boundedText(value, limit, optional)
     return (optional and value == nil) or (type(value) == "string" and #value <= limit)
 end
 
 local function validState(state)
-    return type(state) == "table" and state.version == 1
+    if type(state) ~= "table" or (state.materialCosts ~= nil and type(state.materialCosts) ~= "table") then return false end
+    for id, cost in pairs(state.materialCosts or {}) do
+        if not integer(id, 1, 10000000) or not integer(cost, 0, MAX_CUSTOM_COST) then return false end
+    end
+    return state.version == 1
         and boundedText(state.profession, 100, true)
         and boundedText(state.search, 100)
         and boundedText(state.selected, 300, true)
@@ -44,6 +54,8 @@ local function restoreState()
         search = state and state.search or "",
     }
     selected, mode = state and state.selected, state and state.mode or "crafts"
+    materialCosts = {}
+    for id, cost in pairs(state and state.materialCosts or {}) do materialCosts[id] = cost end
     return state and state.amount or "1"
 end
 
@@ -53,6 +65,7 @@ local function saveState()
         version = 1, profession = options.profession, search = searchBox:GetText(),
         recipes = options.knownOnly and "learned" or (options.unlearnedOnly and "unlearned" or "all"),
         exit = options.exit, selected = selected, mode = mode, amount = amount:GetText(),
+        materialCosts = materialCosts,
     }
 end
 
@@ -98,14 +111,18 @@ end
 -- does not require pressing Calculate first.
 local function activationBatch()
     if batch then return batch end
-    local result = current()
+    local result = ns.PlannerBatchResult(current(), info, materialCosts)
     if not result or not amount then return nil end
     return (ns.CalculateBatch(result, mode, tonumber(amount:GetText())))
 end
 
 local function updateUseButton()
+    if costButton then
+        if current() then costButton:Enable() else costButton:Disable() end
+    end
     if not useButton then return end
-    local allowed = ns.CanActivatePlannerResult and ns.CanActivatePlannerResult(current(), activationBatch())
+    local result = ns.PlannerBatchResult(current(), info, materialCosts)
+    local allowed = ns.CanActivatePlannerResult and ns.CanActivatePlannerResult(result, activationBatch())
     if allowed then useButton:Enable() else useButton:Disable() end
 end
 
@@ -124,7 +141,7 @@ local function details()
         }
         if activationNotice then lines[#lines + 1] = "\n" .. activationNotice end
         lines[#lines + 1] = ""
-        lines[#lines + 1] = heading("Estimate per craft")
+        lines[#lines + 1] = heading("Market estimate per craft (used for ranking)")
         lines[#lines + 1] = "Materials: " .. money(result.cost)
         if result.net ~= nil then
             lines[#lines + 1] = (result.exit or "Exit") .. " returns: " .. money(result.net)
@@ -186,9 +203,24 @@ local function details()
                     purchase.qty, itemName(purchase.item), money(purchase.total), purchase.source)
                 if purchase.prepare then lines[#lines + 1] = "  Raw preparation needed; extra craft time is not included." end
             end
+            local used = {}
+            for _, purchase in ipairs(batch.purchases) do
+                if purchase.source == "Custom" then used[purchase.item] = true end
+            end
+            for _, reagent in ipairs(result.recipe.reagents) do
+                local refined = info.context.refined[reagent.item]
+                for _, id in ipairs({ reagent.item, refined and refined.raw }) do
+                    if materialCosts[id] ~= nil and not used[id] then
+                        lines[#lines + 1] = "Custom cost not used: " .. itemName(id) .. " (another source was chosen)."
+                        used[id] = true
+                    end
+                end
+            end
+            lines[#lines + 1] = "Custom costs affect this batch, not rankings or purchase limits."
             lines[#lines + 1] = "Required quantities, not confirmed auction stock."
         end
-        local canActivate, activationReason = ns.CanActivatePlannerResult(result, activationBatch())
+        local batchResult = ns.PlannerBatchResult(result, info, materialCosts)
+        local canActivate, activationReason = ns.CanActivatePlannerResult(batchResult, activationBatch())
         if not canActivate then
             lines[#lines + 1] = "\n" .. heading("Set active shuffle")
             lines[#lines + 1] = activationReason
@@ -232,6 +264,7 @@ local function providerText(provider)
 end
 
 refresh = function()
+    if costPanel then costPanel:Hide() end
     options.search = searchBox:GetText()
     local err
     results, err, info = ns.PlannerResults(options)
@@ -323,6 +356,80 @@ local function dropdown(x, width, entries)
     return selector
 end
 
+local costItems, costIndex, costTitle, costEntry, costMessage = {}, 1
+
+local function displayCostItem()
+    local id = costItems[costIndex]
+    costTitle:SetText(id and (itemName(id) .. " (item " .. id .. ")") or "No material selected")
+    local cost = id and materialCosts[id]
+    costEntry:SetText(cost ~= nil and ("%.0f"):format(cost) or "")
+    costMessage:SetText(cost ~= nil and ("Custom: " .. money(cost) .. " per item.")
+        or "Market/vendor estimate is used; enter whole copper to override.")
+end
+
+local function changeCost(clear)
+    local id = costItems[costIndex]
+    if not id then costMessage:SetText("Select a recipe with materials first."); return end
+    local value
+    if not clear then
+        local textValue = costEntry:GetText()
+        value = textValue:match("^%d+$") and tonumber(textValue)
+        if not integer(value, 0, MAX_CUSTOM_COST) then
+            costMessage:SetText("Enter a whole copper amount from 0 to 100000000000.")
+            return
+        end
+    end
+    materialCosts[id] = value
+    saveState()
+    batch, calculationError, activationNotice = nil, nil, nil
+    displayCostItem()
+    details()
+end
+
+local function showCosts()
+    local result = current()
+    if not result then return end
+    costItems, costIndex = {}, 1
+    local seen = {}
+    for _, reagent in ipairs(result.recipe.reagents) do
+        local refined = info.context.refined[reagent.item]
+        for _, id in ipairs({ reagent.item, refined and refined.raw }) do
+            if not seen[id] then costItems[#costItems + 1] = id; seen[id] = true end
+        end
+    end
+    if not costPanel then
+        costPanel = CreateFrame("Frame", "ShuffleDetectorMaterialCosts", panel, "BasicFrameTemplateWithInset")
+        costPanel:SetSize(470, 240)
+        costPanel:SetPoint("CENTER")
+        costPanel:SetFrameStrata("DIALOG")
+        costPanel:EnableMouse(true)
+        costPanel.TitleText:SetText("Batch material costs")
+        costTitle = text(costPanel, "", 20, -38, 430, "GameFontNormal")
+        button(costPanel, "< Previous material", 20, -65, 160, function()
+            costIndex = (costIndex - 2) % #costItems + 1
+            displayCostItem()
+        end)
+        button(costPanel, "Next material >", 190, -65, 160, function()
+            costIndex = costIndex % #costItems + 1
+            displayCostItem()
+        end)
+        text(costPanel, "Cost per item (whole copper)", 20, -103, 250)
+        costEntry = CreateFrame("EditBox", nil, costPanel, "InputBoxTemplate")
+        costEntry:SetSize(150, 26)
+        costEntry:SetPoint("TOPLEFT", 25, -127)
+        costEntry:SetAutoFocus(false)
+        costEntry:SetMaxLetters(12)
+        costEntry:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        button(costPanel, "Set cost", 190, -127, 105, function() changeCost(false) end)
+        button(costPanel, "Use market", 305, -127, 135, function() changeCost(true) end)
+        costMessage = text(costPanel, "", 20, -164, 430, "GameFontHighlightSmall")
+        text(costPanel, "Batch estimates only; rankings and purchase limits do not change.", 20, -190, 430, "GameFontHighlightSmall")
+        button(costPanel, "Done", 335, -205, 105, function() costPanel:Hide() end)
+    end
+    displayCostItem()
+    costPanel:Show()
+end
+
 function ns.TogglePlanner()
     if panel then
         if panel:IsShown() then panel:Hide() else panel:Show(); refresh() end
@@ -341,6 +448,7 @@ function ns.TogglePlanner()
     panel:SetScript("OnHide", function()
         saveState()
         if menuCover then menuCover:Hide() end
+        if costPanel then costPanel:Hide() end
     end)
     panel.TitleText:SetText("ShuffleDetector - read-only recipe browser")
     text(panel, "Profession", 15, -40, 175, "GameFontNormal")
@@ -382,6 +490,7 @@ function ns.TogglePlanner()
     button(panel, "Refresh / search", 825, -60, 140, refresh)
     summary = text(panel, "", 15, -98, 940)
     providerLabel = text(panel, "", 15, -124, 800)
+    costButton = button(panel, "Material costs", 825, -124, 140, showCosts)
     text(panel, "Recipe / estimated profit per craft", 15, -172, 375, "GameFontNormal")
     text(panel, "Recipe breakdown (scroll for exits and batch results)", 410, -172, 530, "GameFontNormal")
     for i = 1, PAGE_SIZE do
@@ -392,6 +501,7 @@ function ns.TogglePlanner()
         rows[i].nameText = text(rows[i], "", 5, -2, 365, "GameFontNormal")
         rows[i].valueText = text(rows[i], "", 5, -21, 365, "GameFontHighlightSmall")
         rows[i]:SetScript("OnClick", function(self)
+            if costPanel then costPanel:Hide() end
             selected, batch, calculationError = self.key, nil, nil
             activationNotice = nil
             saveState()
@@ -431,7 +541,8 @@ function ns.TogglePlanner()
     end)
     button(panel, "Calculate", 680, -636, 120, function()
         amount:ClearFocus()
-        batch, calculationError = ns.CalculateBatch(current(), mode, tonumber(amount:GetText()))
+        local result = ns.PlannerBatchResult(current(), info, materialCosts)
+        batch, calculationError = ns.CalculateBatch(result, mode, tonumber(amount:GetText()))
         activationNotice = nil
         details()
         scroll:SetVerticalScroll(math.max(0, detail:GetStringHeight() - 380))
@@ -439,7 +550,8 @@ function ns.TogglePlanner()
     useButton = button(panel, "Set active shuffle", 810, -636, 155, function()
         amount:ClearFocus()
         batch = activationBatch()
-        local ok, reason = ns.ActivatePlannerResult(current(), batch)
+        local result = ns.PlannerBatchResult(current(), info, materialCosts)
+        local ok, reason = ns.ActivatePlannerResult(result, batch)
         if not ok then
             calculationError, activationNotice = reason, nil
         else

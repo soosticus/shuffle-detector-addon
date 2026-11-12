@@ -145,8 +145,17 @@ function ns.PlannerResults(options)
         end
     end
     return ns.RankEvaluations(results), nil, {
-        quotes = quotes, skipped = skipped, professions = professions, provider = ns.PriceProviderStatus(),
+        quotes = quotes, skipped = skipped, professions = professions, provider = ns.PriceProviderStatus(), context = ctx,
     }
+end
+
+function ns.PlannerBatchResult(result, info, costs)
+    if not result or type(info) ~= "table" or type(info.context) ~= "table" then return nil end
+    local base = info.context
+    return ns.Evaluate(result.recipe, {
+        price = base.price, vendorBuy = base.vendorBuy, vendorSell = base.vendorSell,
+        refined = base.refined, settings = base.settings, customCosts = costs,
+    })
 end
 
 function ns.CanActivatePlannerResult(result, batch)

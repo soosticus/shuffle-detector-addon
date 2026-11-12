@@ -65,6 +65,31 @@ eq(res.cost, nil, "an unpriced reagent leaves cost unknown, not free")
 eq(res.missing[1], 11)
 eq(res.profit, nil)
 
+-- Calculator overrides replace the AH/vendor estimate for that material, but
+-- direct and prepared alternatives still compete independently.
+prices[11], prices[10], vendorBuy[11], vendorBuy[10] = 50, 10, 15, 2
+ctx.customCosts = { [11] = 100 }
+res = ns.Evaluate(recipe, ctx)
+eq(res.cost, 12, "a cheaper raw vendor source can beat a custom refined cost")
+eq(res.reagents[1].source, "Craft from raw")
+eq(res.reagents[1].rawSource, "Vendor")
+ctx.customCosts = { [10] = 30 }
+res = ns.Evaluate(recipe, ctx)
+eq(res.cost, 45, "custom raw cost replaces even a cheaper raw vendor price")
+eq(res.reagents[1].source, "Vendor")
+ctx.customCosts = { [11] = 100, [10] = 1 }
+res = ns.Evaluate(recipe, ctx)
+eq(res.cost, 6, "custom raw can beat custom refined")
+eq(res.reagents[1].rawSource, "Custom")
+ctx.customCosts = { [11] = 0, [10] = 1 }
+res = ns.Evaluate(recipe, ctx)
+eq(res.cost, 0, "zero custom cost is valid")
+eq(res.reagents[1].source, "Custom")
+ctx.customCosts = { [11] = 9 }
+prices[11], prices[10], vendorBuy[11], vendorBuy[10] = nil, nil, nil, nil
+eq(ns.Evaluate(recipe, ctx).cost, 27, "a custom cost can replace a missing quote")
+ctx.customCosts = nil
+
 -- Disenchant exit: partially priced yields are unknown, never a partial value.
 prices[11] = 10
 prices[30] = 100

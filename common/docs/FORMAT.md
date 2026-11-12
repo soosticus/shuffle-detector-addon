@@ -390,6 +390,7 @@ plannerByCharacter = {
     selected = "Tailoring:8774",   -- optional preview recipe key; not an execution plan
     mode = "crafts",              -- "crafts" or "budget" (whole copper)
     amount = "20",                -- edit-box draft, validated when calculating
+    materialCosts = { [2589] = 50 }, -- optional custom whole-copper cost per item
   },
 }
 ```
@@ -403,6 +404,16 @@ falls back to the first matching recipe if the selection is no longer available.
 Quotes, calculated batches and activation notices are transient. Invalid draft
 amounts remain visible and produce normal calculator errors rather than silently
 becoming a valid batch. No companion QSettings are read or imported.
+
+Material-cost overrides are per character and item ID, whole copper from 0 to
+100000000000 inclusive. They replace that material's AH/vendor input estimate
+for batch calculation only; the direct and learned single-input raw preparation
+paths remain alternatives. Rankings and normal per-craft market breakdowns are
+unaffected. Clearing an override restores market/vendor estimation. The selected
+batch's custom price, including zero, is used in the active plan's frozen
+per-craft cost estimate; it does not set purchase limits or guarantee stock.
+Changing an override invalidates any calculated batch. Invalid saved cost keys or
+values invalidate the saved browser record and are logged before defaults are used.
 
 Restoring or editing preview preferences does not replace `ns.plan`, change the
 snatcher target/caps, reset progress, or trigger crafting/purchases. Only the
