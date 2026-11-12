@@ -418,6 +418,21 @@ bags[2996], bags[2589] = 1, 3
 eq(ns.SnatchNeeds()[1].missing, 4, "existing bolts and complete raw units cover demand")
 eq(ns.SnatchNeeds()[2].missing, 7, "partial raw stock reduces cloth purchase")
 eq(ns.SnatchNeeds()[1].toCraft, 1, "manual bolt crafting from bags")
+eq(ns.SnatchNeeds()[2].required, 10, "raw requirement excludes the already-created bolt")
+ns.ToggleSnatcher()
+local function displayed(fragment)
+    for _, f in ipairs(frames) do
+        if type(f.value) == "string" and f:IsShown() and f.value:find(fragment, 1, true) then return true end
+    end
+    return false
+end
+assert(displayed("Raw need 10 | bags 3 | awaiting 0 | buy 7"), "panel uses the same net cloth demand as purchasing")
+assert(displayed("For 5 unfilled Item 2996"), "raw demand explains that existing bolts were subtracted")
+bags[2996], bags[2589] = 2, 1
+event("BAG_UPDATE_DELAYED")
+assert(displayed("Raw need 8 | bags 1 | awaiting 0 | buy 7"), "crafting a bolt immediately reduces displayed raw requirement")
+bags[2996], bags[2589] = 1, 3
+event("BAG_UPDATE_DELAYED")
 s.awaiting[2589], s.bags[2589] = 7, 3
 eq(ns.SnatchNeeds()[1].missing, 0, "raw mail prevents duplicate bolt purchases")
 eq(ns.SnatchNeeds()[2].missing, 0)
@@ -810,6 +825,30 @@ pressPurchase()
 eq(calls[2][1], "craft", "same macro proceeds to craft after buying")
 
 s = setup()
+s.target, s.prices[1], bags[1] = 50, 100, 2
+MerchantFrame.shown = true
+merchants = { { id = 1, price = 80, stackCount = 1, numAvailable = -1, isPurchasable = true } }
+pressPurchase = macro()
+eq(ns.NextSnatchPurchase().kind, "purchase", "the whole batch still needs more materials")
+eq(ns.NextShuffleStep().kind, "craft", "craft available materials before stockpiling the rest of the batch")
+pressPurchase()
+eq(calls[1][1], "craft", "vendor presence does not starve crafting")
+
+s = linen()
+bags[2589] = 12
+ns.plan.reagents[#ns.plan.reagents + 1] = { item = 2320, qty = 3 }
+ns.SnatchNeeds()
+s.target = 50
+s.prices[2320] = 10
+MerchantFrame.shown = true
+merchants = { { id = 2320, price = 10, stackCount = 1, numAvailable = -1, isPurchasable = true } }
+pressPurchase = macro()
+eq(ns.NextShuffleStep().spell, 2963, "prepare owned cloth before filling bags with thread")
+pressPurchase()
+eq(calls[1][1], "craft")
+eq(calls[1][2], 2963)
+
+s = setup()
 s.target, s.prices[1] = 5, 100
 commodity[1] = { { quantity = 10, unitPrice = 80 } }
 pressPurchase = macro()
@@ -828,6 +867,9 @@ pressPurchase()
 eq(#calls, 2, "cannot buy while quote is pending")
 event("COMMODITY_PRICE_UPDATED", 80, 800)
 eq(ns.NextShuffleStep().label, "Confirm 10 x Item 1 for 0g 8s 0c")
+bags[1] = 2
+eq(ns.NextShuffleStep().kind, "purchase", "a pending quote retains confirmation priority over bagged materials")
+bags[1] = nil
 pressPurchase()
 eq(calls[3][1], "confirm", "same macro confirms on a separate press")
 eq(#calls, 3, "one confirmation for down/up")
@@ -878,8 +920,12 @@ pressPurchase()
 eq(calls[3][1], "confirm")
 advance(16)
 eq(ns.NextShuffleStep().label, "Resolve uncertain purchase in the snatcher panel")
+bags[1] = 10
+eq(ns.NextShuffleStep().kind, "idle", "uncertain purchases still block crafting even with materials")
 pressPurchase()
 eq(#calls, 3, "unknown outcomes cannot be retried with macro")
+ns.SnatchResolvePurchase(false)
+eq(ns.NextShuffleStep().kind, "craft", "explicitly resolving uncertainty restores crafting instead of more shopping")
 
 s = setup()
 s.target, s.prices[1] = 0, 100
@@ -1078,6 +1124,27 @@ bags[1] = 10
 eq(ns.NextShuffleStep().quantity, 5, "batching also works without a snatcher target")
 C_TradeSkillUI = nil
 eq(ns.NextShuffleStep().quantity, 1, "legacy crafting stays one cast per press")
+
+s, batchPress = batchSetup("Vendor")
+bags[1], s.target, s.prices[1] = 0, 100, 100
+MerchantFrame.shown = true
+merchants = { { id = 1, price = 80, stackCount = 1, numAvailable = -1, isPurchasable = true } }
+free, outputStack = 3, 5
+eq(ns.NextShuffleStep().purchase.qty, 5, "vendor buy reserves two general slots")
+contents[1] = { itemID = 1, stackCount = 3 }
+eq(ns.NextShuffleStep().purchase.qty, 7, "vendor buy includes unlocked partial material stacks")
+contents[1].isLocked = true
+eq(ns.NextShuffleStep().purchase.qty, 5, "vendor buy excludes locked partial stacks")
+contents[1].isLocked = false
+free = 2
+eq(ns.NextShuffleStep().purchase.qty, 2, "with only reserve slots free, fill the partial stack only")
+free = 1
+eq(ns.NextShuffleStep().kind, "idle", "vendor buy never consumes the reserved slots")
+batchPress()
+eq(#calls, 0, "no vendor buy when general bag reserve cannot be preserved")
+free, outputStack, contents = 3, 5, {}
+merchants[1].stackCount, merchants[1].price = 2, 160
+eq(ns.NextShuffleStep().purchase.qty, 4, "capacity is rounded down to whole vendor bundles")
 
 for _, exit in ipairs({ "Disenchant", "Vendor" }) do
     s, batchPress = batchSetup(exit)

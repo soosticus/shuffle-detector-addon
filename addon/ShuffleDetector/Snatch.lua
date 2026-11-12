@@ -350,6 +350,8 @@ local function merchantOffer(id)
                 local qty = math.floor(r.missing / bundle) * bundle
                 local max = GetMerchantItemMaxStack and GetMerchantItemMaxStack(i) or bundle
                 qty = math.min(qty, math.floor(max / bundle) * bundle)
+                local capacity = ns.BagOutputCapacity and ns.BagOutputCapacity(id)
+                if capacity then qty = math.min(qty, math.floor(capacity / bundle) * bundle) end
                 if stock ~= -1 then qty = math.min(qty, math.floor(stock / bundle) * bundle) end
                 while qty > 0 and qty ~= completeQuantity(qty, r) do qty = qty - bundle end
                 local total = qty / bundle * price
@@ -583,10 +585,10 @@ function ns.NextSnatchPurchase()
     if not s or s.target == 0 then return end
     if pending then
         if pending.kind == "quoted" then
-            return { kind = "purchase", action = "ah", item = pending.item, qty = pending.qty, total = pending.total,
+            return { kind = "purchase", blocking = true, action = "ah", item = pending.item, qty = pending.qty, total = pending.total,
                 label = ("Confirm %d x %s for %s"):format(pending.qty, itemName(pending.item), money(pending.total)) }
         end
-        return { kind = "idle", label = pending.kind == "uncertain"
+        return { kind = "idle", blocking = true, label = pending.kind == "uncertain"
             and "Resolve uncertain purchase in the snatcher panel" or "Waiting for purchase confirmation or bag update" }
     end
     if ns.SnatchTargetReached() then return end
@@ -791,10 +793,11 @@ refresh = function()
             if row.derived then
                 row.price:SetText(("Derived: %s (%d x raw cap)"):format(money(r.cap), r.raw.qty))
             end
-            local note = r.parent and ("Raw for " .. itemName(r.parent))
+            local note = r.parent and ("For %d unfilled %s"):format(r.required / r.per, itemName(r.parent))
                 or r.raw and ("Craft " .. r.toCraft .. " from bag stock via " .. r.raw.recipe) or r.note or ""
-            row.info:SetText(("%s\nNeed %d | bags %d | awaiting %d | buy %d\n%s"):format(
-                itemName(r.item), r.required, r.bags, r.awaiting, r.missing, note))
+            row.info:SetText(("%s\n%s %d | bags %d | awaiting %d | buy %d\n%s"):format(
+                itemName(r.item), r.parent and "Raw need" or "Need",
+                r.required, r.bags, r.awaiting, r.missing, note))
         end
     end
     panel.buy:SetText(pending and pending.kind == "quoted" and "Confirm AH purchase" or "Buy AH offer")

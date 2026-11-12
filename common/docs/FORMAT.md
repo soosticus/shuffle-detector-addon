@@ -246,6 +246,14 @@ quote/confirmation steps through the same shopping state and checks as the panel
 purchase action requires a hardware press; quotes need a later confirmation press.
 The macro uses saved limits only. Its tracker shows purchase prices and waiting/mail
 states; unresolved reservations must be reconciled in the panel.
+With no pending purchase, main-recipe crafting or raw preparation from bag stock
+precedes shopping for the rest of the target. Vendor quantities respect the same
+two-empty-general-slot reserve and unlocked partial-stack capacity as crafting
+when the client supplies bag-capacity APIs. Idle presses log the next-step reason,
+not only an empty button action.
+The raw-material row displays its requirement after intermediate stock/reservations
+are deducted, with the corresponding unfilled intermediate count; its buy quantity
+also deducts raw stock/reservations. These are live views, not saved quantities.
 `/shuffledetector shuffle` and `/shuffledetector snatch` toggle that same window, containing
 both batch/price controls and the live shuffle status. The secure action button remains
 independent of window visibility.

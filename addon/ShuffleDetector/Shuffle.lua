@@ -108,12 +108,12 @@ local function craftableCount(plan)
     return n or 0
 end
 
-local function outputCapacity(plan)
+local function outputCapacity(itemID)
     local c = C_Container
     local freeSlots = (c and c.GetContainerNumFreeSlots) or GetContainerNumFreeSlots
     if not freeSlots then return end
     local info = (C_Item and C_Item.GetItemInfo) or GetItemInfo
-    local stack = info and plan.item and select(8, info(plan.item))
+    local stack = info and itemID and select(8, info(itemID))
     stack = type(stack) == "number" and stack > 0 and stack or 1
     local slots = (c and c.GetContainerNumSlots) or GetContainerNumSlots
     local slotInfo = c and c.GetContainerItemInfo
@@ -125,7 +125,7 @@ local function outputCapacity(plan)
         if stack > 1 and slots and slotInfo then
             for slot = 1, slots(bag) or 0 do
                 local item = slotInfo(bag, slot)
-                if item and item.itemID == plan.item and not item.isLocked then
+                if item and item.itemID == itemID and not item.isLocked then
                     partial = partial + math.max(0, stack - (item.stackCount or stack))
                 end
             end
@@ -134,6 +134,7 @@ local function outputCapacity(plan)
     if empty < 2 then return 0 end
     return (empty - 2) * stack + partial
 end
+ns.BagOutputCapacity = outputCapacity
 
 local function merchantOpen()
     return MerchantFrame ~= nil and MerchantFrame:IsShown()
@@ -164,7 +165,7 @@ function ns.NextShuffleStep()
         return step
     end
     local shopping = ns.NextSnatchPurchase and ns.NextSnatchPurchase()
-    if shopping then
+    if shopping and shopping.blocking then
         step.kind, step.label, step.purchase = shopping.kind, shopping.label, shopping
         return step
     end
@@ -186,6 +187,10 @@ function ns.NextShuffleStep()
             step.quantity = prepare.quantity
             return step
         end
+        if shopping then
+            step.kind, step.label, step.purchase = shopping.kind, shopping.label, shopping
+            return step
+        end
         step.stage = 2
         if bag and plan.exit == "Vendor" then
             step.kind, step.label = "idle", ("Open a vendor window to sell %d x %s"):format(crafted, plan.recipe)
@@ -200,7 +205,7 @@ function ns.NextShuffleStep()
     local quantity = step.craftable
     local remaining = ns.SnatchCraftsRemaining and ns.SnatchCraftsRemaining()
     if remaining then quantity = math.min(quantity, remaining) end
-    local capacity = outputCapacity(plan)
+    local capacity = outputCapacity(plan.item)
     if capacity then quantity = math.min(quantity, math.floor(capacity / makes)) end
     if quantity <= 0 then
         step.kind, step.label = "idle", "Free bag space (keep 2 slots open) before crafting " .. plan.recipe
@@ -398,6 +403,7 @@ local function create()
         local acted = (self.craftRecipe or sellSlot or self:GetAttribute("type")) and not InCombatLockdown()
         log(("click: %s (%s) down=%s"):format(self.craftRecipe and "tradeskill craft" or sellSlot and "vendor sale" or tostring(self:GetAttribute("type")),
             tostring(self:GetAttribute("spell") or self:GetAttribute("macrotext") or self.craftRecipe), tostring(self.lastDown)))
+        if not acted then log("next: " .. ns.NextShuffleStep().label) end
         if sellSlot then
             if ns.BatchStatsSale then ns.BatchStatsSale(sellSlot[1], sellSlot[2]) end
             local use = (C_Container and C_Container.UseContainerItem) or UseContainerItem
