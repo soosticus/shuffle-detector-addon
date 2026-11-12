@@ -57,7 +57,18 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   ID like trade goods; weapons/armor stay unpriced (suffix variants). A replay of
   the saved data prices every learned recipe for Suest (58/58) and Arand (59/59).
   Confirm in game that the banner shows 346, rows are priced, and Set active
-  shuffle works without pressing Calculate. Do not waive DE gates to hide missing data.
+  shuffle works without pressing Calculate (confirmed in game 2026-11-12, along with
+  the selection now surviving /reload). Do not waive DE gates to hide missing data.
+  Disenchant source: on Forever, Auctionator loads its disenchant code but not its
+  probability table (`/shuffledetector prices 4343 6239` returned nil for Brown Linen
+  Pants and Red Linen Vest; diagnostic reports "probability table loaded=false"), and
+  that table is All Rights Reserved, so it cannot be copied. Candidate: CMaNGOS
+  ClassicDB (github.com/cmangos/classic-db, GPLv3 plus a COPYRIGHT.md fair-use notice)
+  has populated `disenchant_loot_template` rows (entry = ilvl*100 + quality; chance,
+  min/max count). It models Vanilla 1.12, not Forever, and redistribution rights for a
+  generated addon bundle are not established. Needs a user decision before use; if
+  adopted, ship it as an uncertain opt-in model until logged disenchants confirm it
+  (rare outcomes need well over 10 samples per bracket).
 
 - Confirm companion installation isolation when switching beta/release clients on the user's machine: selected-client startup/polling, empty-client result clearing, explicit account-file opening, and File > Manage character data exclusions/restoration. Synthetic GUI tests cover these paths; exclusions do not edit WoW SavedVariables.
 
