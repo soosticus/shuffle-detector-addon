@@ -968,6 +968,77 @@ populate = function()
     refresh()
 end
 
+-- Attach the shuffle window to the right of the client's open windows (professions, vendor,
+-- auction house, mail, bank), the way the client's own panels sit side by side. The rightmost
+-- open window is the anchor, so this window is always the one pushed furthest right; with
+-- nothing open it returns to its saved dragged position.
+local ANCHOR_WINDOWS = { "ProfessionsFrame", "MerchantFrame", "AuctionHouseFrame", "AuctionFrame",
+    "MailFrame", "BankFrame", "TradeFrame", "ClassTrainerFrame" }
+local hookedWindows, attachedTo = {}, nil
+
+local function rightmostWindow()
+    local best, bestRight
+    for _, name in ipairs(ANCHOR_WINDOWS) do
+        local window = _G[name]
+        if type(window) == "table" and window.IsShown and window:IsShown() and window.GetRight then
+            local ok, right = pcall(window.GetRight, window)
+            if ok and type(right) == "number" and (not bestRight or right > bestRight) then
+                best, bestRight = window, right
+            end
+        end
+    end
+    return best
+end
+
+local function savedPosition()
+    local position = AHSnapshotDB.shuffleTracker
+    panel:ClearAllPoints()
+    if position and position.point then
+        panel:SetPoint(position.point, UIParent, position.relPoint or position.point, position.x or 0, position.y or 0)
+    else
+        panel:SetPoint("CENTER")
+    end
+end
+
+local function reanchor()
+    if not panel then return end
+    local target = rightmostWindow()
+    if target then
+        attachedTo = target
+        panel:ClearAllPoints()
+        panel:SetPoint("TOPLEFT", target, "TOPRIGHT", 4, 0)
+    elseif attachedTo then
+        attachedTo = nil
+        savedPosition()
+    end
+end
+ns.ReanchorShuffleWindow = reanchor
+
+-- The client builds some of these windows on demand, so hook whatever exists whenever one of
+-- the open/close events fires.
+local function hookWindows()
+    for _, name in ipairs(ANCHOR_WINDOWS) do
+        local window = _G[name]
+        if window and not hookedWindows[name] and window.HookScript then
+            hookedWindows[name] = true
+            pcall(window.HookScript, window, "OnShow", reanchor)
+            pcall(window.HookScript, window, "OnHide", reanchor)
+            pcall(window.HookScript, window, "OnSizeChanged", reanchor)
+        end
+    end
+end
+
+local anchorDriver = CreateFrame("Frame")
+for _, event in ipairs({ "PLAYER_LOGIN", "TRADE_SKILL_SHOW", "TRADE_SKILL_CLOSE", "AUCTION_HOUSE_SHOW",
+    "AUCTION_HOUSE_CLOSED", "MERCHANT_SHOW", "MERCHANT_CLOSED", "MAIL_SHOW", "MAIL_CLOSED",
+    "BANKFRAME_OPENED", "BANKFRAME_CLOSED" }) do
+    pcall(anchorDriver.RegisterEvent, anchorDriver, event)
+end
+anchorDriver:SetScript("OnEvent", function()
+    hookWindows()
+    reanchor()
+end)
+
 local function createPanel()
     if not panel then
         local compactHeight = ns.BatchStatsText and 600 or 510
@@ -980,6 +1051,11 @@ local function createPanel()
         panel:SetScript("OnDragStart", panel.StartMoving)
         panel:SetScript("OnDragStop", function(self)
             self:StopMovingOrSizing()
+            -- While a client window is open this window stays attached; dragging snaps it back.
+            if rightmostWindow() then
+                reanchor()
+                return
+            end
             local point, _, relPoint, x, y = self:GetPoint()
             AHSnapshotDB.shuffleTracker = { point = point, relPoint = relPoint, x = x, y = y }
         end)
@@ -1075,6 +1151,8 @@ local function createPanel()
             stop("Shuffle window hidden. Polling stopped.")
         end)
         if ns.AttachShuffleTracker then panel.shuffleStatus = ns.AttachShuffleTracker(panel) end
+        hookWindows()
+        reanchor()
     end
 end
 
@@ -1086,11 +1164,8 @@ end
 
 function ns.RestoreShuffleWindow()
     createPanel()
-    local position = AHSnapshotDB.shuffleTracker
-    if position and position.point then
-        panel:ClearAllPoints()
-        panel:SetPoint(position.point, UIParent, position.relPoint or position.point, position.x or 0, position.y or 0)
-    end
+    savedPosition()
+    reanchor()
     populate()
     if AHSnapshotDB.shuffleTrackerShown ~= false and ns.plan and ns.plan.version == 1 and ns.plan.recipe then
         panel:Show()

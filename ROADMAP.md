@@ -23,6 +23,13 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   `/shuffledetector browse` toggles the tab while the window is open and the
   standalone window otherwise. Check coexistence with SkillUp Forever's tab.
 
+- Confirm the shuffle window's attachment in game: it should sit to the right of the
+  rightmost open client window (professions - including when widened by the browser
+  tab - vendor, auction house, mail, bank), follow opens/closes/resizes, snap back
+  after a drag while attached, and return to its saved position when everything
+  closes. The anchor list is in Snatch.lua (`ANCHOR_WINDOWS`); add this client's
+  frame names if some windows are missed.
+
 - Confirm in game that AH polling started by a craft press, and quote/confirm presses during
   a craft cast, work without interrupting the craft queue.
 

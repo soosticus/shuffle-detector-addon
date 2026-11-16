@@ -129,7 +129,7 @@ the exit dropdown until a trusted model is available.
 
 ## In-game shuffle
 
-Select and activate a fully priced shuffle and target in the browser (**Set active shuffle**). One window shows batch target/price controls, batch progress, the live shuffle steps, craftable count and crafted pieces in your bags. The next action includes purchase prices and waiting states. Drag the window to move it; its position and visibility are remembered.
+Select and activate a fully priced shuffle and target in the browser (**Set active shuffle**). One window shows batch target/price controls, batch progress, the live shuffle steps, craftable count and crafted pieces in your bags. The next action includes purchase prices and waiting states. While a professions, vendor, auction house, mail or bank window is open, the shuffle window attaches to the right of the rightmost one, like the client's own side-by-side panels (dragging snaps it back); with none open, drag it anywhere and its position and visibility are remembered.
 
 Use `/shuffledetector shuffle` to toggle this combined window; `/shuffledetector snatch` is an alias, not a separate shopping window. You can put the toggle in its own macro:
 

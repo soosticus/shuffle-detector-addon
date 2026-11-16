@@ -1807,4 +1807,26 @@ events = loadLikeGame(db)
 events.scripts.OnEvent(events, "ADDON_LOADED", "ShuffleDetector")
 eq(ns.plan, nil, "an invalid saved selection is not loaded")
 
+-- The shuffle window attaches to the right of the rightmost open client window and returns
+-- to its saved position when they all close.
+s = setup()
+ns.ToggleSnatcher()
+local attachWindow = ShuffleDetectorSnatcher
+ProfessionsFrame = frame()
+ProfessionsFrame.GetRight = function() return 500 end
+MerchantFrame.GetRight = function() return 300 end
+MerchantFrame.shown = true
+ns.ReanchorShuffleWindow()
+local attachPoint, attachTarget, attachRelPoint = attachWindow:GetPoint()
+eq(attachPoint, "TOPLEFT")
+eq(attachTarget, ProfessionsFrame, "the rightmost open window is the anchor")
+eq(attachRelPoint, "TOPRIGHT")
+ProfessionsFrame.shown = false
+ns.ReanchorShuffleWindow()
+eq(select(2, attachWindow:GetPoint()), MerchantFrame, "the next open window takes over")
+MerchantFrame.shown = false
+ns.ReanchorShuffleWindow()
+eq((attachWindow:GetPoint()), "CENTER", "with every window closed it returns to its saved position")
+ProfessionsFrame = nil
+
 print("snatcher checks passed")
