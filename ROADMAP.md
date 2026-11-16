@@ -12,7 +12,8 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   `ChatFrameExpandArrow`; `SetRotation`/`SetDesaturated` are guarded) and
   accent-marked selected menu entries.
 
-- Confirm the professions-window tab in game (needs the ForeverCore addon): the side
+- Confirm the professions-window tab in game (ForeverCore is now a hard dependency,
+  so the addon refuses to load without it; confirm the user has it installed): the side
   tab appears under the client's own tabs after login or the first profession window,
   selecting it docks the browser into the page area scaled to fit (the window is asked
   for 990 width via `SetMinWidth`), dropdown menus and the material-costs popup work

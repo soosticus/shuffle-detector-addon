@@ -4,8 +4,7 @@
 ## Author: soosticus
 ## X-License: MIT
 ## Version: @project-version@
-## Dependencies: Auctionator
-## OptionalDeps: ForeverCore
+## Dependencies: Auctionator, ForeverCore
 ## SavedVariables: AHSnapshotDB
 
 ShuffleDetector.lua

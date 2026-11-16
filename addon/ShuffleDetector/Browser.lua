@@ -643,7 +643,8 @@ local function undock()
 end
 
 -- Register the browser as a side-tab page of ProfessionsFrame, like SkillUp Forever's tabs.
--- Without ForeverCore (or before the client builds the window) the standalone window remains.
+-- ForeverCore is a dependency, but the guards keep the standalone window working if its
+-- ProfessionTabs API changes or the client has not built the window yet.
 local function ensureTab()
     if dockTab then return true end
     local api = professionTabs()

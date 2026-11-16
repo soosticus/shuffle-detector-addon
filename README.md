@@ -11,7 +11,7 @@ Earlier releases also had a desktop companion app. It was removed in 0.9.6; the 
 
 ## Install
 
-Requires Auctionator. Download `ShuffleDetector-<version>.zip` from the [releases](https://github.com/soosticus/shuffle-detector-addon/releases) and unpack it into `Interface/AddOns` (or copy `addon/ShuffleDetector` from a checkout). Open each profession window (and visit vendors) once so the addon can record recipes and prices; `/shuffledetector browse` then ranks shuffles.
+Requires Auctionator and ForeverCore (the shared Forever addon framework that also powers SkillUp Forever's profession tabs). Download `ShuffleDetector-<version>.zip` from the [releases](https://github.com/soosticus/shuffle-detector-addon/releases) and unpack it into `Interface/AddOns` (or copy `addon/ShuffleDetector` from a checkout). Open each profession window (and visit vendors) once so the addon can record recipes and prices; `/shuffledetector browse` then ranks shuffles.
 
 The addon asks the game for the names and vendor sell prices of every item in your recorded recipes after login (`/shuffledetector items` repeats it). Vendor buy prices still come only from visiting a vendor.
 
@@ -45,13 +45,11 @@ This diagnostic does not change the loaded plan or buy anything.
 to record their buy prices. After recording or scanning with Auctionator, click
 **Refresh / search** in the preview; no `/reload` is needed for price refresh.
 
-With the ForeverCore addon installed (the framework SkillUp Forever uses), the
-browser also registers a side tab on the Professions window, like SkillUp
-Forever's pages: select the tab to show the browser inside the window (scaled
-to fit), select a profession tab or close the window to hand it back. While
-the Professions window is open, `/shuffledetector browse` toggles that tab;
-otherwise it toggles the standalone window. Without ForeverCore only the
-standalone window exists.
+The browser also registers a side tab on the Professions window through
+ForeverCore, like SkillUp Forever's pages: select the tab to show the browser
+inside the window (scaled to fit), select a profession tab or close the window
+to hand it back. While the Professions window is open, `/shuffledetector browse`
+toggles that tab; otherwise it toggles the standalone window.
 
 The browser ranks the current character's recorded item-producing recipes by
 estimated profit. Use the profession, recipe-filter and exit dropdowns
