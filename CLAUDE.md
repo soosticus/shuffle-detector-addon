@@ -6,10 +6,11 @@ Read this first, then `ROADMAP.md` (open work), `README.md` (user docs) and `doc
 
 A WoW Classic addon that ranks and runs crafting "shuffles" (craft something, then disenchant, sell on the AH or vendor it), priced from Auctionator. A desktop companion app (Python, PySide6) used to do the ranking; it was removed in 0.9.6 and only lives in git history (tags up to v0.9.4).
 
-- Target client: the "Forever" Classic client (Interface 16001, game type `camelot`). It exposes the modern `C_TradeSkillUI` profession API, not the classic `GetTradeSkill*` functions (the addon supports both). Install paths differ per machine: on the Linux machine it is `/home/soost/.local/share/Steam/steamapps/compatdata/3544483676/pfx/drive_c/Program Files (x86)/World of Warcraft/_forever_`; on Windows it has been `C:/Games/World of Warcraft/_classic_beta_/`.
+- Target client: the "Forever" Classic client (Interface 16001, game type `camelot`). It exposes the modern `C_TradeSkillUI` profession API, not the classic `GetTradeSkill*` functions (the addon supports both). Install paths differ per machine: on the Linux machine it is `/home/soost/.local/share/Steam/steamapps/compatdata/3544483676/pfx/drive_c/Program Files (x86)/World of Warcraft/_forever_`; on Windows it is `C:/Games/World of Warcraft/_forever_/`.
 - `addon/ShuffleDetector/` (load order in the `.toc`):
   - `ShuffleDetector.lua`: core. Item, profession, recipe and vendor recording, item info requests (`ns.RequestItems`, `ns.LoadRecipeItems` for every item of recorded and catalog recipes), slash commands.
   - `Diagnostics.lua`, `Observations.lua`, `Disenchant.lua`: log ring buffer, observations, logged disenchant results (`AHSnapshotDB.disenchants`).
+  - `UI.lua`: shared flat theme (`ns.UI`): dark 1px-bordered windows, flat buttons/edit boxes, placeholders, scrollbar skinning, Arial Narrow font objects. Every window and the tracker use it; test harnesses load it before any UI module.
   - `Prices.lua`: Auctionator `Auctionator.API.v1` prices in game.
   - `Evaluate.lua`, `Planner.lua`, `Calculator.lua`, `Catalog.lua`, `Browser.lua`: per-recipe evaluation, ranking across recorded characters and the recipe catalog (`AHSnapshotDB.catalog`, a spell ID scan for professions nobody has), the batch calculator, and the `/shuffledetector browse` window. **Set active shuffle** saves `AHSnapshotDB.activePlan`, which `ns.RestoreActivePlan` loads as `ns.plan` on login.
   - `Shuffle.lua`: the secure button, step tracker and macro (craft, disenchant, vendor sell, buying).

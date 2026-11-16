@@ -9,6 +9,7 @@
 
 ShuffleDetector.lua
 Diagnostics.lua
+UI.lua
 Prices.lua
 Evaluate.lua
 Calculator.lua

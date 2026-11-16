@@ -154,18 +154,15 @@ function ns.BatchStatsText(state)
 end
 
 local function text(parent, x, y, width)
-    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local label = ns.UI.Label(parent, nil, 11)
     label:SetPoint("TOPLEFT", x, y)
     label:SetWidth(width)
-    label:SetJustifyH("LEFT")
     return label
 end
 
 local function button(parent, label, x, y, fn)
-    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    b:SetSize(130, 24)
+    local b = ns.UI.Button(parent, label, 130, 24)
     b:SetPoint("TOPLEFT", x, y)
-    b:SetText(label)
     b:SetScript("OnClick", fn)
     return b
 end
@@ -221,8 +218,7 @@ end
 
 function ns.ToggleBatchAnalytics()
     if not panel then
-        panel = CreateFrame("Frame", "ShuffleDetectorAnalytics", UIParent, "BasicFrameTemplateWithInset")
-        panel:SetSize(600, 650)
+        panel = ns.UI.Window("ShuffleDetectorAnalytics", 600, 650, "ShuffleDetector - Analytics")
         panel:SetPoint("CENTER")
         panel:SetMovable(true)
         panel:EnableMouse(true)
@@ -230,10 +226,9 @@ function ns.ToggleBatchAnalytics()
         panel:SetScript("OnDragStart", panel.StartMoving)
         panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
         panel:SetClampedToScreen(true)
-        text(panel, 12, -30, 560):SetText("ShuffleDetector - batch analytics")
-        summary = text(panel, 12, -55, 570)
-        text(panel, 12, -100, 570):SetText("Cost (red) / income (green) per batch; oldest to newest, up to 16")
-        text(panel, 12, -225, 570):SetText("Cumulative cash net across displayed batches; zero at chart midpoint")
+        summary = text(panel, 12, -32, 570)
+        text(panel, 12, -100, 570):SetText("Cost (red) / income (green) per batch, oldest to newest")
+        text(panel, 12, -225, 570):SetText("Cumulative cash net (zero at midline)")
         local zero = panel:CreateTexture(nil, "ARTWORK")
         zero:SetSize(560, 1)
         zero:SetPoint("TOPLEFT", 20, -290)
@@ -249,19 +244,14 @@ function ns.ToggleBatchAnalytics()
             end
         end
         rows = text(panel, 12, -365, 570)
-        text(panel, 12, -475, 570):SetText("Cash net is not economic profit: existing materials and unsold loot are excluded.\nAH proceeds are manual. Trends do not prove income improvement caused by this addon.")
-        local amount = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+        text(panel, 12, -475, 570):SetText("Cash net only: existing materials and unsold loot are excluded; AH proceeds are entered manually.\nTrends do not prove income improvement caused by this addon.")
+        local amount = ns.UI.EditBox(panel, 150, 24, "Amount (g/s/c)")
         panel.amount = amount
-        amount:SetSize(140, 24)
-        amount:SetPoint("TOPLEFT", 20, -550)
-        amount:SetAutoFocus(false)
+        amount:SetPoint("TOPLEFT", 20, -545)
         amount:SetMaxLetters(40)
-        text(panel, 12, -510, 570):SetText("Add verified untracked amounts; never re-enter auto-tracked totals.")
-        text(panel, 12, -530, 570):SetText("Amount (g/s/c)                          Batch ID (blank = active)")
-        local batchId = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
-        batchId:SetSize(100, 24)
-        batchId:SetPoint("TOPLEFT", 200, -550)
-        batchId:SetAutoFocus(false)
+        text(panel, 12, -525, 570):SetText("Add verified untracked amounts; never re-enter auto-tracked totals.")
+        local batchId = ns.UI.EditBox(panel, 150, 24, "Batch ID (blank = active)")
+        batchId:SetPoint("TOPLEFT", 180, -545)
         batchId:SetMaxLetters(12)
         panel.batchId = batchId
         local function selectedBatch()
@@ -281,6 +271,7 @@ function ns.ToggleBatchAnalytics()
             batch[kind] = batch[kind] + value
             batch.lastAdjustment = { kind = kind, value = value }
             amount:SetText("")
+            if amount.UpdatePlaceholder then amount:UpdatePlaceholder() end
             ns.RefreshBatchAnalytics()
         end
         button(panel, "Add cost", 20, -585, function() adjust("manualCost") end)

@@ -10,7 +10,7 @@ local function frame()
     for _, method in ipairs({ "SetSize", "SetPoint", "SetWidth", "SetHeight", "SetJustifyH", "SetMovable",
         "SetClampedToScreen", "EnableMouse", "RegisterForDrag", "SetAutoFocus", "SetMaxLetters",
         "SetScrollChild", "RegisterEvent", "UnregisterEvent", "RegisterUnitEvent", "StartMoving", "StopMovingOrSizing",
-        "SetFrameStrata", "RegisterForClicks", "SetAllPoints", "SetColorTexture", "SetTextColor" }) do f[method] = noop end
+        "SetFrameStrata", "RegisterForClicks", "SetAllPoints", "SetColorTexture", "SetTextColor", "SetTextInsets" }) do f[method] = noop end
     function f:SetScript(event, fn) self.scripts[event] = fn end
     function f:SetParent(parent) self.parent = parent end
     function f:ClearAllPoints() self.point = nil end
@@ -100,6 +100,7 @@ local function setup()
         log = function() end,
         say = function(text) error(text) end,
     }
+    assert(loadfile("addon/ShuffleDetector/UI.lua"))("ShuffleDetector", ns)
     assert(loadfile("addon/ShuffleDetector/Snatch.lua"))("ShuffleDetector", ns)
     ns.SnatchNeeds()
     return AHSnapshotDB.snatcher.char
@@ -449,6 +450,7 @@ s.target, s.prices[1] = 5, 100
 s.inFlight = { kind = "buyingCommodity", item = 1, qty = 10, at = 0 }
 local old = ns
 ns = { plan = old.plan, log = function() end }
+assert(loadfile("addon/ShuffleDetector/UI.lua"))("ShuffleDetector", ns)
 assert(loadfile("addon/ShuffleDetector/Snatch.lua"))("ShuffleDetector", ns)
 eq(ns.SnatchNeeds()[1].missing, 0, "reservation survives reload")
 eq(s.inFlight.kind, "uncertain")

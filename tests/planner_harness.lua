@@ -10,7 +10,7 @@ local function widget(parent)
         "StopMovingOrSizing", "SetJustifyH", "SetWordWrap", "SetAutoFocus",
         "SetMaxLetters", "ClearFocus", "RegisterEvent",
         "SetSpacing", "SetAllPoints", "SetFrameStrata", "SetColorTexture",
-        "SetClampedToScreen", "SetHighlightTexture",
+        "SetClampedToScreen", "SetHighlightTexture", "SetTextColor", "SetTextInsets",
     }) do w[method] = function() end end
     function w:SetScript(event, fn) self.scripts[event] = fn end
     function w:SetSize(width, height) self.width, self.height = width, height end
@@ -38,9 +38,9 @@ local function widget(parent)
     return w
 end
 UIParent = widget()
-CreateFrame = function(_, name, parent, template)
+CreateFrame = function(kind, name, parent, template)
     local w = widget(parent)
-    w.name, w.template = name, template
+    w.kind, w.name, w.template = kind, name, template
     if template == "BasicFrameTemplateWithInset" then w.TitleText = widget(w) end
     return w
 end
@@ -102,7 +102,7 @@ Auctionator = { API = { v1 = {
     end,
     GetAuctionAgeByItemID = function() return 0 end,
 } } }
-for _, module in ipairs({ "Prices", "Evaluate", "Calculator", "Planner", "Browser" }) do
+for _, module in ipairs({ "Prices", "Evaluate", "Calculator", "Planner", "UI", "Browser" }) do
     assert(loadfile("addon/ShuffleDetector/" .. module .. ".lua"))("ShuffleDetector", ns)
 end
 local function find(results, name)
@@ -385,7 +385,7 @@ local function reloadBrowser()
 end
 local function editBox(width)
     for _, w in ipairs(widgets) do
-        if w.template == "InputBoxTemplate" and w.width == width and w:IsShown() then return w end
+        if w.kind == "EditBox" and w.width == width and w:IsShown() then return w end
     end
     error("missing edit box " .. width)
 end

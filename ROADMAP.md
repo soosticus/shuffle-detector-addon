@@ -4,6 +4,12 @@ Open items only; finished work is removed. Release notes are hand-written in `re
 
 ## Open items
 
+- Confirm the flat UI theme in game (all windows now share `UI.lua`: dark 1px-bordered
+  panels, flat buttons/edit boxes, Arial Narrow text): readability at the user's UI
+  scale, edit-box focus/placeholder behavior, scrollbar skinning on this client's
+  `UIPanelScrollFrameTemplate`, and that `Fonts\ARIALN.TTF` renders (a fallback to
+  `STANDARD_TEXT_FONT` exists).
+
 - Confirm in game that AH polling started by a craft press, and quote/confirm presses during
   a craft cast, work without interrupting the craft queue.
 

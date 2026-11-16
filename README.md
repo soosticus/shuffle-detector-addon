@@ -46,8 +46,8 @@ to record their buy prices. After recording or scanning with Auctionator, click
 **Refresh / search** in the preview; no `/reload` is needed for price refresh.
 
 The browser ranks the current character's recorded item-producing recipes by
-estimated profit. Use the **Profession**, **Recipes** and **Sell crafted item via**
-dropdowns to filter; enter a recipe name and press Enter to search. **Learned recipes**
+estimated profit. Use the profession, recipe-filter and exit dropdowns
+to filter; type in the search box and press Enter to search. **Learned recipes**
 are shuffle previews for this character; **Unlearned patterns** compare recipes to
 learn later, not actions that can craft them now. Unlearned patterns also include
 recipes your other recorded characters know, and **Professions to learn** lists

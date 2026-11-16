@@ -131,27 +131,26 @@ end
 local function details()
     local result = current()
     if not result then
-        detail:SetText("No matching item-producing recipes.\n\nOpen your profession windows to record recipes, then click Refresh. Try another profession or recipe filter. Records without a product or complete reagents cannot be ranked. Recipes of professions none of your characters has are read from the game when the browser opens.")
+        detail:SetText("No matching recipes.\n\nOpen your profession windows once to record recipes, then press Refresh / search, or change the filters.")
     else
         local recipe = result.recipe
         local lines = {
             heading(recipe.name),
             recipe.profession .. " / " .. (recipe.known and "Learned recipe"
                 or not recipe.professionKnown and "Profession not learned" or "Unlearned pattern"),
-            recipe.known and "Preview a shuffle you can craft; this row does not start it."
-                or recipe.catalog and ("From the game's recipe data: none of your characters has " .. recipe.profession
-                    .. ". Skill requirement and where to learn it are not verified.")
+            recipe.known and "Shuffle preview; nothing is crafted from here."
+                or recipe.catalog and ("From the game's recipe data; no character has " .. recipe.profession .. ".")
                 or recipe.learnedBy and not recipe.professionKnown and ("Learned by " .. recipe.learnedBy
                     .. "; this character does not have " .. recipe.profession .. ".")
-                or recipe.learnedBy and ("Learned by " .. recipe.learnedBy .. "; this character cannot craft it yet.")
+                or recipe.learnedBy and ("Learned by " .. recipe.learnedBy .. "; not craftable by this character yet.")
                 or not recipe.professionKnown and ("Recorded by another character; this character does not have "
                     .. recipe.profession .. ".")
-                or "Pattern to learn later. This character cannot craft it yet; acquisition requirements are not verified.",
+                or "Pattern to learn later; not craftable yet.",
             ("Makes %d per craft; 30s assumed craft time."):format(recipe.makes),
         }
         if activationNotice then lines[#lines + 1] = "\n" .. activationNotice end
         lines[#lines + 1] = ""
-        lines[#lines + 1] = heading("Market estimate per craft (used for ranking)")
+        lines[#lines + 1] = heading("Per craft (market estimate)")
         lines[#lines + 1] = "Materials: " .. money(result.cost)
         if result.net ~= nil then
             lines[#lines + 1] = (result.exit or "Exit") .. " returns: " .. money(result.net)
@@ -181,7 +180,7 @@ local function details()
             end
         end
         lines[#lines + 1] = ""
-        lines[#lines + 1] = heading("Exit comparison / total per craft")
+        lines[#lines + 1] = heading("Exits / total per craft")
         for _, exit in ipairs(result.exits) do
             local reason
             if exit.label == "Disenchant" then
@@ -198,8 +197,7 @@ local function details()
             end
             lines[#lines + 1] = exit.label .. ": " .. (exit.net ~= nil and money(exit.net) or reason or "Not priced")
         end
-        lines[#lines + 1] = "AH sales assume a 5% fee. Weapons and armor get no AH value yet (suffix variants)."
-        lines[#lines + 1] = "Disenchanting is never valued from guesses; your recorded disenchants are kept for a future verified table."
+        lines[#lines + 1] = "AH exits assume a 5% fee; weapons and armor get no AH value yet (suffix variants)."
         if calculationError then
             lines[#lines + 1] = "\n" .. heading("Calculator") .. "\n" .. calculationError
         elseif batch then
@@ -237,8 +235,8 @@ local function details()
                     end
                 end
             end
-            lines[#lines + 1] = "Custom costs affect this batch, not rankings or purchase limits."
-            lines[#lines + 1] = "Required quantities, not confirmed auction stock."
+            lines[#lines + 1] = "Estimates only: custom costs never change rankings or purchase limits,"
+            lines[#lines + 1] = "and quantities are not confirmed auction stock."
         end
         local batchResult = ns.PlannerBatchResult(result, info, materialCosts)
         local canActivate, activationReason = ns.CanActivatePlannerResult(batchResult, activationBatch())
@@ -271,7 +269,7 @@ render = function()
             button:Hide()
         end
     end
-    countLabel:SetText(("%d recipes / page %d of %d. %d non-item or incomplete records omitted."):format(
+    countLabel:SetText(("%d recipes - page %d/%d - %d incomplete records hidden"):format(
         #results, page, pages, info.skipped or 0))
     details()
 end
@@ -279,7 +277,7 @@ end
 local function providerText(provider)
     if not provider then return "No provider status available." end
     if provider.ready then
-        return "Auctionator " .. provider.normalizedVersion .. " prices (lowest listing; stock depth unknown)."
+        return "Auctionator " .. provider.normalizedVersion .. " prices (lowest listing)."
     end
     return "|cffff7777AH prices unavailable:|r " .. (provider.detail or quoteReason(provider))
 end
@@ -296,15 +294,15 @@ refresh = function()
         if result.recipe.key == selected then page = math.ceil(i / PAGE_SIZE); break end
     end
     saveState()
-    local meaning = options.knownOnly and "Learned recipes: shuffle previews, not action buttons."
-        or options.unlearnedOnly and "Unlearned patterns, including other characters' and new professions; not craftable yet."
-        or options.newOnly and "Professions to learn: recipes from professions this character does not have."
-        or "All recipes: learned shuffles and unlearned patterns; select a row for details."
+    local meaning = options.knownOnly and "Shuffle previews of learned recipes."
+        or options.unlearnedOnly and "Unlearned patterns; not craftable yet."
+        or options.newOnly and "Recipes from professions this character does not have."
+        or "All learned and unlearned recipes."
     if ns.EnsureRecipeCatalog then
         ns.EnsureRecipeCatalog(function() if panel and panel:IsShown() then refresh() end end)
     end
     if ns.RecipeCatalogProgress and ns.RecipeCatalogProgress() then
-        meaning = meaning .. " Reading other professions' recipes from the game; the list updates when done."
+        meaning = meaning .. " Reading other professions' recipes from the game..."
     end
     summary:SetText(err or (ns.charKey() .. " - " .. meaning))
     providerLabel:SetText(providerText(info.provider))
@@ -316,20 +314,17 @@ refresh = function()
     render()
 end
 
-local function text(parent, value, x, y, width, font)
-    local label = parent:CreateFontString(nil, "OVERLAY", font or "GameFontHighlight")
+local function text(parent, value, x, y, width, style)
+    local label = ns.UI.Label(parent, value, style == "small" and 11 or 12,
+        style == "header" and ns.UI.colors.accent or style == "small" and ns.UI.colors.muted or nil)
     label:SetPoint("TOPLEFT", x, y)
     label:SetWidth(width)
-    label:SetJustifyH("LEFT")
-    label:SetText(value)
     return label
 end
 
 local function button(parent, caption, x, y, width, fn)
-    local widget = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    widget:SetSize(width, 26)
+    local widget = ns.UI.Button(parent, caption, width, 24)
     widget:SetPoint("TOPLEFT", x, y)
-    widget:SetText(caption)
     widget:SetScript("OnClick", fn)
     return widget
 end
@@ -337,7 +332,7 @@ end
 -- A small anchored dropdown avoids depending on either client's menu API.
 local function dropdown(x, width, entries)
     local selector
-    selector = button(panel, "", x, -60, width, function()
+    selector = button(panel, "", x, -32, width, function()
         if not menuCover then
             menuCover = CreateFrame("Frame", nil, UIParent)
             menuCover:SetAllPoints(UIParent)
@@ -353,9 +348,7 @@ local function dropdown(x, width, entries)
             popup:SetPoint("TOPLEFT", selector, "BOTTOMLEFT", 0, -2)
             popup:EnableMouse(true)
             popup.buttons = {}
-            local background = popup:CreateTexture(nil, "BACKGROUND")
-            background:SetAllPoints()
-            background:SetColorTexture(0.06, 0.06, 0.06, 1)
+            ns.UI.Skin(popup, ns.UI.colors.section)
             selector.popup = popup
         end
         menuCover.popup = popup
@@ -427,33 +420,29 @@ local function showCosts()
         end
     end
     if not costPanel then
-        costPanel = CreateFrame("Frame", "ShuffleDetectorMaterialCosts", panel, "BasicFrameTemplateWithInset")
-        costPanel:SetSize(470, 240)
+        costPanel = ns.UI.Window("ShuffleDetectorMaterialCosts", 470, 240, "Material costs", panel)
         costPanel:SetPoint("CENTER")
         costPanel:SetFrameStrata("DIALOG")
         costPanel:EnableMouse(true)
-        costPanel.TitleText:SetText("Batch material costs")
-        costTitle = text(costPanel, "", 20, -38, 430, "GameFontNormal")
-        button(costPanel, "< Previous material", 20, -65, 160, function()
+        costTitle = text(costPanel, "", 20, -32, 430, "header")
+        button(costPanel, "< Previous material", 20, -58, 160, function()
             costIndex = (costIndex - 2) % #costItems + 1
             displayCostItem()
         end)
-        button(costPanel, "Next material >", 190, -65, 160, function()
+        button(costPanel, "Next material >", 190, -58, 160, function()
             costIndex = costIndex % #costItems + 1
             displayCostItem()
         end)
-        text(costPanel, "Cost per item (whole copper)", 20, -103, 250)
-        costEntry = CreateFrame("EditBox", nil, costPanel, "InputBoxTemplate")
-        costEntry:SetSize(150, 26)
-        costEntry:SetPoint("TOPLEFT", 25, -127)
-        costEntry:SetAutoFocus(false)
+        text(costPanel, "Cost per item (whole copper)", 20, -96, 250)
+        costEntry = ns.UI.EditBox(costPanel, 150, 24)
+        costEntry:SetPoint("TOPLEFT", 25, -116)
         costEntry:SetMaxLetters(12)
         costEntry:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-        button(costPanel, "Set cost", 190, -127, 105, function() changeCost(false) end)
-        button(costPanel, "Use market", 305, -127, 135, function() changeCost(true) end)
-        costMessage = text(costPanel, "", 20, -164, 430, "GameFontHighlightSmall")
-        text(costPanel, "Batch estimates only; rankings and purchase limits do not change.", 20, -190, 430, "GameFontHighlightSmall")
-        button(costPanel, "Done", 335, -205, 105, function() costPanel:Hide() end)
+        button(costPanel, "Set cost", 190, -116, 105, function() changeCost(false) end)
+        button(costPanel, "Use market", 305, -116, 135, function() changeCost(true) end)
+        costMessage = text(costPanel, "", 20, -152, 430, "small")
+        text(costPanel, "Batch estimates only; rankings and purchase limits are unchanged.", 20, -182, 430, "small")
+        button(costPanel, "Done", 335, -206, 105, function() costPanel:Hide() end)
     end
     displayCostItem()
     costPanel:Show()
@@ -465,8 +454,7 @@ function ns.TogglePlanner()
         return
     end
     local savedAmount = restoreState()
-    panel = CreateFrame("Frame", "ShuffleDetectorBrowser", UIParent, "BasicFrameTemplateWithInset")
-    panel:SetSize(980, 710)
+    panel = ns.UI.Window("ShuffleDetectorBrowser", 980, 645, "ShuffleDetector")
     panel:SetPoint("CENTER")
     panel:SetClampedToScreen(true)
     panel:SetMovable(true)
@@ -479,11 +467,6 @@ function ns.TogglePlanner()
         if menuCover then menuCover:Hide() end
         if costPanel then costPanel:Hide() end
     end)
-    panel.TitleText:SetText("ShuffleDetector - read-only recipe browser")
-    text(panel, "Profession", 15, -40, 175, "GameFontNormal")
-    text(panel, "Recipes", 200, -40, 180, "GameFontNormal")
-    text(panel, "Sell crafted item via", 390, -40, 190, "GameFontNormal")
-    text(panel, "Recipe name", 600, -40, 180, "GameFontNormal")
     professionMenu = dropdown(15, 175, function()
         local choices = { { text = "All professions", choose = function() options.profession = nil end } }
         for _, profession in ipairs(info.professions or {}) do
@@ -508,28 +491,29 @@ function ns.TogglePlanner()
             { text = "Disenchant - no trusted yield data", disabled = true },
         }
     end)
-    searchBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
-    searchBox:SetSize(200, 26)
-    searchBox:SetPoint("TOPLEFT", 605, -60)
-    searchBox:SetAutoFocus(false)
+    searchBox = ns.UI.EditBox(panel, 200, 24, "Search recipes")
+    searchBox:SetPoint("TOPLEFT", 605, -32)
     searchBox:SetMaxLetters(100)
     searchBox:SetText(options.search)
+    searchBox:UpdatePlaceholder()
     searchBox:SetScript("OnTextChanged", saveState)
     searchBox:SetScript("OnEnterPressed", function(self) self:ClearFocus(); page = 1; refresh() end)
     searchBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    button(panel, "Refresh / search", 825, -60, 140, refresh)
-    summary = text(panel, "", 15, -98, 940)
-    providerLabel = text(panel, "", 15, -124, 800)
-    costButton = button(panel, "Material costs", 825, -124, 140, showCosts)
-    text(panel, "Recipe / estimated profit per craft", 15, -172, 375, "GameFontNormal")
-    text(panel, "Recipe breakdown (scroll for exits and batch results)", 410, -172, 530, "GameFontNormal")
+    button(panel, "Refresh / search", 825, -32, 140, refresh)
+    summary = text(panel, "", 15, -64, 940)
+    providerLabel = text(panel, "", 15, -86, 800, "small")
+    costButton = button(panel, "Material costs", 825, -82, 140, showCosts)
+    text(panel, "Recipes / profit per craft", 15, -116, 375, "header")
+    text(panel, "Breakdown", 410, -116, 530, "header")
     for i = 1, PAGE_SIZE do
         rows[i] = CreateFrame("Button", nil, panel)
         rows[i]:SetSize(375, 39)
-        rows[i]:SetPoint("TOPLEFT", 15, -195 - (i - 1) * 40)
-        rows[i]:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-        rows[i].nameText = text(rows[i], "", 5, -2, 365, "GameFontNormal")
-        rows[i].valueText = text(rows[i], "", 5, -21, 365, "GameFontHighlightSmall")
+        rows[i]:SetPoint("TOPLEFT", 15, -136 - (i - 1) * 40)
+        local hover = rows[i]:CreateTexture(nil, "HIGHLIGHT")
+        hover:SetAllPoints()
+        hover:SetColorTexture(1, 1, 1, 0.05)
+        rows[i].nameText = text(rows[i], "", 5, -2, 365)
+        rows[i].valueText = text(rows[i], "", 5, -21, 365, "small")
         rows[i]:SetScript("OnClick", function(self)
             if costPanel then costPanel:Hide() end
             selected, batch, calculationError = self.key, nil, nil
@@ -539,20 +523,17 @@ function ns.TogglePlanner()
             render()
         end)
     end
-    scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-    scroll:SetSize(530, 400)
-    scroll:SetPoint("TOPLEFT", 410, -195)
+    scroll = ns.UI.Scroll(panel, 530, 400)
+    scroll:SetPoint("TOPLEFT", 410, -136)
     local child = CreateFrame("Frame", nil, scroll)
     child:SetSize(530, 400)
     detail = text(child, "", 0, 0, 520)
     detail:SetWordWrap(true)
     detail:SetSpacing(3)
     scroll:SetScrollChild(child)
-    text(panel, "Batch calculator - requirement estimates only", 410, -610, 540, "GameFontNormal")
-    amount = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
-    amount:SetSize(120, 26)
-    amount:SetPoint("TOPLEFT", 415, -636)
-    amount:SetAutoFocus(false)
+    text(panel, "Batch calculator", 410, -552, 540, "header")
+    amount = ns.UI.EditBox(panel, 120, 24)
+    amount:SetPoint("TOPLEFT", 415, -574)
     amount:SetMaxLetters(12)
     amount:SetText(savedAmount)
     amount:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
@@ -562,14 +543,14 @@ function ns.TogglePlanner()
         updateUseButton()
     end)
     local modeButton
-    modeButton = button(panel, mode == "crafts" and "Crafts" or "Budget (copper)", 550, -636, 115, function()
+    modeButton = button(panel, mode == "crafts" and "Crafts" or "Budget (copper)", 550, -574, 115, function()
         mode = mode == "crafts" and "budget" or "crafts"
         modeButton:SetText(mode == "crafts" and "Crafts" or "Budget (copper)")
         batch, calculationError = nil, nil
         saveState()
         details()
     end)
-    button(panel, "Calculate", 680, -636, 120, function()
+    button(panel, "Calculate", 680, -574, 120, function()
         amount:ClearFocus()
         local result = ns.PlannerBatchResult(current(), info, materialCosts)
         batch, calculationError = ns.CalculateBatch(result, mode, tonumber(amount:GetText()))
@@ -577,7 +558,7 @@ function ns.TogglePlanner()
         details()
         scroll:SetVerticalScroll(math.max(0, detail:GetStringHeight() - 380))
     end)
-    useButton = button(panel, "Set active shuffle", 810, -636, 155, function()
+    useButton = button(panel, "Set active shuffle", 810, -574, 155, function()
         amount:ClearFocus()
         batch = activationBatch()
         local result = ns.PlannerBatchResult(current(), info, materialCosts)
@@ -586,14 +567,14 @@ function ns.TogglePlanner()
             calculationError, activationNotice = reason, nil
         else
             calculationError = nil
-            activationNotice = ("Active shuffle set for %d finished items. This only changes the plan; use your shuffle macro to craft. No purchases or crafts were started."):format(batch.items)
+            activationNotice = ("Active shuffle set for %d finished items. No purchases or crafts were started; run your shuffle macro to craft."):format(batch.items)
         end
         details()
     end)
     useButton:Disable()
-    button(panel, "< Previous", 15, -636, 120, function() page = page - 1; render() end)
-    button(panel, "Next >", 145, -636, 120, function() page = page + 1; render() end)
-    countLabel = text(panel, "", 15, -684, 940, "GameFontHighlightSmall")
+    button(panel, "< Previous", 15, -574, 120, function() page = page - 1; render() end)
+    button(panel, "Next >", 145, -574, 120, function() page = page + 1; render() end)
+    countLabel = text(panel, "", 15, -612, 940, "small")
     stateReady = true
     panel:Show()
     refresh()

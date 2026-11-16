@@ -848,28 +848,23 @@ function ns.SnatchResolvePurchase(received)
 end
 
 local function button(parent, text, width, x, y, fn)
-    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    b:SetSize(width, 24)
+    local b = ns.UI.Button(parent, text, width, 24)
     b:SetPoint("TOPLEFT", x, y)
-    b:SetText(text)
     b:SetScript("OnClick", function(...) guarded(fn, ...) end)
     return b
 end
 
 local function edit(parent, width, x, y)
-    local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-    e:SetSize(width, 22)
+    local e = ns.UI.EditBox(parent, width, 22)
     e:SetPoint("TOPLEFT", x, y)
-    e:SetAutoFocus(false)
     e:SetMaxLetters(32)
     return e
 end
 
 local function text(parent, x, y, width)
-    local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local fs = ns.UI.Label(parent, nil, 11)
     fs:SetPoint("TOPLEFT", x, y)
     fs:SetWidth(width)
-    fs:SetJustifyH("LEFT")
     return fs
 end
 
@@ -908,7 +903,7 @@ refresh = function()
     if not panel then return end
     local s, p = state()
     if not s then
-        panel.title:SetText("Choose a shuffle in /shuffledetector browse to configure a batch")
+        panel.title:SetText("No active shuffle - set one in /shuffledetector browse")
         panel.progress:SetText("")
         if panel.statistics then panel.statistics:SetText("") end
         for _, row in ipairs(rows) do row.frame:Hide() end
@@ -975,10 +970,8 @@ end
 
 local function createPanel()
     if not panel then
-        panel = CreateFrame("Frame", "ShuffleDetectorSnatcher", UIParent, "BasicFrameTemplateWithInset")
-        if panel.TitleText then panel.TitleText:SetText("ShuffleDetector") end
         local compactHeight = ns.BatchStatsText and 600 or 510
-        panel:SetSize(450, compactHeight)
+        panel = ns.UI.Window("ShuffleDetectorSnatcher", 450, compactHeight, "ShuffleDetector")
         panel:SetPoint("CENTER")
         panel:SetMovable(true)
         panel:SetClampedToScreen(true)
@@ -991,7 +984,7 @@ local function createPanel()
             AHSnapshotDB.shuffleTracker = { point = point, relPoint = relPoint, x = x, y = y }
         end)
         panel.title = text(panel, 12, -30, 420)
-        text(panel, 12, -52, 170):SetText("Finished-item target (0 = off)")
+        text(panel, 12, -52, 170):SetText("Target items (0 = off)")
         panel.target = edit(panel, 80, 200, -48)
         button(panel, "Save limits", 110, 310, -48, saveInputs)
         panel.progress = text(panel, 12, -78, 420)
@@ -1009,10 +1002,9 @@ local function createPanel()
             panel.statistics = text(panel, 12, -485, 420)
             button(panel.controls, "Analytics", 105, 12, -56, ns.ToggleBatchAnalytics)
         end
-        text(panel, 12, -202, 420):SetText("Maximum price per unit: g/s/c or copper; 0 = do not buy")
-        local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+        text(panel, 12, -202, 420):SetText("Max price per unit - g/s/c or copper; 0 = do not buy")
+        local scroll = ns.UI.Scroll(panel, 402, 210)
         scroll:SetPoint("TOPLEFT", 12, -224)
-        scroll:SetSize(402, 210)
         panel.content = CreateFrame("Frame", nil, scroll)
         panel.content:SetSize(400, 1)
         scroll:SetScrollChild(panel.content)
