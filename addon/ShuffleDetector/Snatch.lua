@@ -977,17 +977,32 @@ local ANCHOR_WINDOWS = { "ProfessionsFrame", "MerchantFrame", "AuctionHouseFrame
 local hookedWindows, attachedTo = {}, nil
 
 local function rightmostWindow()
-    local best, bestRight
+    local best, bestEdge, bestOffset
     for _, name in ipairs(ANCHOR_WINDOWS) do
         local window = _G[name]
         if type(window) == "table" and window.IsShown and window:IsShown() and window.GetRight then
             local ok, right = pcall(window.GetRight, window)
-            if ok and type(right) == "number" and (not bestRight or right > bestRight) then
-                best, bestRight = window, right
+            if ok and type(right) == "number" then
+                -- Side tabs (the professions window's profession and addon tabs) hang off the
+                -- window's right edge, so the attachment clears the rightmost shown child too.
+                local outer = right
+                if window.GetChildren then
+                    for _, child in ipairs({ window:GetChildren() }) do
+                        if child ~= panel and child.IsShown and child:IsShown() and child.GetRight then
+                            local okChild, childRight = pcall(child.GetRight, child)
+                            if okChild and type(childRight) == "number" and childRight > outer then
+                                outer = childRight
+                            end
+                        end
+                    end
+                end
+                if not bestEdge or outer > bestEdge then
+                    best, bestEdge, bestOffset = window, outer, outer - right
+                end
             end
         end
     end
-    return best
+    return best, bestOffset
 end
 
 local function savedPosition()
@@ -1002,11 +1017,11 @@ end
 
 local function reanchor()
     if not panel then return end
-    local target = rightmostWindow()
+    local target, offset = rightmostWindow()
     if target then
         attachedTo = target
         panel:ClearAllPoints()
-        panel:SetPoint("TOPLEFT", target, "TOPRIGHT", 4, 0)
+        panel:SetPoint("TOPLEFT", target, "TOPRIGHT", (offset or 0) + 4, 0)
     elseif attachedTo then
         attachedTo = nil
         savedPosition()

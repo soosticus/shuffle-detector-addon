@@ -1814,13 +1814,20 @@ ns.ToggleSnatcher()
 local attachWindow = ShuffleDetectorSnatcher
 ProfessionsFrame = frame()
 ProfessionsFrame.GetRight = function() return 500 end
+local sideTab = frame()
+sideTab.GetRight = function() return 560 end
+ProfessionsFrame.GetChildren = function() return sideTab end
 MerchantFrame.GetRight = function() return 300 end
 MerchantFrame.shown = true
 ns.ReanchorShuffleWindow()
-local attachPoint, attachTarget, attachRelPoint = attachWindow:GetPoint()
+local attachPoint, attachTarget, attachRelPoint, attachX = attachWindow:GetPoint()
 eq(attachPoint, "TOPLEFT")
 eq(attachTarget, ProfessionsFrame, "the rightmost open window is the anchor")
 eq(attachRelPoint, "TOPRIGHT")
+eq(attachX, 64, "the window clears side tabs hanging off the anchor's right edge")
+sideTab.shown = false
+ns.ReanchorShuffleWindow()
+eq(select(4, attachWindow:GetPoint()), 4, "hidden side tabs reclaim the space")
 ProfessionsFrame.shown = false
 ns.ReanchorShuffleWindow()
 eq(select(2, attachWindow:GetPoint()), MerchantFrame, "the next open window takes over")
