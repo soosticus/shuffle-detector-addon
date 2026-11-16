@@ -5,14 +5,14 @@ local UI = {}
 ns.UI = UI
 
 UI.colors = {
-    window  = { 0.085, 0.085, 0.10, 0.95 }, -- window fill
-    section = { 0.13, 0.13, 0.16, 1 },      -- title bars and sub-panels
-    control = { 0.16, 0.16, 0.19, 1 },      -- buttons
-    inset   = { 0.05, 0.05, 0.06, 0.90 },   -- edit boxes and list wells
-    border  = { 0, 0, 0, 1 },
-    accent  = { 0.45, 0.65, 0.90 },         -- headers and focus edges
-    text    = { 0.88, 0.88, 0.88 },
-    muted   = { 0.60, 0.60, 0.64 },
+    window  = { 0.10, 0.08, 0.06, 0.95 }, -- warm brown-black, like the client's detail pane
+    section = { 0.14, 0.11, 0.08, 1 },    -- title bars and sub-panels
+    control = { 0.17, 0.14, 0.10, 1 },    -- buttons
+    inset   = { 0.06, 0.05, 0.03, 0.90 }, -- edit boxes and list wells
+    border  = { 0.30, 0.23, 0.10, 1 },    -- dim bronze trim, like the native inset outlines
+    accent  = { 1.00, 0.82, 0.10 },       -- the client's gold for headers, focus and selection
+    text    = { 0.92, 0.88, 0.80 },
+    muted   = { 0.62, 0.57, 0.48 },
 }
 
 local FONT = "Fonts\\ARIALN.TTF"
@@ -75,7 +75,7 @@ function UI.Button(parent, caption, width, height)
         button:SetDisabledFontObject(UI.FontObject(12, "disabled"))
         button:SetPushedTextOffset(1, -1)
     end
-    button.hoverTex = solid(button, "HIGHLIGHT", { 1, 1, 1, 0.06 })
+    button.hoverTex = solid(button, "HIGHLIGHT", { 1, 0.82, 0.10, 0.07 })
     button.hoverTex:SetPoint("TOPLEFT", 1, -1)
     button.hoverTex:SetPoint("BOTTOMRIGHT", -1, 1)
     button:SetText(caption)
@@ -104,7 +104,7 @@ function UI.DropdownButton(parent, width, height)
         button:SetDisabledFontObject(UI.FontObject(12, "disabled"))
     end
     leftAlignText(button, 20)
-    button.hoverTex = solid(button, "HIGHLIGHT", { 1, 1, 1, 0.06 })
+    button.hoverTex = solid(button, "HIGHLIGHT", { 1, 0.82, 0.10, 0.07 })
     button.hoverTex:SetPoint("TOPLEFT", 1, -1)
     button.hoverTex:SetPoint("BOTTOMRIGHT", -1, 1)
     local arrow = button:CreateTexture(nil, "OVERLAY")
@@ -112,8 +112,6 @@ function UI.DropdownButton(parent, width, height)
     arrow:SetPoint("RIGHT", -5, 0)
     if arrow.SetTexture then arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow") end
     if arrow.SetRotation then arrow:SetRotation(-math.pi / 2) end
-    if arrow.SetDesaturated then arrow:SetDesaturated(true) end
-    if arrow.SetVertexColor then arrow:SetVertexColor(0.75, 0.75, 0.80) end
     button.arrowTex = arrow
     return button
 end
@@ -161,7 +159,8 @@ function UI.EditBox(parent, width, height, placeholder)
     end)
     box:SetScript("OnEditFocusLost", function(self)
         self.focused = nil
-        self.borderTex:SetColorTexture(0, 0, 0, 1)
+        local border = UI.colors.border
+        self.borderTex:SetColorTexture(border[1], border[2], border[3], border[4] or 1)
         if self.UpdatePlaceholder then self:UpdatePlaceholder() end
     end)
     return box
@@ -176,6 +175,7 @@ function UI.Window(name, width, height, title, parent)
     bar:SetPoint("TOPLEFT", 1, -1)
     bar:SetPoint("TOPRIGHT", -1, -1)
     bar:SetHeight(22)
+    frame.TitleBar = bar
     frame.TitleText = UI.Label(frame, title, 13, UI.colors.accent)
     frame.TitleText:SetPoint("TOPLEFT", 9, -6)
     local close = UI.Button(frame, "X", 22, 22)
@@ -201,10 +201,10 @@ function UI.SkinScrollBar(scroll)
             if arrow then arrow:SetAlpha(0); arrow:EnableMouse(false) end
         end
         local track = bar:CreateTexture(nil, "BACKGROUND")
-        track:SetColorTexture(0.05, 0.05, 0.06, 0.9)
+        track:SetColorTexture(0.05, 0.04, 0.03, 0.9)
         track:SetAllPoints()
         local thumb = bar.GetThumbTexture and bar:GetThumbTexture()
-        if thumb then thumb:SetColorTexture(0.30, 0.30, 0.34, 1) end
+        if thumb then thumb:SetColorTexture(0.35, 0.28, 0.16, 1) end
     end)
 end
 

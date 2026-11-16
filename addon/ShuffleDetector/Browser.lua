@@ -4,6 +4,9 @@ local rows, results, info, selected, batch, calculationError, activationNotice =
 local options, page, mode = { knownOnly = true }, 1, "crafts"
 local PAGE_SIZE = 10
 local PANEL_WIDTH, PANEL_HEIGHT = 980, 645
+-- Docked padding: the professions window's CraftingPage rect includes the native header band,
+-- so the browser starts below it and keeps a margin from the side and bottom borders.
+local DOCK_TOP, DOCK_SIDE, DOCK_BOTTOM = 46, 10, 10
 local refresh, render, menuCover
 local stateReady = false
 local materialCosts, costPanel = {}, nil
@@ -534,7 +537,7 @@ local function build()
         rows[i]:SetPoint("TOPLEFT", 15, -136 - (i - 1) * 40)
         local hover = rows[i]:CreateTexture(nil, "HIGHLIGHT")
         hover:SetAllPoints()
-        hover:SetColorTexture(1, 1, 1, 0.05)
+        hover:SetColorTexture(1, 0.82, 0.10, 0.07)
         rows[i].nameText = text(rows[i], "", 5, -2, 365)
         rows[i].valueText = text(rows[i], "", 5, -21, 365, "small")
         rows[i]:SetScript("OnClick", function(self)
@@ -613,17 +616,28 @@ local function fit()
     local height = shell.GetHeight and shell:GetHeight()
     local scale = 1
     if type(width) == "number" and width > 0 and type(height) == "number" and height > 0 then
-        scale = math.min(1, width / PANEL_WIDTH, height / PANEL_HEIGHT)
+        scale = math.min(1, (width - 2 * DOCK_SIDE) / PANEL_WIDTH,
+            (height - DOCK_TOP - DOCK_BOTTOM) / PANEL_HEIGHT)
     end
     if panel.SetScale then panel:SetScale(scale) end
+end
+
+-- The native window already provides a header and close button, so the docked browser drops its own.
+local function setChrome(shown)
+    for _, part in ipairs({ panel.TitleBar, panel.TitleText, panel.CloseButton }) do
+        if part then
+            if shown then part:Show() else part:Hide() end
+        end
+    end
 end
 
 local function dock()
     build()
     docked = true
+    setChrome(false)
     panel:SetParent(shell)
     panel:ClearAllPoints()
-    panel:SetPoint("TOP", shell, "TOP", 0, 0)
+    panel:SetPoint("TOP", shell, "TOP", 0, -DOCK_TOP)
     panel:SetMovable(false)
     panel:RegisterForDrag()
     fit()
@@ -634,6 +648,7 @@ end
 local function undock()
     docked = false
     if not panel then return end
+    setChrome(true)
     if panel.SetScale then panel:SetScale(1) end
     panel:SetParent(UIParent)
     panel:ClearAllPoints()
@@ -670,7 +685,7 @@ local function ensureTab()
             page = shell,
             onSelect = function() end,
         })
-        if type(api.SetMinWidth) == "function" then api.SetMinWidth("shuffledetector", PANEL_WIDTH + 10) end
+        if type(api.SetMinWidth) == "function" then api.SetMinWidth("shuffledetector", PANEL_WIDTH + 2 * DOCK_SIDE) end
         -- Closing the window hands it back, so the tab is unchecked the next time it opens.
         window:HookScript("OnHide", function()
             local tabs = professionTabs()

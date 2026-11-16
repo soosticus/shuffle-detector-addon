@@ -757,6 +757,8 @@ for _, w in ipairs(widgets) do
 end
 assert(browser and browser.parent == tabPage, "the browser docks into the tab page")
 assert(browser:IsShown(), "the docked browser is visible")
+eq(browser.TitleText.shown, false, "the docked browser drops its own title bar")
+eq(browser.CloseButton.shown, false, "the docked browser drops its own close button")
 ns.TogglePlanner()
 eq(currentTab, nil, "browse again hands the window back to its own page")
 eq(browser:IsShown(), false, "the browser hides with its page")
@@ -770,6 +772,7 @@ eq(browser:IsShown(), false)
 ns.TogglePlanner()
 assert(browser:IsShown(), "browse without the window reopens the standalone browser")
 eq(browser.parent, UIParent, "the standalone browser undocks to the screen")
+eq(browser.TitleText.shown, true, "the standalone browser restores its title bar")
 click("Refresh / search")
 ForeverCore, ProfessionsFrame = nil, nil
 

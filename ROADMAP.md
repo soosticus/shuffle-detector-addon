@@ -16,7 +16,9 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   so the addon refuses to load without it; confirm the user has it installed): the side
   tab appears under the client's own tabs after login or the first profession window,
   selecting it docks the browser into the page area scaled to fit (the window is asked
-  for 990 width via `SetMinWidth`), dropdown menus and the material-costs popup work
+  for 1000 width via `SetMinWidth`; docked padding 46 top / 10 sides / 10 bottom clears
+  the native header and borders, and the browser drops its own title bar and close
+  button while docked), dropdown menus and the material-costs popup work
   while docked, native tabs and closing the window hand it back, and
   `/shuffledetector browse` toggles the tab while the window is open and the
   standalone window otherwise. Check coexistence with SkillUp Forever's tab.
