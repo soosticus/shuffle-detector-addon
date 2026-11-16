@@ -45,6 +45,14 @@ This diagnostic does not change the loaded plan or buy anything.
 to record their buy prices. After recording or scanning with Auctionator, click
 **Refresh / search** in the preview; no `/reload` is needed for price refresh.
 
+With the ForeverCore addon installed (the framework SkillUp Forever uses), the
+browser also registers a side tab on the Professions window, like SkillUp
+Forever's pages: select the tab to show the browser inside the window (scaled
+to fit), select a profession tab or close the window to hand it back. While
+the Professions window is open, `/shuffledetector browse` toggles that tab;
+otherwise it toggles the standalone window. Without ForeverCore only the
+standalone window exists.
+
 The browser ranks the current character's recorded item-producing recipes by
 estimated profit. Use the profession, recipe-filter and exit dropdowns
 to filter; type in the search box and press Enter to search. **Learned recipes**

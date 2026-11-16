@@ -12,6 +12,14 @@ Open items only; finished work is removed. Release notes are hand-written in `re
   `ChatFrameExpandArrow`; `SetRotation`/`SetDesaturated` are guarded) and
   accent-marked selected menu entries.
 
+- Confirm the professions-window tab in game (needs the ForeverCore addon): the side
+  tab appears under the client's own tabs after login or the first profession window,
+  selecting it docks the browser into the page area scaled to fit (the window is asked
+  for 990 width via `SetMinWidth`), dropdown menus and the material-costs popup work
+  while docked, native tabs and closing the window hand it back, and
+  `/shuffledetector browse` toggles the tab while the window is open and the
+  standalone window otherwise. Check coexistence with SkillUp Forever's tab.
+
 - Confirm in game that AH polling started by a craft press, and quote/confirm presses during
   a craft cast, work without interrupting the craft queue.
 

@@ -13,6 +13,9 @@ local function widget(parent)
         "SetClampedToScreen", "SetHighlightTexture", "SetTextColor", "SetTextInsets",
     }) do w[method] = function() end end
     function w:SetScript(event, fn) self.scripts[event] = fn end
+    function w:HookScript(event, fn) self.scripts[event] = fn end
+    function w:SetParent(parent) self.parent = parent end
+    function w:ClearAllPoints() end
     function w:SetSize(width, height) self.width, self.height = width, height end
     function w:SetHeight(height) self.height = height end
     function w:SetWidth(width) self.width = width end
@@ -716,5 +719,59 @@ end
 eq(AHSnapshotDB.catalog.build, "70888")
 eq(AHSnapshotDB.catalog.maxSpell, 500000)
 eq(visible("Reading other professions"), nil, "the browser refreshes when the scan ends")
+
+-- Professions-window tab through a stubbed ForeverCore (the SkillUp Forever framework).
+eq(ns.EnsureProfessionTab(), false, "no tab without ForeverCore and the professions window")
+local currentTab, nativeShown, minWidth, registered
+ForeverCore = { ProfessionTabs = {
+    minor = 1,
+    Register = function(key, spec)
+        registered = { key = key, spec = spec }
+        return widget()
+    end,
+    SetMinWidth = function(_, width) minWidth = width end,
+    Select = function(key)
+        currentTab = key
+        local pageFrame = registered.spec.page
+        pageFrame:Show()
+        pageFrame.scripts.OnShow(pageFrame)
+        registered.spec.onSelect(key)
+    end,
+    Selected = function() return currentTab end,
+    ShowNative = function()
+        currentTab, nativeShown = nil, true
+        if registered then registered.spec.page:Hide() end
+    end,
+} }
+ProfessionsFrame = widget()
+ProfessionsFrame.CraftingPage = widget(ProfessionsFrame)
+assert(ns.EnsureProfessionTab(), "tab registers once ForeverCore and the window exist")
+eq(registered.key, "shuffledetector")
+assert(minWidth and minWidth >= 980, "the window is asked for enough width for the browser")
+local tabPage = registered.spec.page
+eq(tabPage.parent, ProfessionsFrame, "the page lives in the professions window")
+ns.TogglePlanner()
+eq(currentTab, "shuffledetector", "browse selects the tab while the window is open")
+for _, w in ipairs(widgets) do
+    if w.name == "ShuffleDetectorBrowser" and w.parent == tabPage then browser = w end
+end
+assert(browser and browser.parent == tabPage, "the browser docks into the tab page")
+assert(browser:IsShown(), "the docked browser is visible")
+ns.TogglePlanner()
+eq(currentTab, nil, "browse again hands the window back to its own page")
+eq(browser:IsShown(), false, "the browser hides with its page")
+ns.TogglePlanner()
+eq(currentTab, "shuffledetector", "the tab can be reselected")
+nativeShown = nil
+ProfessionsFrame.shown = false
+ProfessionsFrame.scripts.OnHide(ProfessionsFrame)
+eq(nativeShown, true, "closing the professions window unchecks the tab")
+eq(browser:IsShown(), false)
+ns.TogglePlanner()
+assert(browser:IsShown(), "browse without the window reopens the standalone browser")
+eq(browser.parent, UIParent, "the standalone browser undocks to the screen")
+click("Refresh / search")
+ForeverCore, ProfessionsFrame = nil, nil
+
 ns.say = say
 print("planner workflow checks passed")

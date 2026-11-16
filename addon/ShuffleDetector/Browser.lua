@@ -3,10 +3,23 @@ local panel, detail, scroll, summary, providerLabel, countLabel, professionMenu,
 local rows, results, info, selected, batch, calculationError, activationNotice = {}, {}, {}, nil, nil, nil, nil
 local options, page, mode = { knownOnly = true }, 1, "crafts"
 local PAGE_SIZE = 10
+local PANEL_WIDTH, PANEL_HEIGHT = 980, 645
 local refresh, render, menuCover
 local stateReady = false
 local materialCosts, costPanel = {}, nil
 local MAX_CUSTOM_COST = 100000000000
+-- Professions-window docking (shell page, side tab and state) via the ForeverCore addon.
+local shell, dockTab, docked = nil, nil, false
+
+-- The shared side-tab registry of the ForeverCore addon (the framework SkillUp Forever uses).
+local function professionTabs()
+    local core = _G.ForeverCore
+    local api = core and core.ProfessionTabs
+    if api and type(api.Register) == "function" and type(api.Select) == "function"
+        and type(api.Selected) == "function" and type(api.ShowNative) == "function" then
+        return api
+    end
+end
 
 local function integer(n, low, high)
     return type(n) == "number" and n >= low and n <= high and n == math.floor(n)
@@ -452,13 +465,10 @@ local function showCosts()
     costPanel:Show()
 end
 
-function ns.TogglePlanner()
-    if panel then
-        if panel:IsShown() then panel:Hide() else panel:Show(); refresh() end
-        return
-    end
+local function build()
+    if panel then return end
     local savedAmount = restoreState()
-    panel = ns.UI.Window("ShuffleDetectorBrowser", 980, 645, "ShuffleDetector")
+    panel = ns.UI.Window("ShuffleDetectorBrowser", PANEL_WIDTH, PANEL_HEIGHT, "ShuffleDetector")
     panel:SetPoint("CENTER")
     panel:SetClampedToScreen(true)
     panel:SetMovable(true)
@@ -588,7 +598,115 @@ function ns.TogglePlanner()
     button(panel, "< Previous", 15, -574, 120, function() page = page - 1; render() end)
     button(panel, "Next >", 145, -574, 120, function() page = page + 1; render() end)
     countLabel = text(panel, "", 15, -612, 940, "small")
+    -- While docked, closing hands the professions window back to its own page.
+    panel.CloseButton:SetScript("OnClick", function()
+        local api = professionTabs()
+        if docked and api then api.ShowNative() else panel:Hide() end
+    end)
     stateReady = true
+end
+
+-- Scale the docked browser down to the professions window's page area when it is smaller.
+local function fit()
+    if not (panel and shell) then return end
+    local width = shell.GetWidth and shell:GetWidth()
+    local height = shell.GetHeight and shell:GetHeight()
+    local scale = 1
+    if type(width) == "number" and width > 0 and type(height) == "number" and height > 0 then
+        scale = math.min(1, width / PANEL_WIDTH, height / PANEL_HEIGHT)
+    end
+    if panel.SetScale then panel:SetScale(scale) end
+end
+
+local function dock()
+    build()
+    docked = true
+    panel:SetParent(shell)
+    panel:ClearAllPoints()
+    panel:SetPoint("TOP", shell, "TOP", 0, 0)
+    panel:SetMovable(false)
+    panel:RegisterForDrag()
+    fit()
     panel:Show()
     refresh()
 end
+
+local function undock()
+    docked = false
+    if not panel then return end
+    if panel.SetScale then panel:SetScale(1) end
+    panel:SetParent(UIParent)
+    panel:ClearAllPoints()
+    panel:SetPoint("CENTER")
+    panel:SetMovable(true)
+    panel:RegisterForDrag("LeftButton")
+end
+
+-- Register the browser as a side-tab page of ProfessionsFrame, like SkillUp Forever's tabs.
+-- Without ForeverCore (or before the client builds the window) the standalone window remains.
+local function ensureTab()
+    if dockTab then return true end
+    local api = professionTabs()
+    local window = _G.ProfessionsFrame
+    if not api or not window then return false end
+    local ok, err = pcall(function()
+        shell = CreateFrame("Frame", "ShuffleDetectorProfessionTabPage", window)
+        if window.CraftingPage then
+            shell:SetAllPoints(window.CraftingPage)
+        else
+            shell:SetPoint("TOPLEFT", window, "TOPLEFT", 0, -60)
+            shell:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", 0, 2)
+        end
+        shell:Hide()
+        shell:SetScript("OnShow", dock)
+        shell:SetScript("OnHide", function()
+            if panel and docked then panel:Hide() end
+        end)
+        shell:SetScript("OnSizeChanged", function() if docked then fit() end end)
+        dockTab = api.Register("shuffledetector", {
+            icon = "Interface\\Icons\\INV_Misc_Coin_01",
+            tooltip = "ShuffleDetector",
+            page = shell,
+            onSelect = function() end,
+        })
+        if type(api.SetMinWidth) == "function" then api.SetMinWidth("shuffledetector", PANEL_WIDTH + 10) end
+        -- Closing the window hands it back, so the tab is unchecked the next time it opens.
+        window:HookScript("OnHide", function()
+            local tabs = professionTabs()
+            if tabs and tabs.Selected() == "shuffledetector" then tabs.ShowNative() end
+        end)
+    end)
+    if not ok then
+        ns.log("browser: profession tab registration failed: " .. tostring(err))
+        shell, dockTab = nil, nil
+    end
+    return dockTab ~= nil
+end
+ns.EnsureProfessionTab = ensureTab
+
+function ns.TogglePlanner()
+    local api = professionTabs()
+    local window = _G.ProfessionsFrame
+    if api and dockTab and window and window:IsShown() then
+        if api.Selected() == "shuffledetector" then api.ShowNative() else api.Select("shuffledetector") end
+        return
+    end
+    if not panel then
+        build()
+        panel:Show()
+        refresh()
+        return
+    end
+    if docked then
+        undock()
+        panel:Show()
+        refresh()
+        return
+    end
+    if panel:IsShown() then panel:Hide() else panel:Show(); refresh() end
+end
+
+local tabDriver = CreateFrame("Frame")
+tabDriver:RegisterEvent("PLAYER_LOGIN")
+pcall(tabDriver.RegisterEvent, tabDriver, "TRADE_SKILL_SHOW")
+tabDriver:SetScript("OnEvent", function() ensureTab() end)

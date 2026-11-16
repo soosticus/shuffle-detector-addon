@@ -5,6 +5,7 @@
 ## X-License: MIT
 ## Version: @project-version@
 ## Dependencies: Auctionator
+## OptionalDeps: ForeverCore
 ## SavedVariables: AHSnapshotDB
 
 ShuffleDetector.lua
