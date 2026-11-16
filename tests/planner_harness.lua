@@ -226,13 +226,28 @@ eq(reads[10], 1)
 
 local function click(label)
     for _, w in ipairs(widgets) do
-        if w.text == label and w.scripts.OnClick and w:IsShown() then
+        if w.text == label and w.scripts.OnClick and w:IsShown() and not w.isDropdown then
             assert(not w.disabled, "disabled choice must not be selectable")
             w.scripts.OnClick(w)
             return w
         end
     end
     error("missing button " .. label)
+end
+-- Dropdown selectors share captions with their menu entries; they are found by their marker.
+local function openMenu(label)
+    for _, w in ipairs(widgets) do
+        if w.isDropdown and w.text == label and w.scripts.OnClick and w:IsShown() then
+            w.scripts.OnClick(w)
+            return w
+        end
+    end
+    error("missing dropdown " .. label)
+end
+local function menuShows(label)
+    for _, w in ipairs(widgets) do
+        if w.isDropdown and w.text == label and w:IsShown() then return true end
+    end
 end
 SlashCmdList.SHUFFLEDETECTOR("browse")
 local browser
@@ -243,18 +258,18 @@ click("Crafts")
 click("Calculate")
 click("Next >")
 click("< Previous")
-click("All professions v")
+openMenu("All professions")
 click("Tailoring")
-click("Learned recipes v")
+openMenu("Learned recipes")
 click("Unlearned patterns (learn later)")
 local patternShown = false
 for _, w in ipairs(widgets) do
     if w.text and w.text:find("Pattern to learn later", 1, true) then patternShown = true end
 end
 assert(patternShown, "explain that patterns are previews to learn, not action buttons")
-click("Unlearned patterns v")
+openMenu("Unlearned patterns")
 click("Professions to learn")
-click("Tailoring v")
+openMenu("Tailoring")
 click("All professions")
 local altRow
 for _, w in ipairs(widgets) do
@@ -269,22 +284,22 @@ for _, w in ipairs(widgets) do
     if w.text and w.text:find("Learned by Other", 1, true) then learnedByShown = true end
 end
 assert(newShown and learnedByShown, "detail names the missing profession and who has it")
-click("All professions v")
+openMenu("All professions")
 click("Tailoring")
-click("Professions to learn v")
+openMenu("Professions to learn")
 click("Learned recipes (shuffle previews)")
-click("Best available exit v")
+openMenu("Best available exit")
 local disabledDE
 for _, w in ipairs(widgets) do
     if w.text == "Disenchant - no trusted yield data" then disabledDE = w end
 end
 assert(disabledDE and disabledDE.disabled, "do not invite selecting an exit with no model")
 click("Vendor")
-click("Vendor v")
+openMenu("Vendor")
 click("Best available exit")
 local widgetCount = #widgets
 for _ = 1, 3 do
-    click("Best available exit v")
+    openMenu("Best available exit")
     click("Best available exit")
 end
 eq(#widgets, widgetCount, "reopening a dropdown reuses its frames")
@@ -335,7 +350,7 @@ eq(AHSnapshotDB.activePlan.selectedAt, 1700000000, "selection timestamp is saved
 eq(selectedTarget, 2, "batch calculator target is set in finished items")
 assert(visible("No purchases or crafts were started"), "activation never starts a protected action")
 C_AddOns.GetAddOnMetadata = metadata
-click("Best available exit v")
+openMenu("Best available exit")
 local cover
 for _, w in ipairs(widgets) do
     if w.scripts.OnMouseDown and w:IsShown() then cover = w end
@@ -343,7 +358,7 @@ end
 assert(cover, "dropdown has an outside-click dismissal layer")
 cover.scripts.OnMouseDown(cover)
 eq(cover:IsShown(), false)
-click("Best available exit v")
+openMenu("Best available exit")
 SlashCmdList.SHUFFLEDETECTOR("browse")
 eq(browser.shown, false)
 eq(cover:IsShown(), false, "closing the browser closes its dropdown")
@@ -392,11 +407,11 @@ end
 local key = ns.charKey()
 local activePlan, activeSaved, target = ns.plan, AHSnapshotDB.activePlan, selectedTarget
 local changesBeforeRestore = targetChanges
-click("Tailoring v")
+openMenu("Tailoring")
 click("Tailoring")
-click("Learned recipes v")
+openMenu("Learned recipes")
 click("All recipes")
-click("Best available exit v")
+openMenu("Best available exit")
 click("Vendor")
 editBox(200):SetText("Piece")
 editBox(120):SetText("75")
@@ -416,7 +431,7 @@ prices[10] = 6
 reloadBrowser()
 eq(editBox(200):GetText(), "Piece", "search survives module reload")
 eq(editBox(120):GetText(), "75", "calculator input survives module reload")
-assert(visible("Tailoring v") and visible("All recipes v") and visible("Vendor v"))
+assert(menuShows("Tailoring") and menuShows("All recipes") and menuShows("Vendor"))
 assert(visible("Budget (copper)"), "calculator mode survives reload")
 assert(visible("> Piece"), "preview selection survives reload")
 eq(visible("Batch estimate"), nil, "old calculated quotes are never restored")
@@ -439,7 +454,7 @@ ns.charKey = function() return "Other-Realm-Alliance" end
 reloadBrowser()
 eq(editBox(200):GetText(), "", "another character gets its own default filters")
 eq(editBox(120):GetText(), "1")
-assert(visible("Learned recipes v") and visible("All professions v") and visible("Crafts"))
+assert(menuShows("Learned recipes") and menuShows("All professions") and visible("Crafts"))
 editBox(120):SetText("9")
 browser:Hide()
 ns.charKey = originalCharKey
@@ -490,19 +505,19 @@ for _, invalidState in ipairs(invalidStates) do
     assert(AHSnapshotDB.log[#AHSnapshotDB.log]:find("invalid or unsupported saved settings", 1, true))
     eq(editBox(120):GetText(), "1")
     eq(editBox(200):GetText(), "")
-    assert(visible("Learned recipes v") and visible("Crafts"), "bad state restores safe browser defaults")
+    assert(menuShows("Learned recipes") and visible("Crafts"), "bad state restores safe browser defaults")
 end
 browser:Hide()
 AHSnapshotDB.plannerByCharacter = false
 reloadBrowser()
 assert(AHSnapshotDB.log[#AHSnapshotDB.log]:find("invalid saved settings container", 1, true))
 eq(editBox(120):GetText(), "1")
-click("Learned recipes v")
+openMenu("Learned recipes")
 click("Unlearned patterns (learn later)")
-click("Best available exit v")
+openMenu("Best available exit")
 click("Sell on AH (verified item types)")
 reloadBrowser()
-assert(visible("Unlearned patterns v") and visible("Sell on AH v"),
+assert(menuShows("Unlearned patterns") and menuShows("Sell on AH"),
     "unlearned and AH filters survive reload even without a priced exit")
 assert(visible("> Unlearned"), "the unlearned preview selection survives reload")
 eq(ns.plan, activePlan)
@@ -511,9 +526,9 @@ eq(selectedTarget, target)
 eq(targetChanges, changesBeforeRestore)
 
 -- Custom costs are calculator-only estimates, persisted per character/item.
-click("Unlearned patterns v")
+openMenu("Unlearned patterns")
 click("Learned recipes (shuffle previews)")
-click("Sell on AH v")
+openMenu("Sell on AH")
 click("Vendor")
 editBox(200):SetText("Piece")
 editBox(120):SetText("75")

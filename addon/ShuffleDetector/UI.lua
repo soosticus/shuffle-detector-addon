@@ -30,6 +30,7 @@ function UI.FontObject(size, style)
         font:SetShadowOffset(1, -1)
         if style == "disabled" then font:SetTextColor(0.45, 0.45, 0.45)
         elseif style == "white" then font:SetTextColor(1, 1, 1)
+        elseif style == "accent" then font:SetTextColor(UI.colors.accent[1], UI.colors.accent[2], UI.colors.accent[3])
         else font:SetTextColor(UI.colors.text[1], UI.colors.text[2], UI.colors.text[3]) end
         fonts[key] = font
     end
@@ -78,6 +79,62 @@ function UI.Button(parent, caption, width, height)
     button.hoverTex:SetPoint("TOPLEFT", 1, -1)
     button.hoverTex:SetPoint("BOTTOMRIGHT", -1, 1)
     button:SetText(caption)
+    return button
+end
+
+-- Left-aligns a themed button's caption by routing SetText into an anchored font string.
+local function leftAlignText(button, rightInset)
+    local fs = button:CreateFontString(nil, "OVERLAY")
+    fs:SetPoint("LEFT", 8, 0)
+    fs:SetPoint("RIGHT", -rightInset, 0)
+    fs:SetJustifyH("LEFT")
+    if button.SetFontString then button:SetFontString(fs) end
+end
+
+-- Dropdown selector: left-aligned current value with a down arrow. The caller owns the menu.
+function UI.DropdownButton(parent, width, height)
+    local button = CreateFrame("Button", nil, parent)
+    button.isDropdown = true
+    button:SetSize(width, height or 24)
+    UI.Skin(button, UI.colors.control)
+    local normal = UI.FontObject(12)
+    if normal then
+        button:SetNormalFontObject(normal)
+        button:SetHighlightFontObject(UI.FontObject(12, "white"))
+        button:SetDisabledFontObject(UI.FontObject(12, "disabled"))
+    end
+    leftAlignText(button, 20)
+    button.hoverTex = solid(button, "HIGHLIGHT", { 1, 1, 1, 0.06 })
+    button.hoverTex:SetPoint("TOPLEFT", 1, -1)
+    button.hoverTex:SetPoint("BOTTOMRIGHT", -1, 1)
+    local arrow = button:CreateTexture(nil, "OVERLAY")
+    arrow:SetSize(12, 12)
+    arrow:SetPoint("RIGHT", -5, 0)
+    if arrow.SetTexture then arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow") end
+    if arrow.SetRotation then arrow:SetRotation(-math.pi / 2) end
+    if arrow.SetDesaturated then arrow:SetDesaturated(true) end
+    if arrow.SetVertexColor then arrow:SetVertexColor(0.75, 0.75, 0.80) end
+    button.arrowTex = arrow
+    return button
+end
+
+-- Flat menu row: no border, hover tint, accent color for the selected entry.
+function UI.MenuItem(parent, width, height)
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(width, height or 24)
+    local normal, accent = UI.FontObject(12), UI.FontObject(12, "accent")
+    if normal then
+        button:SetNormalFontObject(normal)
+        button:SetHighlightFontObject(UI.FontObject(12, "white"))
+        button:SetDisabledFontObject(UI.FontObject(12, "disabled"))
+    end
+    leftAlignText(button, 8)
+    local hover = solid(button, "HIGHLIGHT",
+        { UI.colors.accent[1], UI.colors.accent[2], UI.colors.accent[3], 0.15 })
+    hover:SetAllPoints()
+    function button:SetAccented(on)
+        if normal then self:SetNormalFontObject(on and accent or normal) end
+    end
     return button
 end
 

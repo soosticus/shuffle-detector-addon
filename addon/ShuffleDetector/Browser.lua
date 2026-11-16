@@ -306,10 +306,10 @@ refresh = function()
     end
     summary:SetText(err or (ns.charKey() .. " - " .. meaning))
     providerLabel:SetText(providerText(info.provider))
-    professionMenu:SetText((options.profession or "All professions") .. " v")
-    recipeMenu:SetText((options.knownOnly and "Learned recipes" or options.unlearnedOnly and "Unlearned patterns"
-        or options.newOnly and "Professions to learn" or "All recipes") .. " v")
-    exitMenu:SetText((options.exit or "Best available exit") .. " v")
+    professionMenu:SetText(options.profession or "All professions")
+    recipeMenu:SetText(options.knownOnly and "Learned recipes" or options.unlearnedOnly and "Unlearned patterns"
+        or options.newOnly and "Professions to learn" or "All recipes")
+    exitMenu:SetText(options.exit or "Best available exit")
     scroll:SetVerticalScroll(0)
     render()
 end
@@ -331,8 +331,9 @@ end
 
 -- A small anchored dropdown avoids depending on either client's menu API.
 local function dropdown(x, width, entries)
-    local selector
-    selector = button(panel, "", x, -32, width, function()
+    local selector = ns.UI.DropdownButton(panel, width, 24)
+    selector:SetPoint("TOPLEFT", x, -32)
+    selector:SetScript("OnClick", function()
         if not menuCover then
             menuCover = CreateFrame("Frame", nil, UIParent)
             menuCover:SetAllPoints(UIParent)
@@ -352,13 +353,15 @@ local function dropdown(x, width, entries)
             selector.popup = popup
         end
         menuCover.popup = popup
-        popup:SetSize(math.max(width, 280), #choices * 30 + 8)
+        local menuWidth = math.max(width, 280)
+        popup:SetSize(menuWidth, #choices * 24 + 2)
         for _, pick in ipairs(popup.buttons) do pick:Hide() end
         for i, choice in ipairs(choices) do
-            local entry = choice
             local pick = popup.buttons[i]
             if not pick then
-                pick = button(popup, "", 4, -4 - (i - 1) * 30, math.max(width, 280) - 8, function(self)
+                pick = ns.UI.MenuItem(popup, menuWidth - 2, 24)
+                pick:SetPoint("TOPLEFT", 1, -1 - (i - 1) * 24)
+                pick:SetScript("OnClick", function(self)
                     if self.choice.disabled then return end
                     menuCover:Hide()
                     self.choice.choose()
@@ -367,9 +370,10 @@ local function dropdown(x, width, entries)
                 end)
                 popup.buttons[i] = pick
             end
-            pick.choice = entry
-            pick:SetText(entry.text)
-            if entry.disabled then pick:Disable() else pick:Enable() end
+            pick.choice = choice
+            pick:SetText(choice.text)
+            pick:SetAccented(choice.selected)
+            if choice.disabled then pick:Disable() else pick:Enable() end
             pick:Show()
         end
         popup:Show()
@@ -468,26 +472,35 @@ function ns.TogglePlanner()
         if costPanel then costPanel:Hide() end
     end)
     professionMenu = dropdown(15, 175, function()
-        local choices = { { text = "All professions", choose = function() options.profession = nil end } }
+        local choices = { { text = "All professions", selected = options.profession == nil,
+            choose = function() options.profession = nil end } }
         for _, profession in ipairs(info.professions or {}) do
             local name = profession
-            choices[#choices + 1] = { text = name, choose = function() options.profession = name end }
+            choices[#choices + 1] = { text = name, selected = options.profession == name,
+                choose = function() options.profession = name end }
         end
         return choices
     end)
     recipeMenu = dropdown(200, 180, function()
         return {
-            { text = "Learned recipes (shuffle previews)", choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = true, nil, nil end },
-            { text = "Unlearned patterns (learn later)", choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = nil, true, nil end },
-            { text = "Professions to learn", choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = nil, nil, true end },
-            { text = "All recipes", choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = nil, nil, nil end },
+            { text = "Learned recipes (shuffle previews)", selected = options.knownOnly,
+                choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = true, nil, nil end },
+            { text = "Unlearned patterns (learn later)", selected = options.unlearnedOnly,
+                choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = nil, true, nil end },
+            { text = "Professions to learn", selected = options.newOnly,
+                choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = nil, nil, true end },
+            { text = "All recipes", selected = not (options.knownOnly or options.unlearnedOnly or options.newOnly),
+                choose = function() options.knownOnly, options.unlearnedOnly, options.newOnly = nil, nil, nil end },
         }
     end)
     exitMenu = dropdown(390, 195, function()
         return {
-            { text = "Best available exit", choose = function() options.exit = nil end },
-            { text = "Sell on AH (verified item types)", choose = function() options.exit = "Sell on AH" end },
-            { text = "Vendor", choose = function() options.exit = "Vendor" end },
+            { text = "Best available exit", selected = options.exit == nil,
+                choose = function() options.exit = nil end },
+            { text = "Sell on AH (verified item types)", selected = options.exit == "Sell on AH",
+                choose = function() options.exit = "Sell on AH" end },
+            { text = "Vendor", selected = options.exit == "Vendor",
+                choose = function() options.exit = "Vendor" end },
             { text = "Disenchant - no trusted yield data", disabled = true },
         }
     end)
